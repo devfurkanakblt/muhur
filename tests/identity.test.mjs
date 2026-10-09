@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { claimDecision, githubIdentity, isAdminIdentity } from "../lib/identity.ts";
+import { ADMIN_REAUTH_MS, claimDecision, githubIdentity, isAdminIdentity, isFreshSignIn, sessionSignedInAt } from "../lib/identity.ts";
 
 const ADMIN_ID = "1001";
 const githubUser = (overrides = {}) => ({
@@ -39,4 +39,22 @@ test("A02: repo sahipliği sabit kimlikle; kullanıcı adı eşleşmesi tek baş
 
 test("A02: başka bir hesaba ait token sahiplik kanıtı sayılmaz", () => {
   assert.equal(claimDecision({ ownerId: 3003, githubId: "2002", tokenUserId: 3003, tokenCanPush: true }), "denied");
+});
+
+test("A21: oturumun açılış zamanı yalnızca amr içindeki OAuth kaydından okunur", () => {
+  assert.equal(sessionSignedInAt([{ method: "oauth", timestamp: 1_800_000_000 }]), 1_800_000_000_000);
+  assert.equal(sessionSignedInAt([{ method: "oauth", timestamp: 10 }, { method: "oauth", timestamp: 20 }]), 20_000);
+  assert.equal(sessionSignedInAt([{ method: "password", timestamp: 1_800_000_000 }]), null);
+  assert.equal(sessionSignedInAt(["oauth"]), null);
+  assert.equal(sessionSignedInAt([{ method: "oauth", timestamp: "1800000000" }]), null);
+  assert.equal(sessionSignedInAt(undefined), null);
+});
+
+test("A21: geri alınamaz yönetim işlemi 12 saatten eski ya da zamanı bilinmeyen oturumla yapılamaz", () => {
+  const now = Date.UTC(2026, 10, 7, 16, 55);
+  assert.equal(isFreshSignIn(now - 60_000, now), true);
+  assert.equal(isFreshSignIn(now - ADMIN_REAUTH_MS + 60_000, now), true);
+  assert.equal(isFreshSignIn(now - ADMIN_REAUTH_MS, now), false);
+  assert.equal(isFreshSignIn(null, now), false);
+  assert.equal(isFreshSignIn(now + 3600_000, now), false);
 });

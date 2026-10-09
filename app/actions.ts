@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { exhibitPath, getEvent, getOwnProject, getViewer } from "@/lib/data";
+import { exhibitPath, getAdminSession, getEvent, getOwnProject, getViewer } from "@/lib/data";
 import { canClaimRepo, getHeadSha, getRepo, getRepoById, GithubError, parseRepoInput } from "@/lib/github";
 import { checkHealth, freezeAll, getEventRow, lockNow, tick } from "@/lib/freeze";
 import { processDeliveryJobs, retrySeal } from "@/lib/delivery";
@@ -407,6 +407,18 @@ async function requireAdmin() {
   return viewer;
 }
 
+const REAUTH_MSG = "Bu işlem için son 12 saat içinde GitHub ile giriş yapmış olmalısın. Yönetim sayfasının üstündeki “GitHub ile yeniden giriş yap” düğmesini kullan.";
+
+/**
+ * Geri alınamaz ya da etkinliği doğrudan etkileyen yönetim işlemleri (kilit, zamanlama, oylama, yeni etkinlik,
+ * anonimleştirme) yalnızca son 12 saatte açılmış bir oturumla yapılır. Çalınmış eski bir oturum bunları yapamaz (A21).
+ */
+async function requireFreshAdmin(): Promise<{ admin: Awaited<ReturnType<typeof requireAdmin>>; error?: string }> {
+  const admin = await requireAdmin();
+  const session = await getAdminSession();
+  return session?.fresh ? { admin } : { admin, error: REAUTH_MSG };
+}
+
 /** Etkinlik değişikliği ve aktörlü denetim kaydı aynı transaction içinde yazılır. */
 async function updateEvent(admin: { id: string; login: string }, eventId: string, action: string, changes: Record<string, unknown>) {
   return createAdminClient().rpc("admin_update_event", {
@@ -430,7 +442,8 @@ function trDate(value: FormDataEntryValue | null) {
 }
 
 export async function setSchedule(_: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
+  const { admin, error: reauth } = await requireFreshAdmin();
+  if (reauth) return { error: reauth };
   const starts = trDate(formData.get("starts"));
   const deadline = trDate(formData.get("deadline"));
   if (!starts || !deadline) return { error: "Geçerli tarihler gir." };
@@ -466,12 +479,14 @@ export async function setAnnouncement(_: FormState, formData: FormData): Promise
   return { ok: true };
 }
 
-export async function lockNowAction() {
-  const admin = await requireAdmin();
+export async function lockNowAction(): Promise<{ error?: string }> {
+  const { admin, error } = await requireFreshAdmin();
+  if (error) return { error };
   const event = await getEvent();
   await lockNow(event.id, admin);
   after(() => freezeAll(event.id));
   revalidatePath("/", "layout");
+  return {};
 }
 
 export async function retryFreeze(formData: FormData) {
@@ -489,8 +504,9 @@ export async function retryFreeze(formData: FormData) {
   revalidatePath("/yonetim");
 }
 
-export async function setVoting(formData: FormData) {
-  const admin = await requireAdmin();
+export async function setVoting(formData: FormData): Promise<{ error: string } | void> {
+  const { admin, error: reauth } = await requireFreshAdmin();
+  if (reauth) return { error: reauth };
   const state = String(formData.get("state") ?? "");
   if (state !== "acik" && state !== "sonuclandi") return;
   const event = await getEvent();
@@ -515,7 +531,8 @@ export async function setVoting(formData: FormData) {
 }
 
 export async function createEvent(_: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
+  const { admin, error: reauth } = await requireFreshAdmin();
+  if (reauth) return { error: reauth };
   const current = await getEvent();
   if (!current.locked) return { error: "Yeni etkinlik, güncel etkinlik mühürlendikten sonra açılabilir." };
   const title = String(formData.get("title") ?? "").trim();
@@ -611,7 +628,8 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
  * Eser kaydı, teslim SHA'sı, arşiv hash'i ve zamanlar korunur. Arayüzü yönetim sayfasına ayrıca eklenecek.
  */
 export async function anonymizeUser(_: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
+  const { admin, error: reauth } = await requireFreshAdmin();
+  if (reauth) return { error: reauth };
   const login = String(formData.get("login") ?? "").trim().replace(/^@/, "");
   const reason = String(formData.get("reason") ?? "").trim();
   if (!/^[A-Za-z0-9-]{1,39}$/.test(login)) return { error: "Geçerli bir GitHub kullanıcı adı yaz." };

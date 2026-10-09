@@ -7,7 +7,7 @@ import { buttonStyles } from "@/components/button-styles";
 
 type Repo = { id: number; full_name: string; description: string | null; pushed: string; taken: boolean };
 
-export function RepoPicker({ repos, error }: { repos: Repo[]; error?: string }) {
+export function RepoPicker({ repos, error, listFailed = false }: { repos: Repo[]; error?: string; listFailed?: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [paste, setPaste] = useState("");
@@ -35,9 +35,15 @@ export function RepoPicker({ repos, error }: { repos: Repo[]; error?: string }) 
 
       <ul className="mt-2 divide-y divide-rule">
         {filtered.length === 0 && (
-          <li className="py-8 text-ink-2">
-            {repos.length === 0 ? "Hesabında public repo bulunamadı." : "Aramana uyan repo yok."}
-          </li>
+          listFailed ? (
+            <li role="alert" className="py-8 text-danger">
+              {"GitHub'dan repo listen alınamadı. Sayfayı yenile ya da reponun bağlantısını aşağıya yapıştırarak devam et."}
+            </li>
+          ) : (
+            <li className="py-8 text-ink-2">
+              {repos.length === 0 ? "Hesabında public repo bulunamadı." : "Aramana uyan repo yok."}
+            </li>
+          )
         )}
         {filtered.map((r) => (
           <li key={r.id} className="flex items-center justify-between gap-4 py-4">

@@ -1,0 +1,10 @@
+/.impeccable
+/supabase
+*.tsbuildinfo
+/.test-db
+/.next
+/.next-preview
+/test-artifacts
+/audit
+/.preview-app.pid
+/.env.local

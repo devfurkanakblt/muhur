@@ -1,0 +1,169 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { addAward, anonymizeUser, createEvent, retryDeliveryJob, setAnnouncement, setSchedule, type FormState } from "@/app/actions";
+import { SubmitButton } from "@/components/buttons";
+import { useProtectedForm } from "@/components/protected-form";
+
+const input =
+  "h-12 w-full rounded-[2px] border border-rule-strong bg-plinth px-3 text-[0.9375rem] placeholder:text-ink-3 focus:border-ink focus:outline-none";
+const label = "text-[0.9375rem] font-medium";
+
+export function RetryJobButton({ id }: { id: string }) {
+  const [state, action, pending] = useActionState(retryDeliveryJob, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  return <form {...protectedForm} className="mt-2" data-live-safe>
+    <input type="hidden" name="jobId" value={id} />
+    <button disabled={pending} className="press underline underline-offset-4">{pending ? "Sıraya alınıyor…" : "Tekrar dene"}</button>
+    <Status state={state} ok="Yeniden deneme sıraya alındı." />
+  </form>;
+}
+
+export function AwardForm({ projects }: { projects: { id: string; name: string; team_name: string }[] }) {
+  const [state, action, pending] = useActionState(addAward, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  return <form {...protectedForm} className="grid gap-3">
+    <label htmlFor="award-project" className={label}>Ödül alacak mühürlü eser</label>
+    <select id="award-project" name="projectId" required className={input} defaultValue="">
+      <option value="">Eser seç</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name} · {p.team_name}</option>)}
+    </select>
+    <label htmlFor="award-title" className={label}>Ödül adı</label>
+    <input id="award-title" name="title" minLength={2} maxLength={80} required className={input} placeholder="En iyi teknik çözüm" />
+    <label htmlFor="award-reason" className={label}>Jürinin gerekçesi</label>
+    <textarea id="award-reason" name="reason" minLength={10} maxLength={280} required rows={3} className={`${input} h-auto py-3`} />
+    <div className="flex flex-wrap gap-3"><SubmitButton variant="ink" busy={pending} pending="Açıklanıyor…">Ödülü açıkla</SubmitButton><button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button><Status state={state} ok="Ödül sergide yayında." /></div>
+  </form>;
+}
+
+/** KVKK silme başvurusu: ad ve avatar kaldırılır, hesap kapanır; eser, teslim ve mühür kaydı korunur. */
+export function AnonymizeForm() {
+  const [state, action, pending] = useActionState(anonymizeUser, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  return <form {...protectedForm} className="grid max-w-[560px] gap-3">
+    <label htmlFor="anon-login" className={label}>GitHub kullanıcı adı</label>
+    <input id="anon-login" name="login" required maxLength={40} autoComplete="off" spellCheck={false} placeholder="kullanici-adi" className={`${input} font-mono`} />
+    <label htmlFor="anon-reason" className={label}>Başvuru ve gerekçe</label>
+    <textarea id="anon-reason" name="reason" required minLength={5} maxLength={500} rows={2} placeholder="Ör. 5 Ekim tarihli e-posta ile silme başvurusu" className={`${input} h-auto py-3`} />
+    <label className="flex items-start gap-2 text-[0.9375rem]"><input type="checkbox" required className="mt-1" /> Kişinin adı ve avatarı tüm sergilerden kaldırılacak, hesabı kapatılacak. Bu işlem geri alınamaz.</label>
+    <div className="flex flex-wrap items-center gap-4">
+      <SubmitButton variant="ghost" busy={pending} pending="Anonimleştiriliyor…">Anonimleştir</SubmitButton>
+      <Status state={state} ok="Kişisel bilgiler kaldırıldı; işlem denetim kaydına yazıldı." />
+    </div>
+  </form>;
+}
+
+function Status({ state, ok }: { state: FormState; ok: string }) {
+  return (
+    <p role="status" className="basis-full text-[0.9375rem]">
+      {state?.error && <span className="text-danger">{state.error}</span>}
+      {state?.ok && <span className="text-ink-2">{ok}</span>}
+    </p>
+  );
+}
+
+export function ScheduleForm({ starts, deadline }: { starts: string; deadline: string }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(setSchedule, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  return (
+    <form {...protectedForm} className="grid gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <label htmlFor="starts" className={label}>
+            Başlangıç
+          </label>
+          <input id="starts" name="starts" type="datetime-local" required defaultValue={starts} className={`${input} font-mono tnum`} />
+        </div>
+        <div className="grid gap-2">
+          <label htmlFor="deadline" className={label}>
+            Son teslim
+          </label>
+          <input id="deadline" name="deadline" type="datetime-local" required defaultValue={deadline} className={`${input} font-mono tnum`} />
+        </div>
+      </div>
+      <p className="text-[0.8125rem] text-ink-3">Türkiye saati (UTC+3).</p>
+      <div className="flex flex-wrap items-center gap-4">
+        <SubmitButton variant="ink" busy={pending} pending="Kaydediliyor…">
+          Kaydet
+        </SubmitButton>
+        <button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button>
+        <Status state={state} ok="Zamanlama güncellendi." />
+      </div>
+    </form>
+  );
+}
+
+export function AnnouncementForm({ current }: { current: string | null }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(setAnnouncement, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  const [text, setText] = useState(current ?? "");
+  return (
+    <form {...protectedForm} onReset={() => setText(current ?? "")} className="grid gap-3">
+      <div className="flex items-baseline justify-between">
+        <label htmlFor="announcement" className={label}>
+          Tüm sayfaların üstünde görünür
+        </label>
+        <span className={`text-[0.8125rem] tnum ${text.length > 160 ? "text-danger" : "text-ink-3"}`}>{text.length}/160</span>
+      </div>
+      <input
+        id="announcement"
+        name="announcement"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={160}
+        placeholder="Yemek 19:00'da kantinde."
+        className={input}
+      />
+      <div className="flex flex-wrap items-center gap-4">
+        <SubmitButton variant="ink" busy={pending} pending="Yayınlanıyor…">
+          {text.trim() ? "Yayınla" : "Duyuruyu kaldır"}
+        </SubmitButton>
+        <button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button>
+        <Status state={state} ok={text.trim() ? "Duyuru yayında." : "Duyuru kaldırıldı."} />
+      </div>
+    </form>
+  );
+}
+
+export function NewEventForm() {
+  const [state, action, pending] = useActionState<FormState, FormData>(createEvent, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  return (
+    <form {...protectedForm} className="grid gap-4">
+      <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+        <div className="grid gap-2">
+          <label htmlFor="title" className={label}>
+            Etkinlik adı
+          </label>
+          <input id="title" name="title" required minLength={3} maxLength={80} placeholder="DEÜ CS&AI Hackathon · Bahar" className={input} />
+        </div>
+        <div className="grid gap-2">
+          <label htmlFor="slug" className={label}>
+            Adres kısaltması
+          </label>
+          <input id="slug" name="slug" required pattern="[a-z0-9-]{3,40}" placeholder="2027-bahar" className={`${input} font-mono`} />
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <label htmlFor="new-starts" className={label}>
+            Başlangıç
+          </label>
+          <input id="new-starts" name="starts" type="datetime-local" required className={`${input} font-mono tnum`} />
+        </div>
+        <div className="grid gap-2">
+          <label htmlFor="new-deadline" className={label}>
+            Son teslim
+          </label>
+          <input id="new-deadline" name="deadline" type="datetime-local" required className={`${input} font-mono tnum`} />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <SubmitButton variant="ink" busy={pending} pending="Açılıyor…">
+          Yeni etkinliği aç
+        </SubmitButton>
+        <button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button>
+        <Status state={state} ok="Yeni etkinlik açıldı; bu sergi geçmiş sergilere taşındı." />
+      </div>
+    </form>
+  );
+}

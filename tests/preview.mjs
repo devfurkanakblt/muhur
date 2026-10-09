@@ -1,0 +1,104 @@
+// Yalnızca yerel arayüz kontrolü: canlı hesap veya veri kullanılmaz, üretim rotası eklemez.
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import { resolve } from "node:path";
+
+const now = Date.now();
+const stamp = n => new Date(now + n).toISOString();
+const userId = "00000000-0000-0000-0000-000000000001";
+const eventId = "10000000-0000-0000-0000-000000000001";
+let mode = "open";
+const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
+const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
+function records(table) {
+  const locked = mode !== "open";
+  const projects = Array.from({ length: 3 }, (_, i) => ({
+    id: `30000000-0000-0000-0000-00000000000${i + 1}`, event_id: eventId, exhibit_no: i + 1,
+    name: ["Örnek · Akıllı Kampüs", "Örnek · Mühür Arşivi", "Örnek · Uzun Bir Proje Adıyla Erişilebilirlik Denemesi"][i],
+    team_name: ["Örnek Ekip", "Arşiv Ekibi", "Düşün, Bağlan, Üret"][i], summary: "Bu kayıt yalnızca yerel arayüz testinde kullanılan örnek bir projedir. Gerçek bir teslim değildir.",
+    demo_url: i === 0 ? "https://example.com/demo" : null, logo_path: null, repo_id: 100 + i,
+    repo_full_name: `preview/project-${i}`, repo_url: `https://github.com/preview/project-${i}`, default_branch: "main",
+    invite_code: "preview-invite", created_by: userId, created_at: stamp(-3600_000), updated_at: stamp(-300_000),
+    last_pushed_at: stamp(-120_000), health_checked_at: stamp(-30_000), health_issues: mode === "failed" ? ["erisilemiyor"] : [],
+    repo_head_sha: "a".repeat(40), repo_created_at: stamp(-7200_000), pre_event_commits: false, repo_size_kb: 100,
+    accepted_sha: "a".repeat(40), accepted_at: stamp(-300_000), accepted_branch: "main", accepted_archive_sha256: "b".repeat(64), accepted_archive_bytes: 25000,
+    accepted_archive_path: "teslim/fixture.zip",
+    archive_path: ["sealed", "voting"].includes(mode) ? "teslim/fixture.zip" : null, archive_sha256: ["sealed", "voting"].includes(mode) ? "b".repeat(64) : null,
+    archive_bytes: mode === "sealed" ? 25000 : null, frozen_sha: mode === "sealed" ? "a".repeat(40) : null,
+    frozen_at: mode === "sealed" ? stamp(-60_000) : null, frozen_method: mode === "sealed" ? "accepted" : null,
+    freeze_error: mode === "failed" ? "Arşiv deposuna ulaşılamadı. Kabul edilmiş sürüm korunuyor." : null,
+    delivery_error: null, members: [{ ...member, project_id: `30000000-0000-0000-0000-00000000000${i + 1}` }, { user_id: "00000000-0000-0000-0000-000000000002", github_login: "preview-member", role: "member", avatar_url: null }],
+    snapshots: [{ sha: "a".repeat(40), last_seen_at: stamp(-600_000) }],
+  }));
+  const tables = {
+    events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
+      is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+    projects,
+    project_members: [{ ...member, project_id: projects[0].id }],
+    project_timeline: [{ id: "t1", project_id: projects[0].id, kind: "accepted", detail: "a".repeat(40), occurred_at: stamp(-300_000) }, { id: "t2", project_id: projects[0].id, kind: "snapshot", detail: "a".repeat(40), occurred_at: stamp(-600_000) }],
+    delivery_jobs: mode === "failed" ? [{ id: "j1", project_id: projects[0].id, event_id: eventId, kind: "seal", state: "failed", attempts: 5, error: "Depo bağlantısı başarısız.", next_attempt_at: stamp(0), created_at: stamp(-30_000), project: { name: projects[0].name, team_name: projects[0].team_name }, event: { title: "Örnek Hackathon" } }] : [],
+    worker_runs: [{ id: "r1", started_at: stamp(-30_000), finished_at: stamp(-15_000), processed: 3, error: null }],
+    awards: mode === "sealed" ? [{ id: "a1", event_id: eventId, project_id: projects[0].id, title: "Örnek · En iyi teknik çözüm", reason: "Bu gerekçe yerel arayüz kontrolü için oluşturulmuş örnektir.", created_at: stamp(-20_000) }] : [],
+    votes: mode === "sealed" ? [{ event_id: eventId, user_id: "visitor", project_id: projects[0].id }] : [],
+  };
+  return tables[table] ?? [];
+}
+const server = createServer((request, response) => {
+  const url = new URL(request.url, "http://127.0.0.1:54330");
+  response.setHeader("Content-Type", "application/json");
+  if (url.pathname === "/fixture/login") {
+    const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const access_token = `${part({ alg: "HS256", typ: "JWT" })}.${part({ sub: userId, exp: Math.floor(now / 1000) + 7200, role: "authenticated" })}.fixture-signature`;
+    const session = { access_token, refresh_token: "fixture", expires_at: Math.floor(now / 1000) + 7200, expires_in: 7200, token_type: "bearer", user };
+    const cookie = `sb-127-auth-token=base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}; path=/; SameSite=Lax`;
+    const next = url.searchParams.get("next") ?? "/panel";
+    const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/panel";
+    response.setHeader("Content-Type", "text/html; charset=utf-8");
+    return response.end(`<html><body><script>document.cookie=${JSON.stringify(cookie)};location.href=${JSON.stringify(`http://127.0.0.1:3100${safeNext}`)};</script></body></html>`);
+  }
+  if (url.pathname === "/fixture/state") {
+    mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
+    return response.end(JSON.stringify({ mode }));
+  }
+  if (url.pathname === "/fixture/session") {
+    const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const access_token = `${part({ alg: "HS256", typ: "JWT" })}.${part({ sub: userId, exp: Math.floor(now / 1000) + 7200, role: "authenticated" })}.fixture-signature`;
+    const session = { access_token, refresh_token: "fixture", expires_at: Math.floor(now / 1000) + 7200, expires_in: 7200, token_type: "bearer", user };
+    return response.end(JSON.stringify({ name: "sb-127-auth-token", value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}` }));
+  }
+  if (url.pathname === "/auth/v1/user") return response.end(JSON.stringify(user));
+  // Browser UI tests can reach a normal action error without a real database lease.
+  if (url.pathname === "/rest/v1/rpc/try_worker_lease") return response.end("true");
+  // Oy toplamları DB'de sayılır (vote_tallies RPC); fikstür aynı sonucu örnek oylardan üretir.
+  if (url.pathname === "/rest/v1/rpc/vote_tallies") {
+    const tallies = {};
+    if (records("events")[0].voting === "sonuclandi") for (const v of records("votes")) tallies[v.project_id] = (tallies[v.project_id] ?? 0) + 1;
+    return response.end(JSON.stringify(tallies));
+  }
+  if (!url.pathname.startsWith("/rest/v1/") || !["GET", "HEAD"].includes(request.method)) {
+    response.statusCode = 405; return response.end(JSON.stringify({ message: "Yerel test verisi salt okunur.", code: "FIXTURE_READ_ONLY" }));
+  }
+  const table = url.pathname.split("/").at(-1);
+  let rows = records(table);
+  for (const [key, filter] of url.searchParams) {
+    if (filter.startsWith("eq.")) rows = rows.filter(row => String(row[key]) === filter.slice(3));
+    if (filter === "is.null") rows = rows.filter(row => row[key] == null);
+    if (filter === "not.is.null") rows = rows.filter(row => row[key] != null);
+  }
+  response.setHeader("Content-Range", `0-${Math.max(0, rows.length - 1)}/${rows.length}`);
+  if (request.method === "HEAD") return response.end();
+  if (request.headers.accept?.includes("application/vnd.pgrst.object+json")) return response.end(JSON.stringify(rows[0] ?? null));
+  response.end(JSON.stringify(rows));
+});
+await new Promise(resolve => server.listen(54330, "127.0.0.1", resolve));
+const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), "dev", "-p", "3100"], {
+  windowsHide: true, stdio: "inherit", env: { ...process.env, NODE_ENV: "development", MUHUR_TEST_PREVIEW: "1",
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54330", NEXT_PUBLIC_SUPABASE_ANON_KEY: "fixture-key",
+    SUPABASE_SERVICE_ROLE_KEY: "fixture-key", ADMIN_GITHUB_IDS: "424242", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
+    GITHUB_TOKEN: "", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", CRON_SECRET: "fixture-cron",
+  },
+});
+console.log("Yerel örnek arayüz: http://127.0.0.1:3100 (canlı veri kullanılmıyor)");
+function stop() { app.kill(); server.close(); }
+process.on("SIGINT", stop); process.on("SIGTERM", stop); app.on("exit", () => server.close());
+process.stdin.on("data", chunk => { if (chunk.toString().trim() === "stop") stop(); });

@@ -1,0 +1,311 @@
+@import "tailwindcss";
+
+@keyframes seal-arrive {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.seal-success { animation: seal-arrive 250ms var(--ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  .seal-success { animation: none; }
+}
+
+/* Müze vitrini: soğuk galeri duvarı, kömür mürekkep, yalnızca "süre / kilit / cam" anlamı taşıyan indigo. */
+:root {
+  --wall: #eef2f6;
+  --plinth: #f8f9fb;
+  --ink: #0b0d1e;
+  --ink-2: #44485f;
+  --ink-3: #61667d;
+  --rule: #d3d9e2;
+  --rule-strong: #b9c1cd;
+  --indigo: #4a36cf;
+  --indigo-ink: #3a29b0;
+  --indigo-fill: #4a36cf;
+  --indigo-fill-hover: #3a29b0;
+  --indigo-wash: rgb(74 54 207 / 0.07);
+  --blush: #feccd7;
+  --danger: #b4233c;
+  --sticker: transparent;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  color-scheme: light;
+}
+
+/* Gece galerisi: duvar ışıkları söndü, vitrin camı hâlâ indigo. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --wall: #0e1020;
+    --plinth: #161a2e;
+    --ink: #e8eaf4;
+    --ink-2: #aeb3c9;
+    --ink-3: #8e94ad;
+    --rule: #262b44;
+    --rule-strong: #3b4160;
+    --indigo: #9d8fff;
+    --indigo-ink: #bdb3ff;
+    --indigo-fill: #5b46e6;
+    --indigo-fill-hover: #6b58f0;
+    --indigo-wash: rgb(124 104 255 / 0.1);
+    --danger: #ff7a8e;
+    --sticker: #f3f1fa;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --wall: #0e1020;
+  --plinth: #161a2e;
+  --ink: #e8eaf4;
+  --ink-2: #aeb3c9;
+  --ink-3: #8e94ad;
+  --rule: #262b44;
+  --rule-strong: #3b4160;
+  --indigo: #9d8fff;
+  --indigo-ink: #bdb3ff;
+  --indigo-fill: #5b46e6;
+  --indigo-fill-hover: #6b58f0;
+  --indigo-wash: rgb(124 104 255 / 0.1);
+  --danger: #ff7a8e;
+  --sticker: #f3f1fa;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-wall: var(--wall);
+  --color-plinth: var(--plinth);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-indigo: var(--indigo);
+  --color-indigo-ink: var(--indigo-ink);
+  --color-indigo-fill: var(--indigo-fill);
+  --color-indigo-fill-hover: var(--indigo-fill-hover);
+  --color-blush: var(--blush);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-grotesk);
+  --font-mono: var(--font-mono-face);
+  --radius-label: 2px;
+}
+
+html {
+  scroll-padding-top: 1.5rem;
+  background: var(--wall);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--wall);
+  color: var(--ink);
+  font-family: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01";
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--indigo-fill);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+
+input,
+textarea {
+  caret-color: var(--indigo);
+}
+
+/* Klavye ve dokunma ile aynı netlikte kullanım. */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 1rem;
+  z-index: 60;
+  padding: 0.75rem 1rem;
+  background: var(--ink);
+  color: var(--wall);
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: translateY(0); }
+main:focus { outline: none; }
+main { min-width: 0; }
+h1, h2, h3 { overflow-wrap: anywhere; text-wrap: balance; }
+summary { min-height: 44px; padding-block: 0.65rem; }
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 3px;
+}
+label:has(input[type="file"]):focus-within {
+  outline: 2px solid var(--indigo);
+  outline-offset: 3px;
+}
+header nav a, footer nav a { min-height: 44px; align-content: center; }
+button { touch-action: manipulation; }
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  textarea, select { font-size: 1rem; }
+}
+
+a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+* {
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+/* Basılabilir her şey basıldığını hissettirir. */
+.press {
+  transition: transform 160ms var(--ease-out), background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Vitrin camı: kilit anında soldan kayarak kapanır. */
+.glass {
+  pointer-events: none;
+  background: var(--indigo-wash);
+  box-shadow: inset 1px 0 0 var(--indigo), inset -1px 0 0 color-mix(in srgb, var(--indigo) 35%, transparent);
+  transform: translateX(0);
+  transition: transform 1400ms var(--ease-in-out), opacity 400ms ease;
+}
+.glass[data-state="open"] {
+  transform: translateX(-102%);
+  opacity: 0;
+}
+
+/* Yeni mühür satırı belirir. */
+.seal-line {
+  transition: opacity 500ms ease 1100ms, transform 500ms var(--ease-out) 1100ms;
+}
+.seal-line {
+  @starting-style {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* İfade değişince maskot yumuşakça belirir. */
+.mascot-enter {
+  transition: opacity 320ms ease, translate 320ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+/* Maskot hafifçe nefes alır; yalnızca vitrin açıkken. */
+@keyframes breathe {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  50% {
+    transform: translateY(-1.5%) scaleY(1.012);
+  }
+}
+.breathe {
+  transform-origin: 50% 100%;
+  animation: breathe 4.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathe {
+    animation: none;
+  }
+  .glass,
+  .seal-line {
+    transition: opacity 300ms ease;
+  }
+  .glass[data-state="open"] {
+    transform: none;
+  }
+  .press:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Koyu temada maskot, paftadaki çıkartma seti gibi beyaz konturla zeminden ayrılır. */
+.mascot {
+  --sw: 2px;
+}
+.mascot-sm {
+  --sw: 1px;
+}
+.mascot-lg {
+  --sw: 3px;
+}
+:root[data-theme="dark"] .mascot {
+  filter: drop-shadow(var(--sw) 0 0 var(--sticker)) drop-shadow(calc(var(--sw) * -1) 0 0 var(--sticker))
+    drop-shadow(0 var(--sw) 0 var(--sticker)) drop-shadow(0 calc(var(--sw) * -1) 0 var(--sticker));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mascot {
+    filter: drop-shadow(var(--sw) 0 0 var(--sticker)) drop-shadow(calc(var(--sw) * -1) 0 0 var(--sticker))
+      drop-shadow(0 var(--sw) 0 var(--sticker)) drop-shadow(0 calc(var(--sw) * -1) 0 var(--sticker));
+  }
+}
+
+/* Tema düğmesi: doğru ikon CSS ile seçilir, hidrasyon farkı oluşmaz. */
+.theme-moon {
+  display: inline;
+}
+.theme-sun {
+  display: none;
+}
+:root[data-theme="dark"] .theme-moon {
+  display: none;
+}
+:root[data-theme="dark"] .theme-sun {
+  display: inline;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-moon {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .theme-sun {
+    display: inline;
+  }
+}
+
+/* Canlı nabız: son push yakınsa nokta yavaşça atar. */
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
+  }
+}
+
+@media print {
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+}

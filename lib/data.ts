@@ -1,0 +1,265 @@
+import "server-only";
+import { cache } from "react";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
+import { githubIdentity, isAdminIdentity } from "@/lib/identity";
+import { selectAll } from "@/lib/paginate";
+
+/** Okuma hatası "kayıt yok" gibi gösterilmez; sayfa hata ekranına düşer. */
+function readFailed(what: string, error: { message: string }): never {
+  console.error(`[veri] ${what}: ${error.message}`);
+  throw new Error(`${what} okunamadı. Lütfen biraz sonra tekrar dene.`);
+}
+
+type EventRow = {
+  id: string;
+  slug: string;
+  title: string;
+  starts_at: string;
+  deadline: string;
+  locked_at: string | null;
+  is_current: boolean;
+  announcement: string | null;
+  announcement_at: string | null;
+  voting: "kapali" | "acik" | "sonuclandi";
+};
+
+export type EventState = {
+  id: string;
+  slug: string;
+  title: string;
+  startsAt: string;
+  deadline: string;
+  lockedAt: string | null;
+  isCurrent: boolean;
+  /** Etkinlik başladı mı (başlangıç saatine göre). */
+  started: boolean;
+  locked: boolean;
+  /** Mührün referans aldığı an: erken kilitlendiyse kilit anı, değilse son tarih. */
+  sealTime: string;
+  announcement: string | null;
+  announcementAt: string | null;
+  voting: EventRow["voting"];
+  /** Sunucunun okuma anı; geri sayımın ilk karesi için. */
+  now: number;
+};
+
+function toState(row: EventRow): EventState {
+  const now = Date.now();
+  const deadline = new Date(row.deadline).getTime();
+  const lockedAt = row.locked_at ? new Date(row.locked_at).getTime() : null;
+  const seal = lockedAt !== null && lockedAt < deadline ? lockedAt : deadline;
+  return {
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    startsAt: row.starts_at,
+    deadline: row.deadline,
+    lockedAt: row.locked_at,
+    isCurrent: row.is_current,
+    started: now >= new Date(row.starts_at).getTime(),
+    locked: lockedAt !== null || now >= deadline,
+    sealTime: new Date(seal).toISOString(),
+    announcement: row.announcement,
+    announcementAt: row.announcement_at,
+    voting: row.voting,
+    now,
+  };
+}
+
+/** Güncel etkinlik. Ana sayfa, panel ve yönetim her zaman bunu kullanır. */
+export const getEvent = cache(async (): Promise<EventState> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("events").select("*").eq("is_current", true).single();
+  if (error || !data) throw new Error("Güncel etkinlik bulunamadı.");
+  return toState(data as EventRow);
+});
+
+export const getEventBySlug = cache(async (slug: string): Promise<EventState | null> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("events").select("*").eq("slug", slug).maybeSingle();
+  if (error) readFailed("Etkinlik", error);
+  return data ? toState(data as EventRow) : null;
+});
+
+export const getEvents = cache(async (): Promise<EventState[]> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("events").select("*").order("starts_at", { ascending: false });
+  if (error) readFailed("Etkinlikler", error);
+  return (data ?? []).map((r) => toState(r as EventRow));
+});
+
+export type Viewer = {
+  id: string;
+  /** Sabit sayısal GitHub kullanıcı kimliği (yetki ve repo sahipliği buna bağlı). */
+  githubId: string;
+  login: string;
+  avatarUrl: string | null;
+  isAdmin: boolean;
+};
+
+export const getViewer = cache(async (): Promise<Viewer | null> => {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
+  if (!user) return null;
+  // user_metadata kullanıcı tarafından değiştirilebilir; kimlik ve yetki yalnızca GitHub identity kaydından okunur.
+  const github = githubIdentity(user);
+  if (!github) return null;
+  return {
+    id: user.id,
+    githubId: github.githubId,
+    login: github.login,
+    avatarUrl: github.avatarUrl,
+    isAdmin: isAdminIdentity(github, env.adminGithubIds),
+  };
+});
+
+const EXHIBIT_COLUMNS =
+  "id, event_id, exhibit_no, name, team_name, summary, demo_url, logo_path, repo_full_name, repo_url, created_at, last_pushed_at, frozen_sha, frozen_at, frozen_method, archive_sha256, archive_bytes, accepted_sha, accepted_at, accepted_branch, freeze_error";
+
+export type Exhibit = {
+  id: string;
+  event_id: string;
+  exhibit_no: number;
+  name: string;
+  team_name: string;
+  summary: string;
+  demo_url: string | null;
+  accepted_sha: string | null;
+  accepted_at: string | null;
+  accepted_branch: string | null;
+  freeze_error: string | null;
+  logo_path: string | null;
+  repo_full_name: string;
+  repo_url: string;
+  created_at: string;
+  last_pushed_at: string | null;
+  frozen_sha: string | null;
+  frozen_at: string | null;
+  frozen_method: string | null;
+  archive_sha256: string | null;
+  archive_bytes: number | null;
+};
+
+export const getExhibits = cache(async (eventId: string): Promise<Exhibit[]> => {
+  const db = createAdminClient();
+  try {
+    return await selectAll<Exhibit>((from, to) =>
+      db.from("projects").select(EXHIBIT_COLUMNS, { count: "exact" }).eq("event_id", eventId)
+        .order("exhibit_no", { ascending: true }).range(from, to).overrideTypes<Exhibit[], { merge: false }>());
+  } catch (e) {
+    readFailed("Eserler", e as Error);
+  }
+});
+
+export const getExhibit = cache(async (eventId: string, no: number): Promise<Exhibit | null> => {
+  const db = createAdminClient();
+  if (!Number.isSafeInteger(no) || no < 1) return null;
+  const { data, error } = await db.from("projects").select(EXHIBIT_COLUMNS).eq("event_id", eventId).eq("exhibit_no", no).maybeSingle();
+  if (error) readFailed("Eser", error);
+  return (data as Exhibit) ?? null;
+});
+
+export type Member = {
+  user_id: string;
+  github_login: string;
+  avatar_url: string | null;
+  role: "owner" | "member";
+};
+
+export type OwnProject = Exhibit & {
+  repo_id: number;
+  invite_code: string;
+  default_branch: string;
+  archive_path: string | null;
+  health_issues: string[];
+  health_checked_at: string | null;
+  repo_head_sha: string | null;
+  delivery_error: string | null;
+  accepted_archive_sha256: string | null;
+  accepted_archive_bytes: number | null;
+  members: Member[];
+};
+
+/** Kullanıcının güncel etkinlikteki eseri. */
+export const getOwnProject = cache(async (userId: string, eventId: string): Promise<OwnProject | null> => {
+  const db = createAdminClient();
+  const { data: membership, error: memberError } = await db
+    .from("project_members")
+    .select("project_id")
+    .eq("user_id", userId)
+    .eq("event_id", eventId)
+    .maybeSingle();
+  if (memberError) readFailed("Ekip üyeliği", memberError);
+  if (!membership) return null;
+  const { data, error } = await db
+    .from("projects")
+    .select("*, members:project_members(user_id, github_login, avatar_url, role)")
+    .eq("id", membership.project_id)
+    .maybeSingle();
+  if (error) readFailed("Proje", error);
+  return (data as OwnProject) ?? null;
+});
+
+export const getMembers = cache(async (projectId: string): Promise<Member[]> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("project_members").select("user_id, github_login, avatar_url, role").eq("project_id", projectId).order("joined_at");
+  if (error) readFailed("Ekip", error);
+  return (data ?? []) as Member[];
+});
+
+export type VoteState = { myVote: string | null; tallies: Record<string, number> | null };
+
+/** Kullanıcının oyu; sonuçlar yalnızca oylama sonuçlandığında, DB'de sayılarak döner. */
+export const getVotes = cache(async (event: EventState, userId: string | null): Promise<VoteState> => {
+  if (event.voting === "kapali") return { myVote: null, tallies: null };
+  const db = createAdminClient();
+  let myVote: string | null = null;
+  if (userId) {
+    const { data, error } = await db.from("votes").select("project_id").eq("event_id", event.id).eq("user_id", userId).maybeSingle();
+    if (error) readFailed("Oyun", error);
+    myVote = data?.project_id ?? null;
+  }
+  let tallies: Record<string, number> | null = null;
+  if (event.voting === "sonuclandi") {
+    const { data, error } = await db.rpc("vote_tallies", { p_event: event.id });
+    if (error) readFailed("Oylama sonuçları", error);
+    tallies = (data ?? {}) as Record<string, number>;
+  }
+  return { myVote, tallies };
+});
+
+export function logoUrl(path: string | null) {
+  if (!path) return null;
+  return `${env.supabaseUrl}/storage/v1/object/public/logos/${path}`;
+}
+
+export function exhibitPath(slug: string, no: number) {
+  return `/sergi/${slug}/${no}`;
+}
+
+export type TimelineEntry = { id: string; kind: string; detail: string | null; occurred_at: string };
+export const getTimeline = cache(async (projectId: string): Promise<TimelineEntry[]> => {
+  const { data, error } = await createAdminClient().from("project_timeline")
+    .select("id, kind, detail, occurred_at").eq("project_id", projectId).order("occurred_at", { ascending: false }).limit(30);
+  if (error) throw new Error("Teslim geçmişi okunamadı.");
+  return data ?? [];
+});
+
+export type ProjectJob = { id: string; kind: string; state: string; attempts: number; error: string | null; created_at: string; next_attempt_at: string };
+export const getProjectJobs = cache(async (projectId: string): Promise<ProjectJob[]> => {
+  const { data, error } = await createAdminClient().from("delivery_jobs")
+    .select("id, kind, state, attempts, error, created_at, next_attempt_at").eq("project_id", projectId)
+    .order("created_at", { ascending: false }).limit(10);
+  if (error) throw new Error("Teslim işleri okunamadı.");
+  return data ?? [];
+});
+
+export type Award = { id: string; event_id: string; project_id: string; title: string; reason: string };
+export const getAwards = cache(async (eventId: string): Promise<Award[]> => {
+  const { data, error } = await createAdminClient().from("awards").select("id, event_id, project_id, title, reason")
+    .eq("event_id", eventId).order("created_at");
+  if (error) throw new Error("Ödüller okunamadı.");
+  return data ?? [];
+});

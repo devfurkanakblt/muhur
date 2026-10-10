@@ -264,13 +264,13 @@ export async function submitVersion(previous: FormState): Promise<FormState> {
     if (result.status === "already_accepted" || result.status === "busy") return { notice: message, status: result.status };
     if (result.status !== "queued") return { error: message, status: result.status };
     after(() => processProjectJobs(project.id));
-    return { ok: true, status: result.status };
+    return { ok: true, status: result.status, ...(result.supersededSha ? { notice: message } : {}) };
   } catch { return { error: "GitHub'a ulaşılamadı. Kabul edilmiş önceki sürümün korunuyor; tekrar dene." }; }
 }
 
 type SubmissionResult = {
   status: "queued" | "busy" | "already_accepted" | "rate_limited";
-  requestedSha: string; queuedSha: string | null; acceptedSha: string | null; retryAt?: string;
+  requestedSha: string; queuedSha: string | null; acceptedSha: string | null; retryAt?: string; supersededSha?: string | null;
 };
 
 const short = (sha: string | null | undefined) => (sha ?? "").slice(0, 7);
@@ -279,7 +279,9 @@ const short = (sha: string | null | undefined) => (sha ?? "").slice(0, 7);
 function submissionMessage(r: SubmissionResult) {
   switch (r.status) {
     case "queued":
-      return `${short(r.requestedSha)} sürümü sıraya alındı.`;
+      return r.supersededSha
+        ? `${short(r.requestedSha)} sürümü sıraya alındı; bekleyen ${short(r.supersededSha)} sürümünün yerini aldı.`
+        : `${short(r.requestedSha)} sürümü sıraya alındı.`;
     case "already_accepted":
       return `Repodaki son commit (${short(r.requestedSha)}) zaten kabul edilmiş. Yeni bir değişiklik push etmediysen tekrar teslim etmen gerekmiyor.`;
     case "busy":

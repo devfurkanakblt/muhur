@@ -14,7 +14,8 @@
     "preview:test": "node tests/preview.mjs",
     "test:browser": "node tests/browser.mjs",
     "test:live-browser": "node tests/live-browser.mjs",
-    "test:routes": "node tests/routes.mjs"
+    "test:routes": "node tests/routes.mjs",
+    "test:stress": "node --import ./tests/register.mjs scripts/stress-seal.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -35,6 +36,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
+    "pg": "^8.23.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

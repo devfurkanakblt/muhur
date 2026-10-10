@@ -49,3 +49,6 @@ next-env.d.ts
 # editor / agent local state
 .claude/settings.local.json
 /.impeccable/review/
+
+# supabase cli
+/supabase/.temp/

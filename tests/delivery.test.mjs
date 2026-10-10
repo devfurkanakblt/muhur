@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { captureSubmission, hashArchive, validateArchive, verifySealedArchive } from "../lib/delivery-core.ts";
+import { captureSubmission, hashArchive, isPermanentDeliveryError, retryTransient, validateArchive, verifySealedArchive } from "../lib/delivery-core.ts";
 import { ARCHIVE_LIMIT_BYTES, deliveryState, safeDemoUrl, serverTimeAt, canDownloadArchive } from "../lib/delivery-policy.ts";
 import { zipEntries } from "../lib/zip.ts";
 
@@ -111,4 +111,41 @@ test("demo URL doğrulaması HTTPS ister, kullanıcı bilgisi ve script URL redd
   for (const bad of ["javascript:alert(1)", "http://demo.example.com", "https://user:secret@example.com", "bad"]) {
     assert.throws(() => safeDemoUrl(bad));
   }
+});
+
+test("geçici hata aynı kira içinde yeniden denenir, kalıcı hata denenmez", async () => {
+  const waits = [];
+  const sleep = async (ms) => { waits.push(ms); };
+  let calls = 0;
+  const result = await retryTransient(async () => { if (++calls < 3) throw new Error("Arşiv indirilemedi (502)"); return "kabul"; }, { sleep });
+  assert.equal(result, "kabul");
+  assert.deepEqual(waits, [1000, 2000]);
+
+  calls = 0;
+  await assert.rejects(retryTransient(async () => { calls++; throw new Error("Arşiv 50 MB sınırını aşıyor."); }, { sleep }), /50 MB/);
+  assert.equal(calls, 1);
+
+  calls = 0;
+  await assert.rejects(retryTransient(async () => { calls++; throw new Error("Teslim işi artık geçerli değil."); }, { sleep }), /geçerli değil/);
+  assert.equal(calls, 1, "Kirası kaybedilen iş yeniden denenmez");
+
+  calls = 0;
+  await assert.rejects(retryTransient(async () => { calls++; throw new Error("Storage 503"); }, { sleep }), /503/);
+  assert.equal(calls, 3, "Deneme sayısı sınırlı");
+});
+
+test("yeniden deneme süre bütçesini aşmaz", async () => {
+  let clock = 0;
+  let calls = 0;
+  await assert.rejects(retryTransient(async () => { calls++; clock += 19_500; throw new Error("Arşiv indirilemedi (502)"); },
+    { sleep: async (ms) => { clock += ms; }, now: () => clock }), /502/);
+  assert.equal(calls, 1, "45 sn'lik zaman aşımından sonra kira içinde yeniden denenmez");
+});
+
+test("kayıp arşiv kalıcı hatadır, ağ hataları geçicidir", () => {
+  assert.equal(isPermanentDeliveryError("Kabul edilmiş arşiv depoda bulunamadı."), true);
+  assert.equal(isPermanentDeliveryError("Kabul edilmiş arşivin bütünlüğü doğrulanamadı. Yönetici incelemesi gerekli."), true);
+  assert.equal(isPermanentDeliveryError("LOCKED: Teslim süresi doldu; arşiv yazılmadı."), true);
+  assert.equal(isPermanentDeliveryError("Arşiv deposuna ulaşılamadı."), false);
+  assert.equal(isPermanentDeliveryError("Arşiv indirilemedi (502)"), false);
 });

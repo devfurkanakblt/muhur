@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { downloadZipball } from "@/lib/github";
-import { captureSubmission, verifySealedArchive, type DeliveryJob } from "@/lib/delivery-core";
+import { captureSubmission, isPermanentDeliveryError, retryTransient, verifySealedArchive, type DeliveryJob } from "@/lib/delivery-core";
 
 async function readArchive(path: string) {
   const { data, error } = await createAdminClient().storage.from("archives").download(path);
@@ -40,7 +40,7 @@ export async function processDeliveryJobs(projectId: string | null = null, limit
     try {
       let completed: boolean;
       if (job.kind === "submit") {
-        completed = await captureSubmission(job, {
+        completed = await retryTransient(() => captureSubmission(job, {
           read: readArchive,
           download: downloadZipball,
           write: async (path, bytes) => {
@@ -55,7 +55,7 @@ export async function processDeliveryJobs(projectId: string | null = null, limit
             if (error) throw new Error(error.message);
             return data === true;
           },
-        });
+        }));
       } else {
         const { data: p, error: projectError } = await db.from("projects").select(
           "accepted_archive_path, accepted_archive_sha256, accepted_archive_bytes, archive_sha256",
@@ -63,7 +63,7 @@ export async function processDeliveryJobs(projectId: string | null = null, limit
         if (projectError || !p) throw new Error("Proje okunamadı.");
         if (!p.archive_sha256) {
           if (!p.accepted_archive_path) throw new Error("Süre dolmadan kabul edilmiş teslim sürümü yok. Sonradan kod kabul edilemez.");
-          await verifySealedArchive(p.accepted_archive_path, p.accepted_archive_sha256, p.accepted_archive_bytes, readArchive);
+          await retryTransient(() => verifySealedArchive(p.accepted_archive_path, p.accepted_archive_sha256, p.accepted_archive_bytes, readArchive));
         }
         const { data, error } = await db.rpc("complete_seal", { p_job: job.id, p_token: job.lease_token });
         if (error) throw new Error(error.message);
@@ -75,14 +75,44 @@ export async function processDeliveryJobs(projectId: string | null = null, limit
       return { id: job.id, projectId: job.project_id, ok: completed };
     } catch (e) {
       const message = e instanceof Error ? e.message : "Arşiv işlemi tamamlanamadı.";
-      const permanent = /50 MB|Geçerli bir ZIP|kabul edilmiş teslim sürümü yok|bütünlü|LOCKED|Eski mühür/.test(message);
+      const permanent = isPermanentDeliveryError(message);
       const { error } = await db.rpc("fail_delivery_job", {
         p_job: job.id, p_token: job.lease_token, p_error: message, p_retry: !permanent,
       });
       if (error) throw new Error(error.message);
-      return { id: job.id, projectId: job.project_id, ok: false, message };
+      return { id: job.id, projectId: job.project_id, ok: false, message, retry: !permanent };
     }
   }));
+  return outcomes;
+}
+
+/** Son 15 dakikada geçici hatadan sonra bekleme en fazla 10 sn (0006); takip denemesi bunun hemen ardından yapılır. */
+const FOLLOW_UP_MS = 11_000;
+
+/**
+ * Teslim isteğinden sonra (after) çalışır: geçici hatayla sıraya dönen iş, dakikalık zamanlayıcıyı beklemeden
+ * yeniden denenir. Son tarih uzaktaysa bekleme daha uzundur; takip turu iş bulamaz ve durur.
+ */
+export async function processProjectJobs(projectId: string) {
+  for (let round = 0; round < 4; round++) {
+    const outcomes = await processDeliveryJobs(projectId);
+    if (!outcomes.some((o) => "retry" in o && o.retry)) return outcomes;
+    await new Promise((resolve) => setTimeout(resolve, FOLLOW_UP_MS));
+  }
+}
+
+/**
+ * Kuyruk boşalana ya da süre bütçesi bitene kadar işler. Kilitten sonra bütün mühürler
+ * dakikada birkaç iş yerine ilk zamanlayıcı turunda tamamlanır.
+ */
+export async function drainDeliveryJobs(budgetMs: number) {
+  const started = Date.now();
+  const outcomes: Awaited<ReturnType<typeof processDeliveryJobs>> = [];
+  while (Date.now() - started < budgetMs) {
+    const batch = await processDeliveryJobs(null, 8);
+    if (!batch.length) break;
+    outcomes.push(...batch);
+  }
   return outcomes;
 }
 

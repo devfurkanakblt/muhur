@@ -23,6 +23,13 @@ if (!url || !key) {
       const missing = [audit.error, tallies.error].some(e => e && ["42P01", "PGRST202", "PGRST205", "42883"].includes(e.code));
       console.error(missing ? "0005_hardening.sql migration henüz uygulanmamış." : "0005 şeması doğrulanamadı. Anahtar değerleri yazdırılmadı.");
       process.exitCode = 1;
-    } else console.log("Sertleştirme şeması (0005) erişilebilir.");
+    } else {
+      console.log("Sertleştirme şeması (0005) erişilebilir.");
+      const { data: version, error: versionError } = await db.rpc("delivery_schema_version");
+      if (versionError || version < 6) {
+        console.error(versionError && !["PGRST202", "42883"].includes(versionError.code) ? "0006 şeması doğrulanamadı." : "0006_son_dakika.sql migration henüz uygulanmamış.");
+        process.exitCode = 1;
+      } else console.log("Son dakika teslim şeması (0006) erişilebilir.");
+    }
   }
 }

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { downloadZipball, getHeadSha, getRepoById, GithubError, hasCommitsBefore } from "@/lib/github";
 import { notify, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
-import { enqueueSeals, processDeliveryJobs } from "@/lib/delivery";
+import { drainDeliveryJobs, enqueueSeals, processDeliveryJobs } from "@/lib/delivery";
 import { sendReminders } from "@/lib/reminders";
 import { hashArchive, validateArchive } from "@/lib/delivery-core";
 import { sweepStorage } from "@/lib/storage-sweep";
@@ -87,7 +87,7 @@ async function storeZip(path: string, zip: Uint8Array) {
 /** Yalnızca süre dolmadan doğrulanmış teslimler mühürlenir. */
 export async function freezeAll(eventId: string) {
   await enqueueSeals(eventId);
-  return processDeliveryJobs(null, 4);
+  return drainDeliveryJobs(SEAL_DRAIN_MS);
 }
 
 export type SnapshotResult = { attempted: number; stored: number; unchanged: number; skipped: number; failed: number; lastError: string | null };
@@ -211,6 +211,8 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e)).sli
 
 /** Yardımcı işler (sağlık, ara mühür, hatırlatma, depo temizliği) bu süreden sonra başlatılmaz. */
 const HELPER_BUDGET_MS = 35_000;
+/** Kilitten sonra mühür kuyruğu bu süre boyunca boşaltılır; pg_cron isteğinin 60 sn zaman aşımının altında kalır. */
+const SEAL_DRAIN_MS = 40_000;
 
 async function tryLease(name: string, seconds: number) {
   const { data, error } = await createAdminClient().rpc("try_worker_lease", { p_name: name, p_seconds: seconds });
@@ -241,7 +243,7 @@ export async function tick() {
     for (const ev of events ?? []) {
       await step(`kilit ${ev.slug}`, async () => { if (await ensureLocked(ev.id, "otomatik")) await enqueueSeals(ev.id); });
     }
-    processed = [...processed, ...((await step("mühür kuyruğu", () => processDeliveryJobs(null, 4))) ?? [])];
+    processed = [...processed, ...((await step("mühür kuyruğu", () => drainDeliveryJobs(SEAL_DRAIN_MS))) ?? [])];
     details.jobs = { processed: processed.length, failed: processed.filter((r) => !r.ok).length };
 
     const open = (events ?? []).find((ev) => ev.is_current && !ev.locked_at && Date.now() < new Date(ev.deadline).getTime());

@@ -21,6 +21,33 @@ export function validateArchive(bytes: Uint8Array) {
   return checkZipStructure(bytes);
 }
 
+/** Yeniden denemekle düzelmeyecek hatalar. Kayıp arşiv de buna dahildir: yönetici incelemesi gerekir. */
+export function isPermanentDeliveryError(message: string) {
+  return /50 MB|Geçerli bir ZIP|kabul edilmiş teslim sürümü yok|bütünlü|LOCKED|Eski mühür|depoda bulunamadı/i.test(message);
+}
+
+/**
+ * Geçici hatayı (GitHub 502, depo 503) kuyruğa bırakmadan aynı kira içinde birkaç kez yeniden dener.
+ * Son dakikada kuyruğa düşen iş, sonraki zamanlayıcı turunu beklerken süre dolabilir.
+ * Bütçe kısa tutulur: iş işlenirken ekibin daha yeni sürümü sıraya giremez.
+ */
+export async function retryTransient<T>(run: () => Promise<T>, options: {
+  delaysMs?: number[]; budgetMs?: number; sleep?: (ms: number) => Promise<void>; now?: () => number;
+} = {}) {
+  const { delaysMs = [1000, 2000], budgetMs = 20_000, sleep = (ms) => new Promise<void>((r) => setTimeout(r, ms)), now = Date.now } = options;
+  const started = now();
+  for (let attempt = 0; ; attempt++) {
+    try { return await run(); }
+    catch (e) {
+      const message = e instanceof Error ? e.message : "";
+      const delay = delaysMs[attempt];
+      if (delay === undefined || isPermanentDeliveryError(message) || /artık geçerli değil/.test(message)
+        || now() - started + delay > budgetMs) throw e;
+      await sleep(delay);
+    }
+  }
+}
+
 export async function captureSubmission(job: DeliveryJob, deps: {
   download: (name: string, sha: string) => Promise<Uint8Array>;
   read: (path: string) => Promise<Uint8Array | null>;

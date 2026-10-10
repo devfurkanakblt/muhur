@@ -9,7 +9,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { exhibitPath, getEvent, getOwnProject, getViewer } from "@/lib/data";
 import { canClaimRepo, getHeadSha, getRepo, getRepoById, GithubError, parseRepoInput } from "@/lib/github";
 import { checkHealth, freezeAll, getEventRow, lockNow, tick } from "@/lib/freeze";
-import { processDeliveryJobs, retrySeal } from "@/lib/delivery";
+import { processProjectJobs, retrySeal } from "@/lib/delivery";
 import { safeDemoUrl } from "@/lib/delivery-policy";
 import { normalizeLogo, type NormalizedLogo } from "@/lib/logo-image";
 import { notify, tg } from "@/lib/notify";
@@ -148,7 +148,7 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
   }
 
   after(async () => {
-    await processDeliveryJobs(project.id);
+    await processProjectJobs(project.id);
     await checkHealth(project, await getEventRow(event.id));
     await notify([
       `🖼 ${tg.b("Vitrine yeni eser")} · No. ${String(project.exhibit_no).padStart(3, "0")}`,
@@ -263,14 +263,14 @@ export async function submitVersion(previous: FormState): Promise<FormState> {
     const message = submissionMessage(result);
     if (result.status === "already_accepted" || result.status === "busy") return { notice: message, status: result.status };
     if (result.status !== "queued") return { error: message, status: result.status };
-    after(() => processDeliveryJobs(project.id));
-    return { ok: true, status: result.status };
+    after(() => processProjectJobs(project.id));
+    return { ok: true, status: result.status, ...(result.supersededSha ? { notice: message } : {}) };
   } catch { return { error: "GitHub'a ulaşılamadı. Kabul edilmiş önceki sürümün korunuyor; tekrar dene." }; }
 }
 
 type SubmissionResult = {
   status: "queued" | "busy" | "already_accepted" | "rate_limited";
-  requestedSha: string; queuedSha: string | null; acceptedSha: string | null; retryAt?: string;
+  requestedSha: string; queuedSha: string | null; acceptedSha: string | null; retryAt?: string; supersededSha?: string | null;
 };
 
 const short = (sha: string | null | undefined) => (sha ?? "").slice(0, 7);
@@ -279,7 +279,9 @@ const short = (sha: string | null | undefined) => (sha ?? "").slice(0, 7);
 function submissionMessage(r: SubmissionResult) {
   switch (r.status) {
     case "queued":
-      return `${short(r.requestedSha)} sürümü sıraya alındı.`;
+      return r.supersededSha
+        ? `${short(r.requestedSha)} sürümü sıraya alındı; bekleyen ${short(r.supersededSha)} sürümünün yerini aldı.`
+        : `${short(r.requestedSha)} sürümü sıraya alındı.`;
     case "already_accepted":
       return `Repodaki son commit (${short(r.requestedSha)}) zaten kabul edilmiş. Yeni bir değişiklik push etmediysen tekrar teslim etmen gerekmiyor.`;
     case "busy":
@@ -601,7 +603,7 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
     return { error: "İş yeniden denemeye uygun değil." };
   }
   await auditAdmin(admin, "retry_job", { projectId: job.project_id, after: { job: id } });
-  after(() => processDeliveryJobs(job.project_id));
+  after(() => processProjectJobs(job.project_id));
   revalidatePath("/yonetim");
   return { ok: true };
 }

@@ -101,6 +101,21 @@ export async function processProjectJobs(projectId: string) {
   }
 }
 
+/**
+ * Kuyruk boşalana ya da süre bütçesi bitene kadar işler. Kilitten sonra bütün mühürler
+ * dakikada birkaç iş yerine ilk zamanlayıcı turunda tamamlanır.
+ */
+export async function drainDeliveryJobs(budgetMs: number) {
+  const started = Date.now();
+  const outcomes: Awaited<ReturnType<typeof processDeliveryJobs>> = [];
+  while (Date.now() - started < budgetMs) {
+    const batch = await processDeliveryJobs(null, 8);
+    if (!batch.length) break;
+    outcomes.push(...batch);
+  }
+  return outcomes;
+}
+
 export async function enqueueSeals(eventId: string) {
   const { error } = await createAdminClient().rpc("enqueue_seals", { p_event: eventId });
   if (error) throw new Error(error.message);

@@ -15,7 +15,7 @@ type SceneDef = { id: string; dur: number; C: React.FC<{ dur: number }> };
 export const SCENES: SceneDef[] = [
   { id: "S01", dur: 330, C: S01Merhaba },
   { id: "S02", dur: 180, C: S02Baslik },
-  { id: "S03", dur: 190, C: S03Doga },
+  { id: "S03", dur: 400, C: S03Doga },
   { id: "S04", dur: 270, C: S04Gorev },
   { id: "S05", dur: 330, C: S05Beklenen },
   { id: "S06", dur: 330, C: S06Kod },

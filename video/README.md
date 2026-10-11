@@ -34,5 +34,6 @@ Sahne süreleri `src/Video.tsx` içindeki `SCENES` listesinde (kare cinsinden).
 ## Notlar
 
 - Arayüz sahnelerindeki ekip, repo, SHA ve eserler örnektir ve ekranda "ÖRNEK" etiketi taşır.
+- S3'teki küre `d3-geo` ile çizilir; kıta verisi Natural Earth 1:50m (`world-atlas` paketi, kamu malı). Pencerelerdeki çizimler `src/components/vignettes.tsx` içindedir.
 - Ses efektleri kayıt değil, `scripts/sfx.py` ile sentezlenir; telif sorunu yoktur.
 - Remotion lisansı bireyler, kâr amacı gütmeyen kuruluşlar ve en fazla 3 çalışanlı şirketler için ücretsizdir; öğrenci kulübü kullanımı bu kapsamdadır.

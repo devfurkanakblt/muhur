@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SaveEgg } from "@/components/save-egg";
@@ -26,11 +27,14 @@ export const metadata: Metadata = {
 // Kayıtlı tema seçimi ilk boyamadan önce uygulanır; seçim yoksa CSS sistem temasını izler.
 const themeScript = `(function(){try{var t=localStorage.getItem("tema");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // proxy.ts her sayfa isteğine yeni nonce verir; politika nonce'suz satır içi betiği çalıştırmaz (A21).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="tr" className={`${grotesk.variable} ${mono.variable} antialiased`} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {/* Tarayıcı nonce özniteliğini DOM'dan gizler; hidrasyon farkı beklenen bir durumdur. */}
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="flex min-h-dvh flex-col">
         <a href="#main-content" className="skip-link no-print">İçeriğe geç</a>

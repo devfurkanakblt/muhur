@@ -5,10 +5,12 @@ import { ArrowUpRightIcon, DownloadSimpleIcon, MonitorPlayIcon } from "@phosphor
 import { SiteHeader } from "@/components/site-header";
 import { AnnouncementForm, AnonymizeForm, AwardForm, NewEventForm, RetryJobButton, ScheduleForm } from "@/components/admin-forms";
 import { HoldToLock } from "@/components/hold-to-lock";
-import { exhibitPath, getEvent, getViewer, getAwards, getEvents } from "@/lib/data";
+import { exhibitPath, getAdminSession, getEvent, getViewer, getAwards, getEvents, type AdminSession } from "@/lib/data";
+import { SignInButton } from "@/components/buttons";
+import { selectAll } from "@/lib/paginate";
 import { createAdminClient } from "@/lib/supabase/server";
 import { HEALTH_TEXT } from "@/lib/health";
-import { exhibitNo, formatBytes, formatDay, formatTime, relativeTR, toLocalInput } from "@/lib/format";
+import { exhibitNo, formatBytes, formatDateTime, formatDay, formatTime, relativeTR, toLocalInput } from "@/lib/format";
 import { retryFreeze, setVoting, removeAward, runWorker } from "@/app/actions";
 import { LiveState } from "@/components/live-state";
 import { getLiveStatus } from "@/lib/status";
@@ -53,31 +55,66 @@ function Section({ title, note, children }: { title: string; note?: React.ReactN
   );
 }
 
+/** Geri alınamaz işlemler için oturum tazeliği (A21): süresi dolmadan önce uyarır, dolunca yeniden giriş ister. */
+function SessionNotice({ session, now }: { session: AdminSession | null; now: number }) {
+  const until = session?.freshUntil ?? null;
+  const at = until ? formatDateTime(new Date(until).toISOString()) : null;
+  const reauth = <SignInButton next="/yonetim" label="GitHub ile yeniden giriş yap" />;
+  if (!session?.fresh) {
+    return (
+      <div role="alert" className="grid gap-4 border-y border-danger/40 py-5">
+        <p className="max-w-[70ch]">
+          <span className="font-medium">Kilit, zamanlama, oylama, yeni etkinlik ve veri silme kapalı.</span>{" "}
+          <span className="text-ink-2">Bu işlemler son 12 saat içinde açılmış bir oturum ister. Yeniden giriş yapınca hemen açılır.</span>
+        </p>
+        <div>{reauth}</div>
+      </div>
+    );
+  }
+  const soon = until !== null && until - now < 3 * 3600_000;
+  return (
+    <div className="grid gap-4 text-[0.9375rem] text-ink-2">
+      <p>Kilit, zamanlama, oylama, yeni etkinlik ve veri silme {at} itibarıyla yeniden giriş isteyecek.</p>
+      {soon && <div><p className="mb-3 text-ink">Süre üç saatten az; kritik bir anda kapanmaması için şimdi yeniden giriş yap.</p>{reauth}</div>}
+    </div>
+  );
+}
+
 export default async function AdminPage() {
   await connection();
   const viewer = await getViewer();
   if (!viewer?.isAdmin) notFound();
   const event = await getEvent();
+  const session = await getAdminSession();
   const db = createAdminClient();
-  const [{ data }, { count: voteCount }] = await Promise.all([
-    db
+  // Okuma hatası "Henüz eser yok" ya da "zamanlayıcı hiç çalışmadı" gibi gösterilmez; sayfa hata ekranına düşer (A09).
+  const [rows, votes] = await Promise.all([
+    selectAll<Row>((from, to) => db
       .from("projects")
       .select(
         "id, exhibit_no, name, team_name, repo_full_name, repo_url, repo_created_at, pre_event_commits, last_pushed_at, health_issues, frozen_sha, frozen_method, archive_path, archive_bytes, freeze_error, accepted_sha, accepted_at, delivery_error, members:project_members(github_login), snapshots(sha, last_seen_at)",
+        { count: "exact" },
       )
       .eq("event_id", event.id)
-      .order("exhibit_no"),
+      .order("exhibit_no")
+      .range(from, to)
+      .overrideTypes<Row[], { merge: false }>()),
     db.from("votes").select("user_id", { count: "exact", head: true }).eq("event_id", event.id),
   ]);
-  const rows = (data ?? []) as Row[];
+  if (votes.error) throw new Error(`Oy sayısı okunamadı: ${votes.error.message}`);
+  const voteCount = votes.count;
   const sealed = rows.filter((r) => r.archive_path).length;
   const startMs = new Date(event.startsAt).getTime();
-  const [awards, events, status, { data: runs }, { data: jobs }] = await Promise.all([
+  const [awards, events, status, runsResult, jobsResult] = await Promise.all([
     getAwards(event.id), getEvents(), getLiveStatus(),
     db.from("worker_runs").select("id, started_at, finished_at, error, processed").order("started_at", { ascending: false }).limit(5),
     db.from("delivery_jobs").select("id, kind, state, attempts, error, next_attempt_at, created_at, project:projects(name, team_name), event:events(title)")
       .order("created_at", { ascending: false }).limit(30),
   ]);
+  if (runsResult.error) throw new Error(`Zamanlayıcı kayıtları okunamadı: ${runsResult.error.message}`);
+  if (jobsResult.error) throw new Error(`Teslim işleri okunamadı: ${jobsResult.error.message}`);
+  const runs = runsResult.data;
+  const jobs = jobsResult.data;
   const lastSuccess = (runs ?? []).find(r => r.finished_at && !r.error);
   const workerStale = !lastSuccess || event.now - +new Date(lastSuccess.finished_at!) > 3 * 60_000;
 
@@ -97,6 +134,8 @@ export default async function AdminPage() {
             <MonitorPlayIcon size={18} /> Sahne modunu aç
           </Link>
         </div>
+
+        <SessionNotice session={session} now={event.now} />
 
         {event.locked ? (
           <Section title="Mühür vuruldu">

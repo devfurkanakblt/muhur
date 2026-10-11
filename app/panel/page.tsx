@@ -17,7 +17,7 @@ import { getLiveStatus } from "@/lib/status";
 import { ActionForm, ActionButton } from "@/components/action-form";
 import { exhibitPath, getEvent, getExhibits, getOwnProject, getViewer, getTimeline, getProjectJobs, logoUrl, type EventState, type OwnProject, type Viewer } from "@/lib/data";
 import { HEALTH_TEXT } from "@/lib/health";
-import { getRepo, listPublicRepos, parseRepoInput } from "@/lib/github";
+import { getRepo, GithubError, listPublicRepos, parseRepoInput } from "@/lib/github";
 import { exhibitNo, formatDateTime, relativeTR } from "@/lib/format";
 import { env } from "@/lib/env";
 import { leaveProject, recheckHealth, removeMember, renewInvite, signOut } from "@/app/actions";
@@ -112,8 +112,11 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
       const repo = await getRepo(repoParam);
       repoName = repo.full_name;
       if (repo.private) repoError = "Bu repo private. Hackathon kuralları gereği yalnızca public repolar kabul ediliyor.";
-    } catch {
-      repoError = "Repo bulunamadı. Bağlantıyı ve reponun public olduğunu kontrol et.";
+    } catch (e) {
+      // Yalnızca 404 "bulunamadı" demektir; GitHub kesintisi reponun yokluğu gibi gösterilmez (A09).
+      repoError = e instanceof GithubError && e.status === 404
+        ? "Repo bulunamadı. Bağlantıyı ve reponun public olduğunu kontrol et."
+        : "GitHub'a şu an ulaşılamadı; repo kontrol edilemedi. Biraz sonra tekrar dene.";
     }
     if (!repoError) {
       return (
@@ -140,7 +143,17 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
 
 async function Picker({ viewer, eventId, note, error }: { viewer: Viewer; eventId: string; note: string; error?: string }) {
   const token = (await cookies()).get("gh_token")?.value;
-  const [repos, exhibits] = await Promise.all([listPublicRepos(token, viewer.login).catch(() => []), getExhibits(eventId)]);
+  // GitHub'a ulaşılamazsa liste boş sayılmaz: ekip hatayı görür, bağlantı yapıştırarak devam edebilir (A09).
+  const [{ repos, listFailed }, exhibits] = await Promise.all([
+    listPublicRepos(token, viewer.login).then(
+      (repos) => ({ repos, listFailed: false }),
+      (e) => {
+        console.error("[github] repo listesi:", e instanceof Error ? e.message : e);
+        return { repos: [], listFailed: true };
+      },
+    ),
+    getExhibits(eventId),
+  ]);
   const taken = new Set(exhibits.map((e) => e.repo_full_name.toLowerCase()));
   return (
     <Shell viewer={viewer}>
@@ -148,6 +161,7 @@ async function Picker({ viewer, eventId, note, error }: { viewer: Viewer; eventI
         <PageTitle note={note}>Hangi repo vitrine çıkacak?</PageTitle>
         <RepoPicker
           error={error}
+          listFailed={listFailed}
           repos={repos.map((r) => ({
             id: r.id,
             full_name: r.full_name,

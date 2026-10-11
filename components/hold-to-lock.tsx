@@ -28,7 +28,10 @@ export function HoldToLock() {
       if (inFlight.current) return;
       inFlight.current = true;
       startTransition(async () => {
-        try { await lockNowAction(); }
+        try {
+          const result = await lockNowAction();
+          if (result?.error) setError(result.error);
+        }
         catch { setError("Mühür işlemi doğrulanamadı. Güncel durumu kontrol edip yeniden dene."); }
         finally { inFlight.current = false; }
       });

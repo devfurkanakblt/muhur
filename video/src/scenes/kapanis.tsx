@@ -70,8 +70,8 @@ export const S21Ozet: React.FC<{ dur: number }> = ({ dur }) => {
           <Words text="Hazırsan… saat başlasın!" at={go + 30} size={140} accent={["başlasın!"]} dot={false} />
         </div>
       )}
-      <Mascot frame={frame} x={1530} y={1040} size={560} mood={frame < go ? "normal" : "heyecanli"} moodAt={go} accessories={["bant", "laptop"]} enterAt={0} hop={frame > go + 30} />
-      <Bubble at={150} until={go - 4} x={1240} y={170} size={46} width={540} tail="br">
+      <Mascot frame={frame} x={1680} y={1040} size={440} mood={frame < go ? "normal" : "heyecanli"} moodAt={go} accessories={["bant", "laptop"]} enterAt={0} hop={frame > go + 30} />
+      <Bubble at={150} until={go - 4} x={1310} y={560} size={44} width={520} tail="br">
         Bu dördü yeter. Gerisi senin fikrin. 💡
       </Bubble>
     </Scene>

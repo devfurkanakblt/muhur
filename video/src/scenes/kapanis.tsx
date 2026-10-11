@@ -44,10 +44,10 @@ export const S20Telegram: React.FC<{ dur: number }> = ({ dur }) => {
 /* S21 · Özet */
 
 const RECAP = [
-  { i: "🌍", t: <>Doğa problemi + yapay zekâ</> },
-  { i: "⌨️", t: <>Kod burada, 24 saatte</> },
-  { i: "🔏", t: <>Push → <b style={{ color: C.indigo }}>Teslim sürümünü güncelle</b></> },
-  { i: "📣", t: <><b style={{ color: C.indigo }}>Telegram kanalına</b> katıl</> },
+  <>Doğa problemi + yapay zekâ</>,
+  <>Kod burada, 24 saatte</>,
+  <>Push → <b style={{ color: C.indigo }}>Teslim sürümünü güncelle</b></>,
+  <><b style={{ color: C.indigo }}>Telegram kanalına</b> katıl</>,
 ];
 
 export const S21Ozet: React.FC<{ dur: number }> = ({ dur }) => {
@@ -58,9 +58,8 @@ export const S21Ozet: React.FC<{ dur: number }> = ({ dur }) => {
       <div style={{ position: "absolute", left: 110, top: 140, display: "grid", gap: 52, opacity: frame < go ? 1 : Math.max(0, 1 - (frame - go) / 10) }}>
         <Kicker at={2}>Özetle</Kicker>
         {RECAP.map((r, i) => (
-          <FadeUp key={i} at={12 + i * 22} dist={36} style={{ display: "flex", alignItems: "center", gap: 34, fontFamily: F.display, fontWeight: 600, fontSize: 76, letterSpacing: "-0.02em", color: C.ink }}>
-            <span style={{ width: 124, height: 124, borderRadius: 3, background: C.plinth, border: `2px solid ${C.rule}`, display: "grid", placeItems: "center", fontSize: 68 }}>{r.i}</span>
-            <span>{r.t}</span>
+          <FadeUp key={i} at={12 + i * 22} dist={36} style={{ fontFamily: F.display, fontWeight: 600, fontSize: 76, letterSpacing: "-0.02em", color: C.ink }}>
+            {r}
           </FadeUp>
         ))}
       </div>
@@ -71,8 +70,8 @@ export const S21Ozet: React.FC<{ dur: number }> = ({ dur }) => {
         </div>
       )}
       <Mascot frame={frame} x={1680} y={1040} size={440} mood={frame < go ? "normal" : "heyecanli"} moodAt={go} accessories={["bant", "laptop"]} enterAt={0} hop={frame > go + 30} />
-      <Bubble at={150} until={go - 4} x={1310} y={560} size={44} width={520} tail="br">
-        Bu dördü yeter. Gerisi senin fikrin. 💡
+      <Bubble at={150} until={go - 4} x={1390} y={560} size={44} width={470} tail="br">
+        Bu dördü yeter. Gerisi senin fikrin.
       </Bubble>
     </Scene>
   );

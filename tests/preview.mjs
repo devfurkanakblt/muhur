@@ -8,6 +8,8 @@ const stamp = n => new Date(now + n).toISOString();
 const userId = "00000000-0000-0000-0000-000000000001";
 const eventId = "10000000-0000-0000-0000-000000000001";
 let mode = "open";
+// Gizem avcıları: claim_mystery RPC ile bellekte tutulur, mod değişince sıfırlanır.
+let hunters = [];
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
 function records(table) {
@@ -34,7 +36,8 @@ function records(table) {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
       is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     projects,
-    project_members: [{ ...member, project_id: projects[0].id }],
+    project_members: [{ ...member, project_id: projects[0].id, project: { team_name: projects[0].team_name } }],
+    mystery_hunters: hunters,
     project_timeline: [{ id: "t1", project_id: projects[0].id, kind: "accepted", detail: "a".repeat(40), occurred_at: stamp(-300_000) }, { id: "t2", project_id: projects[0].id, kind: "snapshot", detail: "a".repeat(40), occurred_at: stamp(-600_000) }],
     delivery_jobs: mode === "failed" ? [{ id: "j1", project_id: projects[0].id, event_id: eventId, kind: "seal", state: "failed", attempts: 5, error: "Depo bağlantısı başarısız.", next_attempt_at: stamp(0), created_at: stamp(-30_000), project: { name: projects[0].name, team_name: projects[0].team_name }, event: { title: "Örnek Hackathon" } }] : [],
     worker_runs: [{ id: "r1", started_at: stamp(-30_000), finished_at: stamp(-15_000), processed: 3, error: null }],
@@ -58,6 +61,7 @@ const server = createServer((request, response) => {
   }
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
+    hunters = [];
     return response.end(JSON.stringify({ mode }));
   }
   if (url.pathname === "/fixture/session") {
@@ -75,6 +79,21 @@ const server = createServer((request, response) => {
     if (records("events")[0].voting === "sonuclandi") for (const v of records("votes")) tallies[v.project_id] = (tallies[v.project_id] ?? 0) + 1;
     return response.end(JSON.stringify(tallies));
   }
+  if (url.pathname === "/rest/v1/rpc/claim_mystery") {
+    let body = "";
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      if (mode !== "open") {
+        response.statusCode = 400;
+        return response.end(JSON.stringify({ message: "MYSTERY: Gizem yalnızca hackathon saatlerinde açık.", code: "P0001" }));
+      }
+      const { p_event, p_user, p_login } = JSON.parse(body || "{}");
+      let row = hunters.find(h => h.user_id === p_user);
+      if (!row) hunters.push(row = { event_id: p_event, user_id: p_user, github_login: p_login, found_at: new Date().toISOString() });
+      response.end(JSON.stringify(row.found_at));
+    });
+    return;
+  }
   if (!url.pathname.startsWith("/rest/v1/") || !["GET", "HEAD"].includes(request.method)) {
     response.statusCode = 405; return response.end(JSON.stringify({ message: "Yerel test verisi salt okunur.", code: "FIXTURE_READ_ONLY" }));
   }
@@ -82,6 +101,7 @@ const server = createServer((request, response) => {
   let rows = records(table);
   for (const [key, filter] of url.searchParams) {
     if (filter.startsWith("eq.")) rows = rows.filter(row => String(row[key]) === filter.slice(3));
+    if (filter.startsWith("in.(")) { const set = filter.slice(4, -1).split(",").map(v => v.replace(/^"|"$/g, "")); rows = rows.filter(row => set.includes(String(row[key]))); }
     if (filter === "is.null") rows = rows.filter(row => row[key] == null);
     if (filter === "not.is.null") rows = rows.filter(row => row[key] != null);
   }

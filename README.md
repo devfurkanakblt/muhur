@@ -45,6 +45,8 @@ Mevcut kurulumda yalnızca `0004_delivery.sql` çalıştırılır. `0002_events.
 
 `supabase/migrations/0006_son_dakika.sql` (son dakika teslimleri) 0005'ten sonra uygulanır ve geriye uyumludur: önce migration, sonra `npm run check:schema`, ardından uygulama yayını. `enqueue_submission` bekleyen eski sürümü yeni sürümle değiştirir ve aynı sürümün yeniden isteğinde beklemeyi atlar; `fail_delivery_job` son 15 dakikada geri çekilmeyi kısaltır; `delivery_schema_version()` şema kontrolü içindir.
 
+`supabase/migrations/0007_gizem.sql` (gizem avcısı) 0006'dan sonra uygulanır ve geriye uyumludur: önce migration, sonra `npm run check:schema`, ardından uygulama yayını. `mystery_hunters` tablosu ve `claim_mystery` yalnızca sunucuya açıktır; kayıt yalnızca hackathon saatlerinde (başlangıçtan mühüre) yapılır. `anonymize_user` gizem kaydındaki adı da anonimleştirir.
+
 ### 1. GitHub OAuth App
 GitHub → Settings → Developer settings → **OAuth Apps** (GitHub Apps değil) → New OAuth App:
 - Homepage URL: sitenin adresi
@@ -94,7 +96,7 @@ npm run dev
 
 `npm run check`: uygulama testleri, ESLint ve TypeScript. ZIP çıktısı Python `zipfile`, QR ise Python/OpenCV ile bağımsız doğrulanır; bu kontroller için Python ve OpenCV gerekir.
 
-`npm run test:db`: ayrı `.test-db` klasöründe PostgreSQL başlatır; 0001/0002/0004/0005/0006 migration'larını boş test veritabanında uygular; `tests/database-hardening.sql`, `tests/database-last-minute.sql` ve davet yenileme, kurucu devri ve oylama kapanışı için gerçek iki bağlantılı yarış testleri de çalışır. Atomik kayıt, geç teslim, iş sahipliği, eski token reddi, kalıcı mühür ve eşzamanlı kayıt/worker senaryolarını sınar. PostgreSQL 17 kurulu olmalı veya `POSTGRES_BIN` ayarlanmalıdır. Canlı veritabanına bağlanmaz; 0003 yalnızca Supabase cron/Vault kurulumu içindir.
+`npm run test:db`: ayrı `.test-db` klasöründe PostgreSQL başlatır; 0001/0002/0004/0005/0006/0007 migration'larını boş test veritabanında uygular; `tests/database-hardening.sql`, `tests/database-last-minute.sql`, `tests/database-mystery.sql` ve davet yenileme, kurucu devri ve oylama kapanışı için gerçek iki bağlantılı yarış testleri de çalışır. Atomik kayıt, geç teslim, iş sahipliği, eski token reddi, kalıcı mühür ve eşzamanlı kayıt/worker senaryolarını sınar. PostgreSQL 17 kurulu olmalı veya `POSTGRES_BIN` ayarlanmalıdır. Canlı veritabanına bağlanmaz; 0003 yalnızca Supabase cron/Vault kurulumu içindir.
 
 `npm run preview:test`: 3100/54330 portlarında yalnızca örnek verilerle ayrı Next dev önizlemesi. `npm run test:browser`: Chrome/Edge ile masaüstü ve mobil render kontrolleri, `test-artifacts/` içinde ekran görüntüleri. Test önizlemesinde gerçek GitHub/Supabase anahtarları ve Telegram kullanılmaz.
 

@@ -263,3 +263,36 @@ export const getAwards = cache(async (eventId: string): Promise<Award[]> => {
   if (error) throw new Error("Ödüller okunamadı.");
   return data ?? [];
 });
+
+// ---------------------------------------------------------------------------- gizem avcıları
+
+export type MysteryHunter = { user_id: string; github_login: string; found_at: string };
+
+/** Etkinlikte gizemi çözenler, bulma sırasıyla. Yalnızca yönetim ve rozet için sunucuda okunur. */
+export async function getMysteryHunters(eventId: string): Promise<MysteryHunter[]> {
+  const { data, error } = await createAdminClient()
+    .from("mystery_hunters")
+    .select("user_id, github_login, found_at")
+    .eq("event_id", eventId)
+    .order("found_at");
+  if (error) {
+    console.error("[gizem] okunamadı:", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+/** Rozet takıma aittir: ekipten biri gizemi çözmüşse proje rozeti açılır. */
+export async function projectHasMystery(eventId: string, projectId: string) {
+  const db = createAdminClient();
+  const { data: members } = await db.from("project_members").select("user_id").eq("project_id", projectId);
+  const ids = (members ?? []).map((m) => m.user_id);
+  if (!ids.length) return false;
+  const { count, error } = await db
+    .from("mystery_hunters")
+    .select("user_id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .in("user_id", ids);
+  if (error) console.error("[gizem] rozet okunamadı:", error.message);
+  return (count ?? 0) > 0;
+}

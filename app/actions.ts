@@ -15,6 +15,7 @@ import { normalizeLogo, type NormalizedLogo } from "@/lib/logo-image";
 import { notify, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
 import { claimOnce, releaseOnce, requestKey } from "@/lib/once";
+import { isMysteryAnswer, mysteryOpen } from "@/lib/mystery";
 
 /** notice: hata olmayan bilgi (ör. "bu commit zaten kabul edilmiş"); nötr gösterilir. */
 export type FormState = { error?: string; ok?: boolean; status?: string; notice?: string } | undefined;
@@ -399,6 +400,33 @@ export async function withdrawVote(): Promise<FormState> {
   if (error) return { error: dbError(error.message) };
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------- gizem avcısı
+
+/** Ctrl+Shift+S penceresi. Pencere dışarıdayken cevabın doğru olup olmadığı söylenmez. */
+export async function huntMystery(_: FormState, formData: FormData): Promise<FormState> {
+  const answer = String(formData.get("answer") ?? "");
+  const event = await getEvent();
+  if (!mysteryOpen(event)) return { error: "Gizem yalnızca hackathon saatlerinde açık." };
+  if (!isMysteryAnswer(answer)) return { error: "Hmm… olmadı. 🤔" };
+  const viewer = await getViewer();
+  if (!viewer) return { notice: "Doğru! Rozeti almak için önce GitHub ile giriş yap, sonra tekrar yaz." };
+  const { error } = await createAdminClient().rpc("claim_mystery", { p_event: event.id, p_user: viewer.id, p_login: viewer.login });
+  if (error) {
+    if (error.message.includes("MYSTERY:")) return { error: error.message.split("MYSTERY:")[1].split("\n")[0].trim() };
+    console.error("[gizem] kaydedilemedi:", error.message);
+    return { error: "Bir şeyler ters gitti. Lütfen tekrar dene." };
+  }
+  const project = await getOwnProject(viewer.id, event.id);
+  revalidatePath("/panel");
+  revalidatePath("/yonetim");
+  return {
+    ok: true,
+    status: project
+      ? "Gizem çözüldü! Takımının panelinde gizem avcısı rozeti açıldı."
+      : "Gizem çözüldü! Bir takıma katılınca rozet takımının paneline gelir.",
+  };
 }
 
 // ---------------------------------------------------------------------------- yönetim

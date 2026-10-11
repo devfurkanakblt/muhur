@@ -67,3 +67,4 @@ Gece galerisi: `--wall #0e1020`, `--plinth #161a2e`, `--ink #e8eaf4`, `--ink-2 #
 - **Eser sayfası, makbuz, doğrulama, aydınlatma metni**: aynı müze etiketi dili; alan adları küçük aralıklı büyük harf, değerler mono. Makbuz yazdırmada header/footer gizlenir.
 - **Canlı nabız**: etiketin altında nötr (`--ink-3`) yavaş atan nokta; yalnızca etkinlik başladıktan sonraki push'lar.
 - **Ctrl/Cmd+S**: "Kaydetmene gerek yok, push etmen yeterli." bildirimi (200 ms giriş, 150 ms çıkış).
+- **Ctrl/Cmd+Shift+S (gizem avcısı)**: açılış videosundaki "sha256" satırı gizli bir hex mesajdır; çözen bu kısayolla açılan pencereye cümleyi yazar. Cevap sunucuda denetlenir, yalnızca hackathon saatlerinde kaydedilir. Ekipten biri bulursa panelin Rozet bölümünde yeşil "mühür. | gizem avcısı" rozeti açılır; yönetimde "Gizem avcıları" listesi görünür.

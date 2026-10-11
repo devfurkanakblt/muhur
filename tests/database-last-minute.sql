@@ -74,6 +74,6 @@ select public.fail_delivery_job((select id from s1), (select lease_token from s1
 select pg_temp.assert_true((select state = 'queued' and next_attempt_at <= clock_timestamp() + interval '60 seconds' from delivery_jobs where id = (select id from s1)),
   'Mühür işinin geri çekilmesi en fazla 60 sn');
 
-select pg_temp.assert_true(public.delivery_schema_version() = 6, 'Şema sürümü 6');
+select pg_temp.assert_true(public.delivery_schema_version() >= 6, 'Şema sürümü en az 6');
 select pg_temp.assert_true(not has_function_privilege('authenticated', 'public.delivery_schema_version()', 'EXECUTE'), 'Kullanıcı şema sürümü RPC''sini çağıramaz');
 rollback;

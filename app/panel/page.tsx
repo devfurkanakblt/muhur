@@ -15,7 +15,7 @@ import { TransferOwnerForm, WithdrawProjectForm } from "@/components/team-action
 import { LiveState } from "@/components/live-state";
 import { getLiveStatus } from "@/lib/status";
 import { ActionForm, ActionButton } from "@/components/action-form";
-import { exhibitPath, getEvent, getExhibits, getOwnProject, getViewer, getTimeline, getProjectJobs, logoUrl, type EventState, type OwnProject, type Viewer } from "@/lib/data";
+import { exhibitPath, getEvent, getExhibits, getOwnProject, getViewer, getTimeline, getProjectJobs, logoUrl, projectHasMystery, type EventState, type OwnProject, type Viewer } from "@/lib/data";
 import { HEALTH_TEXT } from "@/lib/health";
 import { getRepo, GithubError, listPublicRepos, parseRepoInput } from "@/lib/github";
 import { exhibitNo, formatDateTime, relativeTR } from "@/lib/format";
@@ -194,7 +194,8 @@ async function ProjectView({
   const isOwner = project.members.find((m) => m.user_id === viewer.id)?.role === "owner";
   const logo = logoUrl(project.logo_path);
   const inviteUrl = `${env.siteUrl}/davet/${project.invite_code}`;
-  const [timeline, jobs] = await Promise.all([getTimeline(project.id), getProjectJobs(project.id)]);
+  const [timeline, jobs, mystery] = await Promise.all([getTimeline(project.id), getProjectJobs(project.id), projectHasMystery(event.id, project.id)]);
+  const mysteryMd = `[![gizem avcısı](${badgeUrl}/gizem)](${env.siteUrl}${href})`;
 
   return (
     <Shell viewer={viewer}>
@@ -337,6 +338,19 @@ async function ProjectView({
             <div className="max-w-[640px]">
               <CopyField value={badgeMd} label="Rozet için Markdown" />
             </div>
+            {mystery && (
+              <div className="mt-10">
+                <h3 className="font-semibold">Gizem avcısı</h3>
+                <p className="mt-2 mb-4 max-w-[60ch] text-[0.9375rem] text-ink-2">
+                  Ekibinden biri açılış videosundaki gizemi çözdü. İstersen bu rozeti de mühür rozetinin yanına ekle.
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/rozet/${event.slug}/${project.exhibit_no}/gizem`} alt="gizem avcısı rozeti" className="mb-4 h-5" />
+                <div className="max-w-[640px]">
+                  <CopyField value={mysteryMd} label="Gizem rozeti için Markdown" />
+                </div>
+              </div>
+            )}
           </section>
 
 

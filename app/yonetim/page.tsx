@@ -5,7 +5,7 @@ import { ArrowUpRightIcon, DownloadSimpleIcon, MonitorPlayIcon } from "@phosphor
 import { SiteHeader } from "@/components/site-header";
 import { AnnouncementForm, AnonymizeForm, AwardForm, NewEventForm, RetryJobButton, ScheduleForm } from "@/components/admin-forms";
 import { HoldToLock } from "@/components/hold-to-lock";
-import { exhibitPath, getAdminSession, getEvent, getViewer, getAwards, getEvents, type AdminSession } from "@/lib/data";
+import { exhibitPath, getAdminSession, getEvent, getViewer, getAwards, getEvents, getMysteryHunters, type AdminSession } from "@/lib/data";
 import { SignInButton } from "@/components/buttons";
 import { selectAll } from "@/lib/paginate";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -42,6 +42,8 @@ type Row = {
   members: { github_login: string }[];
   snapshots: { sha: string; last_seen_at: string }[];
 };
+
+type MemberTeam = { user_id: string; project: { team_name: string } | null };
 
 function Section({ title, note, children }: { title: string; note?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -105,16 +107,25 @@ export default async function AdminPage() {
   const voteCount = votes.count;
   const sealed = rows.filter((r) => r.archive_path).length;
   const startMs = new Date(event.startsAt).getTime();
-  const [awards, events, status, runsResult, jobsResult] = await Promise.all([
+  const [awards, events, status, runsResult, jobsResult, hunters, teams] = await Promise.all([
     getAwards(event.id), getEvents(), getLiveStatus(),
     db.from("worker_runs").select("id, started_at, finished_at, error, processed").order("started_at", { ascending: false }).limit(5),
     db.from("delivery_jobs").select("id, kind, state, attempts, error, next_attempt_at, created_at, project:projects(name, team_name), event:events(title)")
       .order("created_at", { ascending: false }).limit(30),
+    getMysteryHunters(event.id),
+    selectAll<MemberTeam>((from, to) => db
+      .from("project_members")
+      .select("user_id, project:projects(team_name)", { count: "exact" })
+      .eq("event_id", event.id)
+      .order("user_id")
+      .range(from, to)
+      .overrideTypes<MemberTeam[], { merge: false }>()),
   ]);
   if (runsResult.error) throw new Error(`Zamanlayıcı kayıtları okunamadı: ${runsResult.error.message}`);
   if (jobsResult.error) throw new Error(`Teslim işleri okunamadı: ${jobsResult.error.message}`);
   const runs = runsResult.data;
   const jobs = jobsResult.data;
+  const teamOf = new Map(teams.map(t => [t.user_id, t.project?.team_name]));
   const lastSuccess = (runs ?? []).find(r => r.finished_at && !r.error);
   const workerStale = !lastSuccess || event.now - +new Date(lastSuccess.finished_at!) > 3 * 60_000;
 
@@ -217,6 +228,16 @@ export default async function AdminPage() {
             <a href={`/api/juri/${e.slug}?format=csv`} className="underline underline-offset-4">CSV listesi</a>
           </li>)}</ul>
           {!events.some(e => e.locked) && <p className="text-ink-2">İlk etkinlik kilitlendiğinde paket hazır olacak.</p>}
+        </Section>
+
+        <Section title="Gizem avcıları" note="Açılış videosundaki gizli mesajı çözüp Ctrl+Shift+S penceresine doğru cümleyi yazanlar. Yalnızca hackathon saatlerinde kaydedilir; rozet takıma verilir.">
+          {hunters.length === 0 ? <p className="text-ink-2">Henüz kimse bulamadı.</p> : <>
+            <p className="mb-3 text-ink-2">{hunters.length} kişi buldu.</p>
+            <ol className="divide-y divide-rule border-y border-rule">{hunters.map(h => <li key={h.user_id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-3 text-[0.9375rem]">
+              <span><span className="font-mono">{h.github_login}</span> · {teamOf.get(h.user_id) ?? <span className="text-ink-3">takımı yok</span>}</span>
+              <span className="font-mono text-ink-2">{formatDay(h.found_at)}, {formatTime(h.found_at)}</span>
+            </li>)}</ol>
+          </>}
         </Section>
 
         {event.locked && <Section title="Jüri ödülleri" note="Ödül adı ve gerekçesi eserin sergi sayfasında yayımlanır.">

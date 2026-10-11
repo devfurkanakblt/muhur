@@ -29,7 +29,13 @@ if (!url || !key) {
       if (versionError || version < 6) {
         console.error(versionError && !["PGRST202", "42883"].includes(versionError.code) ? "0006 şeması doğrulanamadı." : "0006_son_dakika.sql migration henüz uygulanmamış.");
         process.exitCode = 1;
-      } else console.log("Son dakika teslim şeması (0006) erişilebilir.");
+      } else {
+        console.log("Son dakika teslim şeması (0006) erişilebilir.");
+        if (version < 7) {
+          console.error("0007_gizem.sql migration henüz uygulanmamış.");
+          process.exitCode = 1;
+        } else console.log("Gizem avcısı şeması (0007) erişilebilir.");
+      }
     }
   }
 }

@@ -37,6 +37,27 @@ export function isAdminIdentity(identity: GithubIdentity | null, adminGithubIds:
   return !!identity && adminGithubIds.includes(identity.githubId);
 }
 
+/** Geri alınamaz yönetim işlemleri için oturumun en fazla bu kadar önce açılmış olması gerekir (denetim A21). */
+export const ADMIN_REAUTH_MS = 12 * 3600_000;
+
+/**
+ * Bu oturumun GitHub ile açıldığı an (ms). Doğrulanmış JWT'nin `amr` kaydından okunur; oturum tazelense de
+ * değişmez, başka bir cihazdaki giriş de bu oturumu tazelemez. Kayıt yoksa null.
+ */
+export function sessionSignedInAt(amr: unknown): number | null {
+  if (!Array.isArray(amr)) return null;
+  const times = amr
+    .filter((e): e is { method: string; timestamp: number } =>
+      !!e && typeof e === "object" && e.method === "oauth" && typeof e.timestamp === "number" && Number.isFinite(e.timestamp))
+    .map((e) => e.timestamp * 1000);
+  return times.length ? Math.max(...times) : null;
+}
+
+/** Oturum, geri alınamaz işlemler için yeterince yeni mi. Gelecekteki zaman damgası da reddedilir. */
+export function isFreshSignIn(signedInAt: number | null, now: number, windowMs = ADMIN_REAUTH_MS) {
+  return signedInAt !== null && signedInAt <= now + 60_000 && now - signedInAt < windowMs;
+}
+
 /**
  * Repo sahiplenme kararı (saf). Repo sahibi sabit kimlikle eşleşiyorsa ya da kullanıcının kendi token'ı
  * (token sahibi = oturumdaki kişi) repoya push yetkisi gösteriyorsa izin verilir.

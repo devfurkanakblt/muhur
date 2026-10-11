@@ -10,6 +10,8 @@ const eventId = "10000000-0000-0000-0000-000000000001";
 let mode = "open";
 // Gizem avcıları: claim_mystery RPC ile bellekte tutulur, mod değişince sıfırlanır.
 let hunters = [];
+// Yönetici oturumunun açılış zamanı (A21): ?oturum=eski 13 saat önce açılmış oturum verir.
+const fixtureAmr = url => [{ method: "oauth", timestamp: Math.floor((url.searchParams.get("oturum") === "eski" ? Date.now() - 13 * 3600_000 : Date.now()) / 1000) }];
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
 function records(table) {
@@ -51,7 +53,7 @@ const server = createServer((request, response) => {
   response.setHeader("Content-Type", "application/json");
   if (url.pathname === "/fixture/login") {
     const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");
-    const access_token = `${part({ alg: "HS256", typ: "JWT" })}.${part({ sub: userId, exp: Math.floor(now / 1000) + 7200, role: "authenticated" })}.fixture-signature`;
+    const access_token = `${part({ alg: "HS256", typ: "JWT" })}.${part({ sub: userId, exp: Math.floor(now / 1000) + 7200, role: "authenticated", amr: fixtureAmr(url) })}.${Buffer.from("fixture-signature").toString("base64url")}`;
     const session = { access_token, refresh_token: "fixture", expires_at: Math.floor(now / 1000) + 7200, expires_in: 7200, token_type: "bearer", user };
     const cookie = `sb-127-auth-token=base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}; path=/; SameSite=Lax`;
     const next = url.searchParams.get("next") ?? "/panel";
@@ -66,7 +68,7 @@ const server = createServer((request, response) => {
   }
   if (url.pathname === "/fixture/session") {
     const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");
-    const access_token = `${part({ alg: "HS256", typ: "JWT" })}.${part({ sub: userId, exp: Math.floor(now / 1000) + 7200, role: "authenticated" })}.fixture-signature`;
+    const access_token = `${part({ alg: "HS256", typ: "JWT" })}.${part({ sub: userId, exp: Math.floor(now / 1000) + 7200, role: "authenticated", amr: fixtureAmr(url) })}.${Buffer.from("fixture-signature").toString("base64url")}`;
     const session = { access_token, refresh_token: "fixture", expires_at: Math.floor(now / 1000) + 7200, expires_in: 7200, token_type: "bearer", user };
     return response.end(JSON.stringify({ name: "sb-127-auth-token", value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}` }));
   }
@@ -111,8 +113,10 @@ const server = createServer((request, response) => {
   response.end(JSON.stringify(rows));
 });
 await new Promise(resolve => server.listen(54330, "127.0.0.1", resolve));
-const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), "dev", "-p", "3100"], {
-  windowsHide: true, stdio: "inherit", env: { ...process.env, NODE_ENV: "development", MUHUR_TEST_PREVIEW: "1",
+// MUHUR_PREVIEW_PROD=1: önce aynı ortamla `next build`, sonra `next start` (üretim CSP'si ve derlemesi).
+const prod = process.env.MUHUR_PREVIEW_PROD === "1";
+const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), prod ? "start" : "dev", "-p", "3100"], {
+  windowsHide: true, stdio: "inherit", env: { ...process.env, NODE_ENV: prod ? "production" : "development", MUHUR_TEST_PREVIEW: "1",
     NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54330", NEXT_PUBLIC_SUPABASE_ANON_KEY: "fixture-key",
     SUPABASE_SERVICE_ROLE_KEY: "fixture-key", ADMIN_GITHUB_IDS: "424242", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
     GITHUB_TOKEN: "", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", CRON_SECRET: "fixture-cron",

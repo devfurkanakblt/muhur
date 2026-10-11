@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { githubIdentity, isAdminIdentity } from "@/lib/identity";
+import { ADMIN_REAUTH_MS, githubIdentity, isAdminIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
 import { selectAll } from "@/lib/paginate";
 
 /** Okuma hatası "kayıt yok" gibi gösterilmez; sayfa hata ekranına düşer. */
@@ -112,6 +112,25 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     login: github.login,
     avatarUrl: github.avatarUrl,
     isAdmin: isAdminIdentity(github, env.adminGithubIds),
+  };
+});
+
+export type AdminSession = { signedInAt: number | null; freshUntil: number | null; fresh: boolean };
+
+/**
+ * Yöneticinin bu oturumu ne zaman açtığı; geri alınamaz işlemler yalnızca yeni oturumla yapılır (A21).
+ * JWT `getClaims` ile doğrulanır ve oturumun sahibi görüntüleyenle aynı olmalıdır.
+ */
+export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
+  const viewer = await getViewer();
+  if (!viewer?.isAdmin) return null;
+  const { data, error } = await (await createClient()).auth.getClaims();
+  if (error || !data || data.claims.sub !== viewer.id) return { signedInAt: null, freshUntil: null, fresh: false };
+  const signedInAt = sessionSignedInAt(data.claims.amr);
+  return {
+    signedInAt,
+    freshUntil: signedInAt === null ? null : signedInAt + ADMIN_REAUTH_MS,
+    fresh: isFreshSignIn(signedInAt, Date.now()),
   };
 });
 

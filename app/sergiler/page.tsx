@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/site-header";
 import { getEvents, getViewer } from "@/lib/data";
 import { formatDay } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/server";
+import { selectAll } from "@/lib/paginate";
 
 export const metadata = { title: "Sergiler" };
 
@@ -12,9 +13,11 @@ export default async function Exhibitions() {
   await connection();
   const [viewer, events] = await Promise.all([getViewer(), getEvents()]);
   const db = createAdminClient();
-  const { data: rows } = await db.from("projects").select("event_id");
+  // Okuma hatası "0 eser" gibi gösterilmez; satır sınırında eksik sayım olmasın diye sayfalı okunur (A09).
+  const rows = await selectAll<{ event_id: string }>((from, to) =>
+    db.from("projects").select("event_id", { count: "exact" }).order("id").range(from, to));
   const counts = new Map<string, number>();
-  for (const r of rows ?? []) counts.set(r.event_id, (counts.get(r.event_id) ?? 0) + 1);
+  for (const r of rows) counts.set(r.event_id, (counts.get(r.event_id) ?? 0) + 1);
 
   return (
     <>

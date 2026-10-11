@@ -137,7 +137,9 @@ export const Words: React.FC<{
             <span
               style={{
                 display: "inline-block",
-                transform: `translateY(${(1 - Math.min(p, 1.05)) * 105}%)`,
+                // Kırpma kutusu 0,12em alt pay taşır ve şapkalı/noktalı harfler kutunun üstüne taşar;
+                // bekleyen kelimenin tepesi görünmesin diye %140 itilir.
+                transform: `translateY(${(1 - Math.min(p, 1.05)) * 140}%)`,
                 color: accent.includes(w.replace(/[.,!?]/g, "")) ? accentColor : undefined,
               }}
             >

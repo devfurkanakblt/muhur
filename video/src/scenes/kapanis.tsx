@@ -27,14 +27,14 @@ export const S20Telegram: React.FC<{ dur: number }> = ({ dur }) => {
         <Qr text={config.telegramUrl} size={452} />
         <div style={{ fontFamily: F.mono, fontSize: 25, color: C.deep, textAlign: "center" }}>{short}</div>
       </div>
-      <Mascot frame={frame} x={1730} y={1050} size={340} mood={frame < 356 ? "heyecanli" : "mutlu"} moodAt={356} accessories={["telefon"]} enterAt={0} />
-      <Bubble at={180} until={262} x={980} y={780} size={42} width={620} tail="br">
-        Kaçırırsan pizza gider, mentor saati gider… 🍕💨
+      <Mascot frame={frame} x={1150} y={1060} size={320} mood={frame < 356 ? "heyecanli" : "mutlu"} moodAt={356} accessories={["telefon"]} enterAt={0} />
+      <Bubble at={180} until={262} x={1340} y={800} size={42} width={480} tail="l">
+        Kaçırırsan pizza da gider, duyuru da… 🍕💨
       </Bubble>
-      <Bubble at={268} until={350} x={930} y={760} size={40} width={680} tail="br">
+      <Bubble at={268} until={350} x={1340} y={740} size={40} width={480} tail="l">
         Teslimini güncellemeyi unutursan <b style={{ color: C.indigoFill }}>mühür de buradan dürter:</b> son 60 ve 15 dakika. 🔔
       </Bubble>
-      <Bubble at={356} x={980} y={790} size={44} width={620} tail="br">
+      <Bubble at={356} x={1340} y={790} size={44} width={480} tail="l">
         <b>Şimdi katıl.</b> Evet, şimdi. QR tam karşında. 📱
       </Bubble>
     </Scene>

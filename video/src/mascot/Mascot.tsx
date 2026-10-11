@@ -245,7 +245,6 @@ export const Mascot: React.FC<MascotProps> = ({
             <rect x={20} y={70} width={1310} height={1070} />
           </clipPath>
         </defs>
-        {accessories.includes("kulaklik") && <Accessory name="kulaklik-arka" frame={frame} />}
         <g clipPath="url(#body-crop)">
         <path d={BODY_FILL} fill={C.mFill} />
         <g fill={C.mBlush}>
@@ -272,7 +271,7 @@ export const Mascot: React.FC<MascotProps> = ({
         {accessories
           .filter((a) => a !== "bant")
           .map((a) => (
-            <Accessory key={a} name={a} frame={frame} drop={glassesDrop} />
+            <Accessory key={a} name={a} frame={frame} drop={glassesDrop} blink={blink} />
           ))}
       </svg>
     </div>

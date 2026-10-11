@@ -30,6 +30,18 @@ export const S01Merhaba: React.FC<{ dur: number }> = ({ dur }) => {
   const named = config.mascotName;
   const mood = frame < 112 ? "heyecanli" : frame < 192 ? "mutlu" : named ? "mutlu" : frame < 266 ? "merakli" : "normal";
   const moodAt = frame < 112 ? undefined : frame < 192 ? 112 : frame < 266 ? 192 : 266;
+  // "Beyin benim ama, neyse.": gözler sol üstten tepeye, oradan sağ üste yay çizer (göz devirme).
+  const ROLL = 274;
+  const roll = (() => {
+    if (named || frame < 266) return { x: 0, y: 0 };
+    const k = ease(frame, ROLL, 26);
+    const th = Math.PI * (1 - k);
+    const arc = { x: Math.cos(th) * 40, y: -34 - Math.sin(th) * 22 };
+    const into = ease(frame, 266, 8);
+    const back = ease(frame, ROLL + 34, 14);
+    return { x: arc.x * into * (1 - back), y: arc.y * into * (1 - back) };
+  })();
+  const rollTilt = named || frame < 266 ? -3 : -3 + 7 * ease(frame, ROLL, 26) * (1 - ease(frame, ROLL + 34, 14));
   return (
     <Scene dur={dur} whoosh={false}>
       <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
@@ -53,8 +65,8 @@ export const S01Merhaba: React.FC<{ dur: number }> = ({ dur }) => {
         mood={mood}
         moodAt={moodAt}
         wiggle={frame < 100 ? 5 : 0}
-        look={frame >= 266 && !named ? { x: 0, y: -46 } : { x: 0, y: 0 }}
-        tilt={-3}
+        look={roll}
+        tilt={rollTilt}
       />
       <Bubble at={45} until={105} x={1170} y={170} size={78}>
         Selam Depark! 👋
@@ -73,7 +85,7 @@ export const S01Merhaba: React.FC<{ dur: number }> = ({ dur }) => {
             <div style={{ fontWeight: 400, fontSize: "0.72em", color: "#44485f", marginTop: 10 }}>Ekip hâlâ düşünüyor.</div>
           </Bubble>
           <Bubble at={266} x={1150} y={200} size={58} width={600}>
-            Beyin benim ama, neyse. 🙄
+            Beyin benim ama, neyse.
           </Bubble>
         </>
       )}
@@ -110,6 +122,12 @@ const Chip: React.FC<{ size: number }> = ({ size }) => (
   </svg>
 );
 
+// 180 px kutularda yaprağın görünen sağ kenarı %83,6 (eğri + kontur); çipin bacak uçları %2, gövdesi %15. Optik denge için %6 alınır.
+const PLUS = 56;
+const GAP = 46;
+const LEAF_LEFT = 960 - PLUS / 2 - GAP - 180 * 0.836;
+const CHIP_LEFT = 960 + PLUS / 2 + GAP - 180 * 0.06;
+
 export const S02Baslik: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
   const meet = ease(frame, 4, 24);
@@ -118,13 +136,15 @@ export const S02Baslik: React.FC<{ dur: number }> = ({ dur }) => {
   const burst = pop(frame, 28, 9, 180);
   return (
     <Scene dur={dur}>
-      <div style={{ position: "absolute", left: 960 - 90 - 110 - (1 - meet) * 700, top: 170, transform: `rotate(${(1 - meet) * -60}deg) scale(${merged ? 1 + (1 - Math.min(burst, 1)) * 0.2 : 1})` }}>
+      <div style={{ position: "absolute", left: LEAF_LEFT - (1 - meet) * 700, top: 170, transform: `rotate(${(1 - meet) * -60}deg) scale(${merged ? 1 + (1 - Math.min(burst, 1)) * 0.2 : 1})` }}>
         <Leaf size={180} />
       </div>
-      <div style={{ position: "absolute", left: 960 - 90 + 110 + (1 - meet) * 700, top: 170, transform: `rotate(${(1 - meet) * 60}deg) scale(${merged ? 1 + (1 - Math.min(burst, 1)) * 0.2 : 1})` }}>
+      <div style={{ position: "absolute", left: CHIP_LEFT + (1 - meet) * 700, top: 170, transform: `rotate(${(1 - meet) * 60}deg) scale(${merged ? 1 + (1 - Math.min(burst, 1)) * 0.2 : 1})` }}>
         <Chip size={180} />
       </div>
-      <div style={{ position: "absolute", left: 960 - 22, top: 238, fontFamily: F.display, fontWeight: 800, fontSize: 60, color: C.ink, opacity: merged ? 1 : 0, transform: `scale(${burst})` }}>+</div>
+      <svg width={PLUS} height={PLUS} viewBox="-1 -1 2 2" style={{ position: "absolute", left: 960 - PLUS / 2, top: 260 - PLUS / 2, opacity: merged ? 1 : 0, transform: `scale(${burst})` }}>
+        <path d="M0 -0.8 V0.8 M-0.8 0 H0.8" stroke={C.ink} strokeWidth={0.32} strokeLinecap="round" />
+      </svg>
       <AbsoluteFill style={{ background: `radial-gradient(500px 300px at 960px 260px, rgba(255,255,255,${flash}), transparent 70%)` }} />
       <Sfx name="pop" at={28} />
       <div style={{ position: "absolute", top: 410, width: 1920, textAlign: "center" }}>

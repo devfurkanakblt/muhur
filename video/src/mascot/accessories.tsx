@@ -13,15 +13,14 @@ export type AccessoryName =
   | "kalp"
   | "gozluk"
   | "buyutec"
-  | "kulaklik"
-  | "yastik"
+  | "battaniye"
   | "megafon"
   | "kupa"
   | "telefon";
 
 const INK = C.mInk;
 
-export const Accessory: React.FC<{ name: AccessoryName | "kulaklik-arka"; frame: number; drop?: number }> = ({ name, frame, drop = 1 }) => {
+export const Accessory: React.FC<{ name: AccessoryName; frame: number; drop?: number; blink?: number }> = ({ name, frame, drop = 1, blink = 0 }) => {
   switch (name) {
     case "bant":
       return <path d="M60 540 Q520 260 1100 300" stroke={C.mVioletDeep} strokeWidth={96} fill="none" clipPath="url(#mascot-head)" />;
@@ -99,43 +98,41 @@ export const Accessory: React.FC<{ name: AccessoryName | "kulaklik-arka"; frame:
           </clipPath>
           <circle cx={528} cy={650} r={138} fill="#EAF1FF" />
           <g clipPath="url(#lens)">
-            <rect x={528 - 55} y={650 - 100} width={110} height={200} rx={55} fill={INK} />
-            <circle cx={510} cy={600} r={20} fill="#fff" />
+            {/* Büyüyen göz de diğer gözle aynı karede kırpar. */}
+            <rect x={528 - 55} y={650 - Math.max(200 * (1 - blink * 0.9), 22) / 2} width={110} height={Math.max(200 * (1 - blink * 0.9), 22)} rx={Math.min(55, Math.max(200 * (1 - blink * 0.9), 22) / 2)} fill={INK} />
+            {blink < 0.5 && <circle cx={510} cy={600} r={20} fill="#fff" />}
           </g>
           <circle cx={528} cy={650} r={138} fill="rgba(200,220,255,0.18)" stroke={INK} strokeWidth={30} />
           <path d="M440 590 Q462 548 512 536" stroke="#fff" strokeWidth={14} fill="none" />
         </g>
       );
-    case "kulaklik-arka":
-      return <path d="M196 640 Q170 120 650 110 Q1120 110 1090 640" stroke={INK} strokeWidth={70} fill="none" strokeLinecap="round" />;
-    case "kulaklik": {
-      const beat = Math.floor(frame / 10) % 2 === 0 ? 1 : 0.6;
+    case "battaniye": {
+      // Uyurken çeneye kadar çekilmiş battaniye; nefesle hafifçe inip kalkar.
+      const rise = Math.sin(frame / 15) * 6;
+      const stars = [
+        [190, 1010],
+        [380, 1080],
+        [560, 990],
+        [760, 1070],
+        [950, 1000],
+        [1120, 1080],
+        [300, 960],
+        [1040, 960],
+      ];
       return (
-        <g>
-          <path d="M196 640 Q170 120 650 110 Q1120 110 1090 640" stroke={C.mVioletDeep} strokeWidth={34} fill="none" strokeLinecap="round" />
-          {[
-            { x: 196, d: -1 },
-            { x: 1090, d: 1 },
-          ].map((c) => (
-            <g key={c.x}>
-              <rect x={c.x - 90} y={560} width={180} height={230} rx={70} fill={C.mVioletDeep} stroke={INK} strokeWidth={18} />
-              <rect x={c.x - 50} y={610} width={100} height={130} rx={40} fill={C.mViolet} />
-              <g stroke={C.mViolet} strokeWidth={18} strokeLinecap="round" opacity={beat}>
-                <path d={`M${c.x + c.d * 140} 600 Q${c.x + c.d * 175} 675 ${c.x + c.d * 140} 750`} fill="none" />
-              </g>
-            </g>
-          ))}
+        <g strokeLinejoin="round" strokeLinecap="round" transform={`translate(0 ${rise})`}>
+          <path d="M70 880 Q60 840 110 836 Q640 800 1190 836 Q1250 840 1240 890 L1262 1118 Q1264 1162 1220 1162 L100 1162 Q56 1162 58 1118 Z" fill="#B9AEFF" stroke={INK} strokeWidth={18} />
+          <g fill="#FFF1C2">
+            {stars.map(([x, y]) => (
+              <path key={`${x}-${y}`} d={`M${x} ${y - 26} Q${x + 5} ${y - 5} ${x + 26} ${y} Q${x + 5} ${y + 5} ${x} ${y + 26} Q${x - 5} ${y + 5} ${x - 26} ${y} Q${x - 5} ${y - 5} ${x} ${y - 26} Z`} />
+            ))}
+          </g>
+          <path d="M330 940 Q350 1060 320 1150 M900 936 Q930 1050 960 1150" stroke={C.mViolet} strokeWidth={12} fill="none" opacity={0.7} />
+          <path d="M70 880 Q60 840 110 836 Q640 800 1190 836 Q1250 840 1240 890 Q1240 932 1190 930 Q640 894 110 930 Q66 932 70 880 Z" fill="#E4DFFF" stroke={INK} strokeWidth={18} />
+          <path d="M150 884 Q640 850 1150 884" stroke={C.mViolet} strokeWidth={10} strokeDasharray="22 18" fill="none" />
         </g>
       );
     }
-    case "yastik":
-      return (
-        <g strokeLinejoin="round">
-          <path d="M150 930 Q140 880 200 880 L600 870 Q660 868 650 930 L640 1100 Q636 1150 580 1150 L210 1150 Q150 1150 150 1100 Z" fill="#D9D3FF" stroke={INK} strokeWidth={18} />
-          <path d="M210 930 L590 922" stroke={C.mViolet} strokeWidth={10} strokeDasharray="22 18" strokeLinecap="round" />
-          <path d="M210 1096 L590 1096" stroke={C.mViolet} strokeWidth={10} strokeDasharray="22 18" strokeLinecap="round" />
-        </g>
-      );
     case "megafon":
       return (
         <g strokeLinejoin="round" strokeLinecap="round">

@@ -76,7 +76,7 @@ export const S07Depark: React.FC<{ dur: number }> = ({ dur }) => (
       { at: 130, text: <>Müzik hoparlörden değil, {em("kulaklıktan.")} 🎧</> },
       { at: 200, text: <>Sesli toplantılarda sesini kıs, yan masa da kod yazıyor.</> },
     ]}
-    mascot={{ mood: (f) => (f < 290 ? "mutlu" : "heyecanli"), moodAt: 290, acc: ["kulaklik"] }}
+    mascot={{ mood: (f) => (f < 290 ? "mutlu" : "heyecanli"), moodAt: 290, acc: [] }}
     bubble={{ at: 290, text: "Ekoloji hackathon'unda çöp bırakmak? Olmaz. 😤", width: 640 }}
   />
 );
@@ -95,12 +95,17 @@ export const S08Gece: React.FC<{ dur: number }> = ({ dur }) => {
         { at: 60, text: <>24 saat = 1 gece. {em("Konaklama da Depark'ta.")}</> },
         { at: 140, text: <>Uyuyanlar var: ışık, ses, telefonlar sessizde. 🤫</> },
       ]}
-      mascot={{ mood: () => "uykulu", acc: ["yastik"] }}
+      mascot={{ mood: () => "uykulu", acc: ["battaniye"] }}
     >
       <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
+        <defs>
+          <mask id="hilal">
+            <circle r={86} fill="#fff" />
+            <circle cx={38} cy={-22} r={78} fill="#000" />
+          </mask>
+        </defs>
         <g transform={`translate(1640 190) scale(${moon})`}>
-          <circle r={86} fill="#F4EFD8" />
-          <circle cx={38} cy={-22} r={78} fill={C.wall} />
+          <circle r={86} fill="#F4EFD8" mask="url(#hilal)" />
         </g>
         {[
           [1350, 120],

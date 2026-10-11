@@ -244,9 +244,10 @@ export const S15Takim: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
   const copied = frame >= 66;
   const people = [
-    { l: "A", c: C.leaf },
-    { l: "D", c: C.blush },
-    { l: "E", c: C.indigo },
+    // Baş harfler E-K-O: EkoZeka'ya küçük bir gönderme.
+    { l: "E", c: C.leaf },
+    { l: "K", c: C.blush },
+    { l: "O", c: C.indigo },
   ];
   return (
     <Scene dur={dur}>
@@ -277,7 +278,7 @@ export const S15Takim: React.FC<{ dur: number }> = ({ dur }) => {
             );
           })}
           <FadeUp at={130} style={{ alignSelf: "center", marginLeft: 20, fontFamily: F.display, fontSize: 36, color: C.leaf }}>
-            Ekip Yeşil · 4 kişi
+            Ekip Yeşil · 3 kişi
           </FadeUp>
         </div>
       </div>
@@ -414,6 +415,11 @@ const EXHIBITS = [
   { c: C.ink, n: "No. 004 · Atık Av", e: "♻️" },
 ];
 
+// "sha256" satırı aslında gizli mesajın UTF-8 hex kodu (easter egg). Hex'ten metne çevrilince okunur:
+// Tebrikler! Bu easter egg'i bulmayı başardın. mühür sitesinde Ctrl + Shift + S bas ve açılan pencereye "Ekoloji <3 Yapay Zeka" yaz ^^
+const EGG_HEX = "54656272696b6c657221204275206561737465722065676727692062756c6d6179c4b1206261c59f617264c4b16e2e206dc3bc68c3bc72207369746573696e6465204374726c202b205368696674202b2053206261732076652061c3a7c4b16c616e2070656e6365726579652022456b6f6c6f6a69203c33205961706179205a656b61222079617a205e5e";
+const EGG_SHORT = `${EGG_HEX.slice(0, 4)}…${EGG_HEX.slice(-4)}`;
+
 export const S18Muhur: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
   const glassAt = 90;
@@ -427,7 +433,6 @@ export const S18Muhur: React.FC<{ dur: number }> = ({ dur }) => {
   const lines = [
     { k: "commit", v: "a41c9e2" },
     { k: "zip", v: "orman-gozu-a41c9e2.zip" },
-    { k: "sha256", v: "9c1e…40ab" },
   ];
   return (
     <Scene dur={dur}>
@@ -475,14 +480,18 @@ export const S18Muhur: React.FC<{ dur: number }> = ({ dur }) => {
                   <b style={{ color: "#fff" }}>{l.v}</b>
                 </FadeUp>
               ))}
+              <FadeUp at={hit + 72} dist={10} style={{ display: "grid", gridTemplateColumns: "190px 1000px", fontFamily: F.mono, fontSize: 36, color: "#dcd6ff" }}>
+                <span>sha256</span>
+                <b style={{ color: "#fff", fontSize: 25, lineHeight: 1.45, wordBreak: "break-all", paddingTop: 6 }}>{EGG_HEX}</b>
+              </FadeUp>
             </div>
           </div>
         )}
       </AbsoluteFill>
       <Sfx name="cam" at={glassAt} />
       <Sfx name="tak" at={hit} />
-      {lines.map((l, i) => (
-        <Sfx key={l.k} name="tik" at={hit + 48 + i * 12} volume={0.4} />
+      {[...lines, null].map((_, i) => (
+        <Sfx key={i} name="tik" at={hit + 48 + i * 12} volume={0.4} />
       ))}
       <Mascot frame={frame} x={1600} y={1040} size={440} mood="normal" accessories={frame >= hit + 10 ? ["gozluk"] : []} glassesDrop={ease(frame, hit + 10, 12)} enterAt={0} />
       <Bubble at={hit + 100} x={1240} y={450} size={42} width={580} tail="br">
@@ -524,7 +533,7 @@ export const S19Sonrasi: React.FC<{ dur: number }> = ({ dur }) => {
             ["Eser", "No. 001"],
             ["Commit", "a41c9e2"],
             ["Mühür", "7 Kas 20:00"],
-            ["SHA-256", "9c1e…40ab"],
+            ["SHA-256", EGG_SHORT],
           ].map(([k, v]) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", borderTop: "2px solid #d3d9e2", paddingTop: 10, fontSize: 24 }}>
               <span style={{ fontFamily: F.display, color: "#61667d" }}>{k}</span>

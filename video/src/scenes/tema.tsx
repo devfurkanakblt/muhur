@@ -16,21 +16,23 @@ const WIN = { w: 440, h: 280, bar: 46, lx: 56, rx: 1424, ys: [60, 400, 740] };
 
 type Stop = { v: VignetteName; title: string; place: string; p: LonLat; side: -1 | 1; row: number };
 
+// Türkiye ve dünya sırayla: art arda yakın noktalara dönmek küreyi gereksiz oynatıyordu.
 const STOPS: Stop[] = [
   { v: "Yangin", title: "Orman yangını", place: "Muğla", p: [28.4, 37.0], side: -1, row: 0 },
-  { v: "Gol", title: "Kuruyan göl", place: "Tuz Gölü", p: [33.4, 38.8], side: 1, row: 0 },
-  { v: "Musilaj", title: "Müsilaj", place: "Marmara", p: [28.0, 40.7], side: -1, row: 1 },
-  { v: "Buzul", title: "Eriyen buzullar", place: "Grönland", p: [-42, 72], side: 1, row: 1 },
-  { v: "Orman", title: "Ormansızlaşma", place: "Amazon", p: [-62, -5], side: -1, row: 2 },
+  { v: "Buzul", title: "Eriyen buzullar", place: "Grönland", p: [-42, 72], side: 1, row: 0 },
+  { v: "Gol", title: "Kuruyan göl", place: "Tuz Gölü", p: [33.4, 38.8], side: -1, row: 1 },
+  { v: "Orman", title: "Ormansızlaşma", place: "Amazon", p: [-62, -5], side: 1, row: 1 },
+  { v: "Musilaj", title: "Müsilaj", place: "Marmara", p: [28.0, 40.7], side: -1, row: 2 },
   { v: "Plastik", title: "Plastik atık", place: "Pasifik", p: [-145, 32], side: 1, row: 2 },
 ];
 
 const T0 = 26;
-const STEP = 44;
+const STEP = 50;
 const at = (i: number) => T0 + i * STEP;
-const DOT = 16;
-const LINE = 20;
-const OPEN = 28;
+const TURN = 26;
+const DOT = 22;
+const LINE = 26;
+const OPEN = 34;
 const PANIC = at(STOPS.length - 1) + 40;
 
 // Nokta pencerenin bulunduğu tarafta görünsün diye küre merkezi noktanın 28° yanına çevrilir.
@@ -44,11 +46,14 @@ function rotation(frame: number): [number, number] {
   }
   let prev: [number, number] = [START[0] - 12, START[1]];
   for (let i = 0; i < STOPS.length; i++) {
-    const next = rotFor(STOPS[i]);
-    if (frame < at(i) + 18 || i === STOPS.length - 1) {
-      const k = glass(frame, at(i), 18);
+    const target = rotFor(STOPS[i]);
+    // En kısa yönden dön: boylam farkını -180..180 aralığına indir.
+    const dl = ((((target[0] - prev[0]) % 360) + 540) % 360) - 180;
+    const next: [number, number] = [prev[0] + dl, target[1]];
+    if (frame < at(i) + TURN || i === STOPS.length - 1) {
+      const k = glass(frame, at(i), TURN);
       const r: [number, number] = [prev[0] + (next[0] - prev[0]) * k, prev[1] + (next[1] - prev[1]) * k];
-      if (i === STOPS.length - 1) r[0] -= Math.max(0, frame - at(i) - 18) * 0.06;
+      if (i === STOPS.length - 1) r[0] -= Math.max(0, frame - at(i) - TURN) * 0.06;
       return r;
     }
     prev = next;

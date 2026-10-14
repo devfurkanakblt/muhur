@@ -24,7 +24,7 @@ Müze vitrini. Hackathon bir sergi kurulumudur: son teslime kadar vitrin açıkt
 | `--ink-2` / `--ink-3` | `#44485f` / `#61667d` | İkincil metin / etiket ve yardımcı metin (duvarda ≥4.5:1) |
 | `--rule` / `--rule-strong` | `#d3d9e2` / `#b9c1cd` | Kıl çizgiler, alan kenarları |
 | `--indigo` | `#4a36cf` | **Yalnızca** süre, kilit, cam ve birincil eylem. Başka hiçbir yerde kullanılmaz. |
-| `--blush` | `#feccd7` | Maskot yanağı, kayıt sonrası "No. 007" pembe mührü ve verilmiş oy ("Oyun burada"). Kalbin rengi. |
+| `--blush` | `#feccd7` | Maskot yanağı, kayıt sonrası "No. 007" pembe mührü, verilmiş oy ("Oyun burada") ve kazanan mühürleri ("Jüri ödülü", "Halkın seçimi", kaidedeki eser numarası). Kalbin rengi. |
 | `--danger` | `#b4233c` | Hata metni |
 
 ## Koyu tema
@@ -54,7 +54,7 @@ Gece galerisi: `--wall #0e1020`, `--plinth #161a2e`, `--ink #e8eaf4`, `--ink-2 #
 
 ## Maskot
 
-`components/mascot/` — gövde, paftadaki ana karakterden vektörleştirildi (`paths.ts`). İfadeler: `normal`, `mutlu`, `merakli`, `odakli`, `uykulu`, `heyecanli`, `hackathon`, `pizza`, `kahve`, `kalp` (halkın seçimi). Ana sayfa maskotuna tıklayınca birkaç saniyeliğine ifade değiştirir. Ana sayfa maskotu Türkiye saatine göre değişir (`lib/daypart.ts`): 01–07 uykulu, 07–10 kahve, 10–12 hackathon, 12–14 pizza, 14–19 hackathon, 19–21 pizza, 21–01 odaklı (gözlüklü). Son 10 dakika heyecanlı ve kilit sonrası uykulu ifadesi saatin önüne geçer. Selamlama başlığı aynı dilimlerden seçilir; giriş yapan kullanıcıya bazen GitHub adıyla seslenir ve bir saat boyunca aynı kalır. Diğer sayfalar: boş vitrin/404 → meraklı, kayıt sonrası → mutlu.
+`components/mascot/` — gövde, paftadaki ana karakterden vektörleştirildi (`paths.ts`). İfadeler: `normal`, `mutlu`, `merakli`, `odakli`, `uykulu`, `heyecanli`, `hackathon`, `pizza`, `kahve`, `kalp` (halkın seçimi). Ana sayfa maskotuna tıklayınca birkaç saniyeliğine ifade değiştirir. Ana sayfa maskotu Türkiye saatine göre değişir (`lib/daypart.ts`): 01–07 uykulu, 07–10 kahve, 10–12 hackathon, 12–14 pizza, 14–19 hackathon, 19–21 pizza, 21–01 odaklı (gözlüklü). Son 10 dakika heyecanlı ve kilit sonrası uykulu ifadesi saatin önüne geçer; kazananlar açıklandıktan sonra uykulu yerine mutlu. Selamlama başlığı aynı dilimlerden seçilir; giriş yapan kullanıcıya bazen GitHub adıyla seslenir ve bir saat boyunca aynı kalır. Diğer sayfalar: boş vitrin/404 → meraklı, kayıt sonrası → mutlu.
 
 ## Logo
 
@@ -62,7 +62,9 @@ Gece galerisi: `--wall #0e1020`, `--plinth #161a2e`, `--ink #e8eaf4`, `--ink-2 #
 
 ## Yüzeyler
 
-- **Sahne modu** (`/sahne`): projektör ölçeği; geri sayım gün/saat sayısına göre boyutlanır, son 60 saniyede yalnızca indigo saniyeler kalır, kilitte cam tüm sahneyi kaplar. Alt şerit: duyuru ya da son push akışı.
+- **Sahne modu** (`/sahne`): projektör ölçeği; geri sayım gün/saat sayısına göre boyutlanır, son 60 saniyede yalnızca indigo saniyeler kalır, kilitte cam tüm sahneyi kaplar. Alt şerit: duyuru ya da son push akışı; kilitten sonra kazananlar.
+- **Kazanan gösterisi** (`/sahne`, `app/sahne/winner-show.tsx`): kazananlar varken sahneyi kaplar. Sahne açıkken açıklanan ödül tören akışıyla gelir: pembe "Jüri ödülü" mührü ve ödül adı maskeden yükselir, ~1 sn bekleyiş, logo kaidesiyle mühür gibi vurulur (`scale 1.2 → 1`, 380ms, ardından iz halkası), eser numarası köşeye basılır, eser adı, ekip ve üyeler 90ms arayla gelir, en son jüri gerekçesi. Tören en az 25 sn ekranda kalır; birden çok kazanan varsa 12 sn arayla sessizce (kısa yükselme) döner. Sayfa açıldığında var olan kazananlar törensiz gösterilir. Alt şeritten her kazananın töreni yeniden oynatılır; "Sahneye dön" ya da Esc gösteriyi kapatır, yeni ödül gelince yeniden açılır. Zamanlama `lib/winner-show.ts` içinde saf fonksiyondur.
+- **Kazananlar** (vitrinin başı, `#kazananlar`): her kazanan kendi kaidesi, köşede pembe eser numarası mührü, ödül adı, büyük eser adı, ekip, üye avatarları ve sol çizgili jüri gerekçesiyle. Hero'nun birincil eylemi "Kazananları gör" olur. Eser sayfasında ödül alanı büyük başlıkla, kaidede "Kazanan" mührüyle görünür; vitrin kartlarında küçük pembe mühür. Tüm kazanan hareketleri `prefers-reduced-motion` altında yalnızca opaklıktır.
 - **Duyuru şeridi**: sayfaların üstünde `--indigo-fill` zeminli tek satır; kapatılabilir, yeni duyuru yeniden görünür.
 - **Eser sayfası, makbuz, doğrulama, aydınlatma metni**: aynı müze etiketi dili; alan adları küçük aralıklı büyük harf, değerler mono. Makbuz yazdırmada header/footer gizlenir.
 - **Canlı nabız**: etiketin altında nötr (`--ink-3`) yavaş atan nokta; yalnızca etkinlik başladıktan sonraki push'lar.

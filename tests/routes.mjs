@@ -9,7 +9,8 @@ const cases = [
   { path: "/", mode: "open", name: "gallery", expected: ["Proje veya ekip ara", "Sıralama", "gallery-search"] },
   { path: "/panel", mode: "sealed", name: "panel-sealed", expected: ["Arşiv doğrulandı", "Mühür makbuzu"] },
   { path: "/yonetim", mode: "sealed", name: "admin", expected: ["Jüri paketi", "Jüri ödülleri", "Son başarılı çalışma"] },
-  { path: "/sahne", mode: "sealed", name: "stage", expected: ["Vitrini açan karekod", "Vitrini aç"] },
+  { path: "/sahne", mode: "sealed", name: "stage", expected: ["Vitrini açan karekod", "Vitrini aç", "Sahneye dön"] },
+  { path: "/", mode: "sealed", name: "winners", expected: ["id=\"kazananlar\"", "Kazananları gör", "Örnek · En iyi teknik çözüm"] },
   { path: "/panel", mode: "failed", name: "panel-failed", expected: ["Teslimde sorun var", "Arşiv deposuna ulaşılamadı"] },
   { path: "/sergi/ornek-etkinlik/1", mode: "failed", name: "exhibit", expected: ["Demoyu aç", "Örnek · Akıllı Kampüs"] },
 ];
@@ -34,3 +35,10 @@ const csv = await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=cs
 assert.equal(csv.status, 200);
 assert.ok((await csv.text()).includes("Örnek Ekip"));
 console.log("PASS: Yönetici CSV teslim listesi indirebiliyor.");
+// Telegram duyurusunun görseli: herkese açık kazanan kartı PNG; bilinmeyen kazanan 404.
+const card = await fetch("http://127.0.0.1:3100/api/kazanan/a1");
+assert.equal(card.status, 200);
+assert.equal(card.headers.get("content-type"), "image/png");
+assert.deepEqual([...new Uint8Array(await card.arrayBuffer()).slice(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+assert.equal((await fetch("http://127.0.0.1:3100/api/kazanan/yok")).status, 404);
+console.log("PASS: Kazanan kartı PNG olarak üretiliyor; bilinmeyen kazanan 404.");

@@ -8,18 +8,19 @@ Hackathon ekipleri public GitHub repolarını içe aktarır. İlk kod arşivi ka
 
 | Adres | Ne var |
 |---|---|
-| `/` | Güncel etkinlik: saate göre değişen selam ve maskot, geri sayım (başlamadan önce başlangıca), vitrin, halkın seçimi |
+| `/` | Güncel etkinlik: saate göre değişen selam ve maskot, geri sayım (başlamadan önce başlangıca), vitrin; sonuçlar açıklanınca vitrinin başında kazananlar (jüri ödülleri ve halkın seçimi) |
 | `/panel` | Ekip paneli: kayıt, teslim sürümü güncelleme, hazırlık listesi, zaman çizelgesi, demo, davet, kuruculuk devri, silme onayı, rozet ve makbuz |
 | `/sergi/<etkinlik>/<no>` | Eser sayfası (paylaşım kartı ile), oy düğmesi, mühür kaydı |
 | `/sergi/<etkinlik>/<no>/makbuz` | Yazdırılabilir mühür makbuzu (kilitten sonra) |
 | `/sergi/<etkinlik>` · `/sergiler` | Geçmiş sergiler |
 | `/dogrula` | Mühürlü ZIP'in SHA-256'sı (tarayıcıda hesaplanır) ya da commit koduyla doğrulama |
-| `/sahne` | Projektör için tam ekran sahne modu |
+| `/sahne` | Projektör için tam ekran sahne modu; kilitten sonra açıklanan her ödül birkaç saniye içinde tören gösterisiyle (logo, eser, ekip, üyeler) açılır |
 | `/yonetim` | Admin: zamanlama, duyuru, kilit, oylama, yeni etkinlik, iş kuyruğu, cron takibi, toplu jüri paketi, CSV, jüri ödülleri |
 | `/gizlilik` | KVKK aydınlatma metni |
 | `/api/rozet/<etkinlik>/<no>` | README rozeti (SVG) |
 | `/api/juri/<etkinlik>` | Admin için toplu ZIP; `?format=csv` ile teslim listesi |
 | `/api/qr` | Sahne için site QR kodu (SVG) |
+| `/api/kazanan/[id]` | Telegram duyurusundaki kazanan kartı (1200×630 PNG): jüri ödülü kimliği ya da `halk-<proje>` |
 | `/api/durum` | Oturuma göre değişim sürümü; canlı durum ve sunucu saati |
 
 ## Kilit nasıl çalışır
@@ -71,7 +72,7 @@ GitHub → Settings → Developer settings → **OAuth Apps** (GitHub Apps deği
 | `TELEGRAM_CHAT_ID` | İsteğe bağlı. Botu gruba ekle, gruba bir mesaj yaz, `https://api.telegram.org/bot<TOKEN>/getUpdates` yanıtındaki `chat.id` (gruplarda eksiyle başlar) |
 | `CONTACT_EMAIL` | KVKK metnindeki kulüp e-postası |
 
-Telegram bildirimleri: yeni eser, duyuru, teslim kilidi, oylama açıldı/sonuçlandı ve son saat hatırlatmaları. Hatırlatmalar etkinlik/pencere bazında kaydedilir; başarısız gönderimler yeniden denenebilir.
+Telegram bildirimleri: yeni eser, duyuru, teslim kilidi, oylama açıldı, son saat hatırlatmaları ve kazananlar. Jüri ödülü yönetimden eklendiği anda kanala kupa stikırı ve kazanan kartıyla (eser, ekip, üyeler, gerekçe) duyurulur; oylama sonuçlanınca halkın seçimi adıyla duyurulur. Telegram kartı alamazsa aynı duyuru düz metin olarak gider. Hatırlatmalar etkinlik/pencere bazında kaydedilir; başarısız gönderimler yeniden denenebilir.
 
 ### 4. Dakikalık zamanlayıcı
 Kurulu: Supabase `pg_cron` her dakika `https://muhur-phi.vercel.app/api/cron/tick` adresini çağırır (`supabase/migrations/0003_cron.sql`). Anahtar Supabase Vault'ta `muhur_cron_secret` adıyla durur ve Vercel'deki `CRON_SECRET` ile aynıdır. Alan adı değişirse migration'daki URL'yi güncelleyip yeniden çalıştır; `CRON_SECRET` değişirse Vault'taki kaydı da güncelle.

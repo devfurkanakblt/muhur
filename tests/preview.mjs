@@ -10,6 +10,9 @@ const eventId = "10000000-0000-0000-0000-000000000001";
 let mode = "open";
 // Gizem avcıları: claim_mystery RPC ile bellekte tutulur, mod değişince sıfırlanır.
 let hunters = [];
+// Halkın seçimi oyları: oylama açıkken (voting) yazılabilir, mod değişince sıfırlanır.
+const sealedVotes = () => mode === "sealed" ? [{ event_id: eventId, user_id: "visitor", project_id: "30000000-0000-0000-0000-000000000001" }] : [];
+let votes = [];
 // Yönetici oturumunun açılış zamanı (A21): ?oturum=eski 13 saat önce açılmış oturum verir.
 const fixtureAmr = url => [{ method: "oauth", timestamp: Math.floor((url.searchParams.get("oturum") === "eski" ? Date.now() - 13 * 3600_000 : Date.now()) / 1000) }];
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
@@ -44,7 +47,7 @@ function records(table) {
     delivery_jobs: mode === "failed" ? [{ id: "j1", project_id: projects[0].id, event_id: eventId, kind: "seal", state: "failed", attempts: 5, error: "Depo bağlantısı başarısız.", next_attempt_at: stamp(0), created_at: stamp(-30_000), project: { name: projects[0].name, team_name: projects[0].team_name }, event: { title: "Örnek Hackathon" } }] : [],
     worker_runs: [{ id: "r1", started_at: stamp(-30_000), finished_at: stamp(-15_000), processed: 3, error: null }],
     awards: mode === "sealed" ? [{ id: "a1", event_id: eventId, project_id: projects[0].id, title: "Örnek · En iyi teknik çözüm", reason: "Bu gerekçe yerel arayüz kontrolü için oluşturulmuş örnektir.", created_at: stamp(-20_000) }] : [],
-    votes: mode === "sealed" ? [{ event_id: eventId, user_id: "visitor", project_id: projects[0].id }] : [],
+    votes,
   };
   return tables[table] ?? [];
 }
@@ -64,6 +67,7 @@ const server = createServer((request, response) => {
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
     hunters = [];
+    votes = sealedVotes();
     return response.end(JSON.stringify({ mode }));
   }
   if (url.pathname === "/fixture/session") {
@@ -93,6 +97,28 @@ const server = createServer((request, response) => {
       let row = hunters.find(h => h.user_id === p_user);
       if (!row) hunters.push(row = { event_id: p_event, user_id: p_user, github_login: p_login, found_at: new Date().toISOString() });
       response.end(JSON.stringify(row.found_at));
+    });
+    return;
+  }
+  // Oy yazımı: upsert (event_id, user_id) ve filtreli silme; guard_votes tetikleyicisinin kuralları taklit edilir.
+  if (url.pathname === "/rest/v1/votes" && ["POST", "DELETE"].includes(request.method)) {
+    let body = "";
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      const reject = message => { response.statusCode = 400; response.end(JSON.stringify({ message: `VOTING: ${message}`, code: "P0001" })); };
+      if (mode !== "voting") return reject("Oylama açık değil.");
+      if (request.method === "DELETE") {
+        const filters = [...url.searchParams].filter(([, f]) => f.startsWith("eq.")).map(([key, f]) => [key, f.slice(3)]);
+        votes = votes.filter(row => !filters.every(([key, value]) => String(row[key]) === value));
+        response.statusCode = 204;
+        return response.end();
+      }
+      const row = JSON.parse(body || "{}");
+      if (!records("projects").some(p => p.id === row.project_id && p.archive_sha256)) return reject("Yalnızca mühürlü eserlere oy verilebilir.");
+      if (records("project_members").some(m => m.project_id === row.project_id && m.user_id === row.user_id)) return reject("Kendi ekibine oy veremezsin.");
+      votes = [...votes.filter(v => !(v.event_id === row.event_id && v.user_id === row.user_id)), row];
+      response.statusCode = 201;
+      response.end();
     });
     return;
   }

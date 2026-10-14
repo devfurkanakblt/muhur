@@ -376,27 +376,22 @@ export async function renewInvite() {
 
 // ---------------------------------------------------------------------------- halkın seçimi
 
-export async function castVote(_: FormState, formData: FormData): Promise<FormState> {
+/**
+ * Oy verme ve geri alma tek eylemdir; düğmenin gösterdiği niyet formla gelir (intent=cast|withdraw).
+ * Oy başka esere verilmişken eser değiştirmek, eski oyu taşır (event_id, user_id başına tek oy).
+ */
+export async function vote(_: FormState, formData: FormData): Promise<FormState> {
   const projectId = String(formData.get("projectId") ?? "");
   const viewer = await getViewer();
   if (!viewer) return { error: "Oy vermek için GitHub ile giriş yap." };
   const event = await getEvent();
   if (event.voting !== "acik") return { error: "Oylama açık değil." };
   const db = createAdminClient();
-  const { error } = await db
-    .from("votes")
-    .upsert({ event_id: event.id, user_id: viewer.id, project_id: projectId, github_login: viewer.login }, { onConflict: "event_id,user_id" });
-  if (error) return { error: dbError(error.message) };
-  revalidatePath("/", "layout");
-  return { ok: true };
-}
-
-export async function withdrawVote(): Promise<FormState> {
-  const viewer = await getViewer();
-  if (!viewer) return { error: "Önce GitHub ile giriş yap." };
-  const event = await getEvent();
-  const db = createAdminClient();
-  const { error } = await db.from("votes").delete().eq("event_id", event.id).eq("user_id", viewer.id);
+  const { error } = formData.get("intent") === "withdraw"
+    // Yalnızca bu esere verilmiş oy silinir; oy başka esere taşındıysa eski görünümdeki düğme onu silemez.
+    ? await db.from("votes").delete().eq("event_id", event.id).eq("user_id", viewer.id).eq("project_id", projectId)
+    : await db.from("votes")
+      .upsert({ event_id: event.id, user_id: viewer.id, project_id: projectId, github_login: viewer.login }, { onConflict: "event_id,user_id" });
   if (error) return { error: dbError(error.message) };
   revalidatePath("/", "layout");
   return { ok: true };

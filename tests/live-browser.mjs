@@ -77,6 +77,27 @@ try {
   await browser.waitFor("window.actionPosts === 2");
   await browser.waitFor("!document.querySelector('input[name=state][value=sonuclandi]').form.querySelector('button').disabled");
   console.log("PASS: Önceki işlem tamamlandıktan sonra düğme yeniden kullanılabilir");
+  // Halkın seçimi: oy geri alınmadan başka esere taşınır, sonra eski esere döner. Sayfa yenilenmeden her düğme
+  // gösterdiği işi yapmalı; "Oy ver" yazan düğme mevcut oyu silmemeli.
+  await fetch("http://127.0.0.1:54330/fixture/state?mode=voting");
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/" });
+  const button = no => `document.querySelector('input[name=projectId][value="30000000-0000-0000-0000-00000000000${no}"]').form.querySelector('button')`;
+  const voted = no => `${button(no)}.getAttribute('aria-pressed') === 'true' && !${button(no)}.disabled`;
+  const notVoted = no => `${button(no)}.getAttribute('aria-pressed') === 'false' && !${button(no)}.disabled`;
+  // Canlı durum isteği hidrasyondan sonra başlar; öncesinde tıklama React'e ulaşmaz.
+  await browser.waitFor(`performance.getEntriesByType('resource').some(e => e.name.includes('/api/durum')) && ${notVoted(2)} && ${notVoted(3)}`);
+  for (const [click, on, off] of [[2, 2, 3], [3, 3, 2], [2, 2, 3], [3, 3, 2]]) {
+    await browser.evaluate(`${button(click)}.click()`);
+    await browser.waitFor(`${voted(on)} && ${notVoted(off)}`);
+  }
+  console.log("PASS: Oy geri alınmadan eserler arasında art arda taşınır, her seferinde tek oy görünür");
+  await browser.evaluate(`${button(3)}.click()`);
+  await browser.waitFor(`${notVoted(2)} && ${notVoted(3)}`);
+  await browser.evaluate(`${button(2)}.click()`);
+  await browser.waitFor(`${voted(2)} && ${notVoted(3)}`);
+  await browser.send("Page.reload");
+  await browser.waitFor(`document.querySelector('input[name=projectId]') && ${voted(2)} && ${notVoted(3)}`);
+  console.log("PASS: Oyu geri alıp yeniden vermek, sayfa yenilendikten sonra da aynı görünür");
 } finally {
   await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
   await browser.close();

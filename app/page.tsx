@@ -45,7 +45,7 @@ export default async function Home() {
       <main id="main-content" tabIndex={-1} className="flex-1">
         <LiveState version={status.version} />
         <Hero
-          key={event.id}
+          key={`hero-${event.id}`}
           startsAt={event.startsAt}
           deadline={event.deadline}
           sealTime={event.sealTime}
@@ -54,7 +54,7 @@ export default async function Home() {
           login={viewer?.login ?? null}
           action={action}
         />
-        <Vitrine key={event.id} items={items} voting={voting} locked={event.locked} sealTime={event.sealTime} />
+        <Vitrine key={`vitrin-${event.id}`} items={items} voting={voting} locked={event.locked} sealTime={event.sealTime} />
       </main>
     </>
   );

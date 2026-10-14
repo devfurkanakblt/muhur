@@ -2,53 +2,51 @@ import "server-only";
 import { env } from "@/lib/env";
 import { STICKERS, type StickerId } from "@/lib/stickers";
 
-function escape(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export { tg } from "@/lib/tg";
+
+/** Telegram'ın görsel altı metni sınırı; HTML hâli bu sınırı aşıyorsa görsel yerine düz mesaj gider. */
+const CAPTION_LIMIT = 1024;
+
+async function call(method: string, body: Record<string, unknown>, timeout = 8000) {
+  const response = await fetch(`https://api.telegram.org/bot${env.telegramBotToken}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: env.telegramChatId, ...body }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeout),
+  });
+  if (!response.ok) return false;
+  const result = await response.json();
+  return result.ok === true;
 }
 
-/** Telegram kanalına mesaj gönderir; verilirse önce maskot stikırını sessizce atar. Bot ayarlı değilse geçer; hata akışı bozmaz. */
-export async function notify(lines: string[], sticker?: StickerId) {
-  const token = env.telegramBotToken;
-  const chat = env.telegramChatId;
-  if (!token || !chat) return false;
+/**
+ * Telegram kanalına mesaj gönderir; verilirse önce maskot stikırını sessizce atar. Görsel verilirse mesaj
+ * görselin altında gider; Telegram görseli alamazsa aynı mesaj düz metin olarak gönderilir.
+ * Bot ayarlı değilse geçer; hata akışı bozmaz.
+ */
+export async function notify(lines: string[], sticker?: StickerId, options: { photo?: string } = {}) {
+  if (!env.telegramBotToken || !env.telegramChatId) return false;
   if (sticker) {
     try {
-      await fetch(`https://api.telegram.org/bot${token}/sendSticker`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chat, sticker: STICKERS[sticker], disable_notification: true }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(8000),
-      });
+      await call("sendSticker", { sticker: STICKERS[sticker], disable_notification: true });
     } catch {
       // Stikır gitmese de mesaj gider.
     }
   }
+  const text = lines.join("\n");
+  if (options.photo && text.length <= CAPTION_LIMIT) {
+    try {
+      // Telegram görseli adresinden kendisi indirir; kart üretimi için süre biraz daha uzun.
+      if (await call("sendPhoto", { photo: options.photo, caption: text, parse_mode: "HTML" }, 20_000)) return true;
+    } catch {
+      // Görsel gitmezse düz mesaja düşülür.
+    }
+  }
   try {
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chat,
-        text: lines.join("\n"),
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return false;
-    const result = await response.json();
-    return result.ok === true;
+    return await call("sendMessage", { text, parse_mode: "HTML", disable_web_page_preview: true });
   } catch {
     // Bildirim gitmezse mühür etkilenmez.
     return false;
   }
 }
-
-export const tg = {
-  b: (s: string) => `<b>${escape(s)}</b>`,
-  code: (s: string) => `<code>${escape(s)}</code>`,
-  text: escape,
-  link: (href: string, label: string) => `<a href="${escape(href)}">${escape(label)}</a>`,
-};

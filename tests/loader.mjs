@@ -1,10 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { transpileModule, ModuleKind, ScriptTarget } from "typescript";
 
+const ROOT = new URL("../", import.meta.url);
+
 export async function resolve(specifier, context, nextResolve) {
+  // Sunucu modülleri de sınanabilsin: "@/..." proje kökünden çözülür, "server-only" testte boş modüldür.
+  if (specifier === "server-only") return { url: "data:text/javascript,export {}", shortCircuit: true };
+  if (specifier.startsWith("@/")) specifier = new URL(specifier.slice(2), ROOT).href;
   try { return await nextResolve(specifier, context); }
   catch (error) {
-    if (specifier.startsWith(".") && !/\.[a-z]+$/.test(specifier)) {
+    if (/^(\.|file:)/.test(specifier) && !/\.[a-z]+$/.test(specifier)) {
       return nextResolve(`${specifier}.ts`, context);
     }
     throw error;

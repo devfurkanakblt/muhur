@@ -279,6 +279,55 @@ a {
   }
 }
 
+/*
+ * Kazanan gösterisi. Öğeler sırayla gelir; her öğenin gecikmesi `--d` ile verilir. Sahnede tören: ödül adı
+ * maskeden yükselir, logo kaideyle birlikte mühür gibi vurulur (iz halkası), pembe mühür köşeye basılır.
+ * Eğim, Tailwind `rotate` özelliğiyle verilir; animasyonlar yalnızca `transform` ile üstüne eklenir.
+ */
+@keyframes winner-rise {
+  from { opacity: 0; transform: translateY(0.5em); }
+  to { opacity: 1; transform: none; }
+}
+/* Bekleyen satır maskenin tamamen altında durur; harflerin üstündeki noktalar (Ö, Ü) alt boşluktan görünmez. */
+@keyframes winner-unmask {
+  from { transform: translateY(calc(100% + 0.6em)); }
+  to { transform: none; }
+}
+@keyframes winner-stamp {
+  from { opacity: 0; transform: scale(1.2) rotate(-3deg); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes winner-ring {
+  from { opacity: 0.5; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.16); }
+}
+@keyframes winner-seal {
+  from { opacity: 0; transform: scale(1.6) rotate(-10deg); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes winner-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.w-rise { animation: winner-rise 600ms var(--ease-out) var(--d, 0ms) both; }
+.w-mask { display: block; overflow: hidden; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+.w-mask > * { display: block; animation: winner-unmask 900ms var(--ease-out) var(--d, 0ms) both; }
+.w-stamp { animation: winner-stamp 380ms var(--ease-out) var(--d, 0ms) both; }
+/* İz halkası yalnızca vuruş anında görünür; gecikme süresince gizli kalır. */
+.w-ring { opacity: 0; animation: winner-ring 800ms var(--ease-out) var(--d, 0ms) forwards; }
+.w-seal { animation: winner-seal 320ms var(--ease-out) var(--d, 0ms) both; }
+.w-fade { animation: winner-fade 400ms ease var(--d, 0ms) both; }
+@media (prefers-reduced-motion: reduce) {
+  .w-rise,
+  .w-mask > *,
+  .w-stamp,
+  .w-seal {
+    animation-name: winner-fade;
+    animation-duration: 400ms;
+  }
+  .w-ring { animation: none; opacity: 0; }
+}
+
 /* Canlı nabız: son push yakınsa nokta yavaşça atar. */
 @keyframes pulse-dot {
   0%,

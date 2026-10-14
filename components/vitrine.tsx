@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { LOCK_EVENT } from "@/components/clock";
 import { ExhibitLabel } from "@/components/exhibit-label";
 import { Mascot } from "@/components/mascot/mascot";
 import { VoteButton } from "@/components/vote-button";
+import { AwardBadge, WinnersSection } from "@/components/winners";
 import type { Exhibit } from "@/lib/data";
-import { exhibitNo, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { filterGallery } from "@/lib/gallery";
+import type { Winner } from "@/lib/winner-model";
 
-export type VitrineItem = Exhibit & { logo: string | null; href: string; pulse: string | null; own: boolean; awards: { title: string; reason: string }[] };
+export type VitrineItem = Exhibit & { logo: string | null; href: string; pulse: string | null; own: boolean; awards: Pick<Winner, "kind" | "title">[] };
 
 export type VitrineVoting = {
   state: "kapali" | "acik" | "sonuclandi";
@@ -24,12 +25,15 @@ export function Vitrine({
   locked: lockedInitially,
   sealTime,
   voting,
+  winners,
   live = true,
 }: {
   items: VitrineItem[];
   locked: boolean;
   sealTime: string;
   voting: VitrineVoting;
+  /** Jüri ödülleri ve halkın seçimi; vitrinin başında büyük gösterilir. */
+  winners: Winner[];
   /** Geçmiş sergilerde kilit olayı dinlenmez. */
   live?: boolean;
 }) {
@@ -47,8 +51,6 @@ export function Vitrine({
   }, [live]);
 
   const tallies = voting.tallies;
-  const best = tallies ? Math.max(0, ...Object.values(tallies)) : 0;
-  const winners = tallies && best > 0 ? items.filter((i) => (tallies[i.id] ?? 0) === best) : [];
 
   const extra = (item: VitrineItem) => {
     if (voting.state === "acik")
@@ -64,25 +66,7 @@ export function Vitrine({
 
   return (
     <section id="vitrin" className="mx-auto w-full max-w-[1240px] px-5 pb-28 sm:px-8">
-      {winners.length > 0 && (
-        <div className="mb-16 flex flex-col items-start gap-6 border-t border-ink pt-6 sm:flex-row sm:items-center">
-          <Mascot mood="kalp" title="" className="w-32 shrink-0" />
-          <div>
-            <h2 className="text-[1.375rem] font-semibold tracking-[-0.015em]">Halkın seçimi</h2>
-            {winners.map((w) => (
-              <p key={w.id} className="mt-3 text-[clamp(1.5rem,3vw,2.25rem)] font-semibold leading-tight tracking-[-0.02em]">
-                <Link href={w.href} className="hover:underline">
-                  {w.name}
-                </Link>
-                <span className="font-normal text-ink-2"> · {w.team_name}</span>
-              </p>
-            ))}
-            <p className="mt-2 text-ink-2">
-              <span className="tnum">{best}</span> oy · {exhibitNo(winners[0].exhibit_no)}
-            </p>
-          </div>
-        </div>
-      )}
+      <WinnersSection winners={winners} />
 
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-ink pt-5">
         <h2 className="text-[1.375rem] font-semibold tracking-[-0.015em]">Vitrin</h2>
@@ -125,7 +109,11 @@ export function Vitrine({
           <ol className="grid grid-cols-1 gap-x-8 gap-y-14 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {visibleItems.map((item) => (
               <li key={item.id}>
-                {item.awards.length > 0 && <ul className="mb-3 grid gap-1 text-[0.8125rem] text-indigo">{item.awards.map(a => <li key={a.title} title={a.reason}>★ {a.title}</li>)}</ul>}
+                {item.awards.length > 0 && (
+                  <ul className="mb-4 flex flex-wrap gap-2" aria-label="Ödüller">
+                    {item.awards.map((a) => <li key={`${a.kind}:${a.title}`}><AwardBadge winner={a} />{a.kind === "juri" && <span className="ml-2 text-[0.8125rem] font-medium">{a.title}</span>}</li>)}
+                  </ul>
+                )}
                 <ExhibitLabel
                   exhibit={item}
                   logo={item.logo}

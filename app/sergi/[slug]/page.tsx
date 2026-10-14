@@ -20,7 +20,7 @@ export default async function PastExhibition({ params }: PageProps<"/sergi/[slug
   if (!event) notFound();
   if (event.isCurrent) redirect("/");
   const viewer = await getViewer();
-  const { items, voting } = await buildVitrine(event, viewer);
+  const { items, voting, winners } = await buildVitrine(event, viewer);
 
   return (
     <>
@@ -32,7 +32,7 @@ export default async function PastExhibition({ params }: PageProps<"/sergi/[slug
             Geçmiş sergi · {formatDay(event.startsAt)} – {formatDay(event.sealTime)} · <span className="tnum">{items.length}</span> eser
           </p>
         </div>
-        <Vitrine items={items} voting={voting} locked={event.locked} sealTime={event.sealTime} live={false} />
+        <Vitrine items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} live={false} />
       </main>
     </>
   );

@@ -7,8 +7,10 @@ import { Plinth } from "@/components/exhibit-label";
 import { SealRecord } from "@/components/seal-record";
 import { VoteButton } from "@/components/vote-button";
 import { LiveState } from "@/components/live-state";
-import { getEventBySlug, getExhibit, getMembers, getOwnProject, getViewer, getVotes, getAwards, logoUrl } from "@/lib/data";
+import { ExhibitAwards } from "@/components/winners";
+import { getEventBySlug, getExhibit, getMembers, getOwnProject, getViewer, getVotes, logoUrl } from "@/lib/data";
 import { exhibitNo, formatDateTime } from "@/lib/format";
+import { getWinners } from "@/lib/winners";
 
 async function load(slug: string, no: string) {
   const event = await getEventBySlug(slug);
@@ -37,7 +39,7 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
   const [viewer, members] = await Promise.all([getViewer(), getMembers(exhibit.id)]);
   const [votes, own] = await Promise.all([getVotes(event, viewer?.id ?? null), viewer ? getOwnProject(viewer.id, event.id) : null]);
   const back = event.isCurrent ? "/#vitrin" : `/sergi/${event.slug}`;
-  const awards = (await getAwards(event.id)).filter(a => a.project_id === exhibit.id);
+  const awards = (await getWinners(event)).filter((w) => w.projectId === exhibit.id);
 
   return (
     <>
@@ -49,8 +51,13 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
         </Link>
 
         <div className="grid gap-12 md:grid-cols-[minmax(0,320px)_1fr] md:gap-20">
-          <div>
+          <div className="relative self-start">
             <Plinth src={logoUrl(exhibit.logo_path)} alt={`${exhibit.name} logosu`} />
+            {awards.length > 0 && (
+              <span className="w-seal absolute -right-3 bottom-6 -rotate-6 rounded-[2px] bg-blush px-3 py-1 text-[0.9375rem] font-semibold text-[#0b0d1e]" style={{ "--d": "250ms" } as React.CSSProperties}>
+                Kazanan
+              </span>
+            )}
           </div>
 
           <div className="min-w-0">
@@ -60,9 +67,7 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
             <h1 className="mt-3 text-[clamp(2rem,4.4vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.03em] text-balance">{exhibit.name}</h1>
             <p className="mt-2 text-[1.25rem] text-ink-2">{exhibit.team_name}</p>
             <p className="mt-8 max-w-[60ch] text-[1.125rem] leading-relaxed">{exhibit.summary}</p>
-            {awards.length > 0 && <section className="mt-8 border-y border-rule py-4" aria-label="Jüri ödülleri">
-              {awards.map(a => <div key={a.id} className="py-2"><h2 className="font-semibold text-indigo">★ {a.title}</h2><p className="mt-1 text-ink-2">{a.reason}</p></div>)}
-            </section>}
+            <ExhibitAwards winners={awards} />
 
             <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
               <a href={exhibit.repo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-mono text-[0.875rem] text-ink hover:underline">

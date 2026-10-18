@@ -18,6 +18,7 @@ const sections: { title: string; body: React.ReactNode }[] = [
         <li>Teslim ettiğin eser: proje adı, ekip adı, kısa özet, logo, repo adı ve bağlantısı, ekip üyelerinin GitHub kullanıcı adları.</li>
         <li>Mühür kaydı: repodaki kodun mühür anındaki kopyası (ZIP), commit kodu ve zaman damgaları. Repo zaten herkese açık olmalıdır.</li>
         <li>Halkın seçimi oylamasına katılırsan hangi esere oy verdiğin. Oylar tek tek yayımlanmaz; yalnızca toplamlar gösterilir.</li>
+        <li>Maskot isim etkinliğine katılırsan önerdiğin isim herkese gösterilir. GitHub kullanıcı adın ve hesap kimliğin katılım denetimi için kaydedilir. Verdiğin oy hesap kimliğinle kaydedilir; yalnızca isim başına toplam oy sayısı yayımlanır.</li>
         <li>
           GitHub erişim anahtarın sunucumuzda saklanmaz; yalnızca tarayıcındaki güvenli bir çerezde 12 saat tutulur ve repolarını listelemek için
           kullanılır.

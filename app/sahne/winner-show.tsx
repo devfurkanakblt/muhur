@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { XIcon } from "@phosphor-icons/react";
 import { Wordmark } from "@/components/brand";
 import { Plinth } from "@/components/exhibit-label";
@@ -67,12 +67,44 @@ function timeline(ceremony: boolean, members: number) {
 
 const d = (ms: number) => ({ "--d": `${ms}ms` }) as React.CSSProperties;
 
+/**
+ * Yazı boyutları hem genişliğe hem yüksekliğe bağlı; yine de uzun ad, kalabalık ekip ya da alçak projektörde
+ * sütun alana sığmazsa `zoom` ile küçülür. Tören hareketleri transform olduğu için ölçümü etkilemez.
+ */
+function useFit<T extends HTMLElement>() {
+  const area = useRef<HTMLDivElement>(null);
+  const content = useRef<T>(null);
+  useLayoutEffect(() => {
+    const box = area.current;
+    const el = content.current;
+    if (!box || !el) return;
+    const fit = () => {
+      el.style.zoom = "1";
+      const scale = Math.min(1, box.clientHeight / el.offsetHeight);
+      el.style.zoom = scale < 0.995 ? String(Math.floor(scale * 100) / 100) : "";
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(box);
+    void document.fonts?.ready.then(fit);
+    return () => observer.disconnect();
+  }, []);
+  return { area, content };
+}
+
 function Spotlight({ winner, ceremony }: { winner: Winner; ceremony: boolean }) {
   const t = timeline(ceremony, winner.members.length);
   const jury = winner.kind === "juri";
+  const { area, content } = useFit<HTMLDivElement>();
+  // Uzun eser adı dev puntoda dört satıra kırılıyordu; uzunluğa göre kademeli küçülür.
+  const nameSize = winner.name.length > 40
+    ? "text-[clamp(2rem,min(4.4vw,7vh),5.5rem)]"
+    : winner.name.length > 22
+      ? "text-[clamp(2.25rem,min(5.4vw,8.5vh),7rem)]"
+      : "text-[clamp(2.5rem,min(6.6vw,11vh),8.5rem)]";
   return (
-    <div className="grid h-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[5vw]">
-      <div className="relative w-[min(30vw,50vh)]">
+    <div ref={area} className="grid h-full grid-cols-[auto_minmax(0,1fr)] items-center gap-[5vw]">
+      <div className="relative w-[min(28vw,46vh)]">
         {ceremony && <div aria-hidden className="w-ring absolute inset-0 border-2 border-ink" style={d(t.ring)} />}
         <div className={ceremony ? "w-stamp" : "w-rise"} style={d(t.plinth)}>
           <Plinth src={winner.logo} alt={`${winner.name} logosu`} />
@@ -84,18 +116,18 @@ function Spotlight({ winner, ceremony }: { winner: Winner; ceremony: boolean }) 
           {exhibitNo(winner.no)}
         </span>
       </div>
-      <div className="min-w-0">
+      <div ref={content} className="min-w-0">
         <div className="w-rise" style={d(t.label)}><AwardBadge winner={winner} size="lg" /></div>
-        <p className="w-mask mt-[3vh] text-[clamp(1.75rem,3.8vw,4.5rem)] font-semibold leading-[1.05] tracking-[-0.03em] text-ink-2">
+        <p className="w-mask mt-[2.5vh] text-[clamp(1.5rem,min(3.4vw,5.6vh),4.5rem)] font-semibold leading-[1.05] tracking-[-0.03em] text-ink-2">
           <span style={d(t.title)}>{jury ? winner.title : `${winner.votes} oy`}</span>
         </p>
-        <h2 className="w-mask mt-[1.5vh] text-[clamp(2.75rem,7vw,8.5rem)] font-semibold leading-[0.98] tracking-[-0.045em]">
+        <h2 className={`w-mask mt-[1.2vh] ${nameSize} font-semibold leading-[0.98] tracking-[-0.045em] [overflow-wrap:anywhere]`}>
           <span style={d(t.name)}>{winner.name}</span>
         </h2>
-        <p className="w-rise mt-[1.5vh] text-[clamp(1.25rem,2.4vw,2.75rem)] text-ink-2" style={d(t.team)}>{winner.team}</p>
-        <div className="mt-[4vh]"><WinnerMembers members={winner.members} size="lg" enter="w-rise" delay={t.member} /></div>
+        <p className="w-rise mt-[1.2vh] text-[clamp(1.125rem,min(2.2vw,3.6vh),2.75rem)] text-ink-2" style={d(t.team)}>{winner.team}</p>
+        <div className="mt-[3vh]"><WinnerMembers members={winner.members} size="lg" enter="w-rise" delay={t.member} /></div>
         {winner.reason && (
-          <p className="w-rise mt-[4vh] max-w-[52ch] border-l-2 border-ink pl-[1.2vw] text-[clamp(1.125rem,1.7vw,1.875rem)] leading-snug text-ink-2" style={d(t.reason)}>
+          <p className="w-rise mt-[3vh] max-w-[56ch] border-l-2 border-ink pl-[1.2vw] text-[clamp(1rem,min(1.6vw,2.7vh),1.875rem)] leading-snug text-ink-2" style={d(t.reason)}>
             {winner.reason}
           </p>
         )}

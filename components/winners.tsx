@@ -23,9 +23,9 @@ export function WinnerMembers({ members, size = "md", enter, delay }: {
   members: Winner["members"]; size?: "md" | "lg"; enter?: string; delay?: (i: number) => number;
 }) {
   if (!members.length) return null;
-  const avatar = size === "lg" ? "h-[clamp(2.25rem,3.6vw,3.75rem)] w-[clamp(2.25rem,3.6vw,3.75rem)]" : "h-8 w-8";
+  const avatar = size === "lg" ? "h-[clamp(2rem,min(3.4vw,5.6vh),3.75rem)] w-[clamp(2rem,min(3.4vw,5.6vh),3.75rem)]" : "h-8 w-8";
   return (
-    <ul className={`flex flex-wrap ${size === "lg" ? "gap-x-[2.4vw] gap-y-3 text-[clamp(1.125rem,1.9vw,2rem)]" : "gap-x-5 gap-y-2 text-[0.9375rem]"}`}>
+    <ul className={`flex flex-wrap ${size === "lg" ? "gap-x-[2.4vw] gap-y-[1.2vh] text-[clamp(1rem,min(1.8vw,3vh),2rem)]" : "gap-x-5 gap-y-2 text-[0.9375rem]"}`}>
       {members.map((m, i) => (
         <li key={m.login} className={`flex items-center gap-2.5 ${enter ?? ""}`} style={delay ? ({ "--d": `${delay(i)}ms` } as React.CSSProperties) : undefined}>
           {m.avatar ? (

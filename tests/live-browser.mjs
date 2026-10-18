@@ -124,6 +124,15 @@ try {
   await browser.waitFor(`${live}.textContent.includes('Jüri özel ödülü') && ${current}.textContent.includes('Jüri özel ödülü')`);
   assert.equal(await browser.evaluate("document.querySelector('section[aria-label=Kazananlar]').innerText.includes('zeynep-dbu')"), true);
   console.log("PASS: Sahne açıkken açıklanan ödül birkaç saniye içinde törenle, ekip üyeleriyle gelir");
+  // Uzun eser adı ve üç üyeli ekip, alçak projektörde de alt şeridin üstüne binmez.
+  await browser.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+  await browser.evaluate("document.getAnimations().forEach(a => a.finish()); new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))");
+  const fit = await browser.evaluate(`(() => {
+    const s = document.querySelector('section[aria-label=Kazananlar]');
+    return { content: s.querySelector('h2').parentElement.getBoundingClientRect().bottom, footer: s.querySelector('footer').getBoundingClientRect().top };
+  })()`);
+  assert.ok(fit.content <= fit.footer, `Kazanan gösterisi alt şeride taşıyor: ${JSON.stringify(fit)}`);
+  console.log("PASS: Uzun adlı kazanan 1280×720'de alt şeride taşmaz");
   await browser.evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('Sahneye dön')).click()");
   await browser.waitFor("!document.querySelector('section[aria-label=Kazananlar]') && document.querySelector('footer').innerText.includes('Birincilik')");
   await browser.evaluate("[...document.querySelectorAll('footer button')].find(b => b.textContent.includes('Birincilik')).click()");

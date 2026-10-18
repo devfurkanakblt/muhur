@@ -11,7 +11,8 @@ export type MascotMood =
   | "pizza"
   | "kahve"
   | "kalp"
-  | "durbun";
+  | "durbun"
+  | "oyun";
 
 const INK = "#00051D";
 const FILL = "#FBF6F8";
@@ -93,6 +94,20 @@ function Eyes({ mood }: { mood: MascotMood }) {
           </g>
         </g>
       );
+    case "oyun":
+      // Kaşlar çatık, gözler aşağıda oyun kolunda: rekabet ciddi.
+      return (
+        <g>
+          <g fill={INK}>
+            <rect x={EYE_L.cx - EYE_L.w / 2} y={EYE_L.cy - 40} width={EYE_L.w} height={104} rx={EYE_L.w / 2} />
+            <rect x={EYE_R.cx - EYE_R.w / 2} y={EYE_R.cy - 40} width={EYE_R.w} height={104} rx={EYE_R.w / 2} />
+          </g>
+          <g {...STROKE} strokeWidth={22}>
+            <path d="M484 566 L572 594" />
+            <path d="M813 566 L725 594" />
+          </g>
+        </g>
+      );
     case "kalp":
       return (
         <g>
@@ -114,6 +129,13 @@ function Mouth({ mood }: { mood: MascotMood }) {
   if (mood === "durbun") return <ellipse cx={649} cy={806} rx={20} ry={24} fill={INK} />;
   if (mood === "pizza") return <ellipse cx={649} cy={778} rx={24} ry={28} fill={INK} />;
   if (mood === "heyecanli") return <path d="M626 752 Q649 790 672 752" {...STROKE} strokeWidth={18} />;
+  if (mood === "oyun")
+    return (
+      <g>
+        <path d="M660 772 Q666 820 692 816 Q714 812 702 768 Z" fill="#E8536B" stroke={INK} strokeWidth={12} strokeLinejoin="round" />
+        <path d="M612 756 Q649 796 700 760" {...STROKE} strokeWidth={18} />
+      </g>
+    );
   if (mood === "mutlu") return <path d="M604 752 Q649 812 694 752" {...STROKE} strokeWidth={20} />;
   return <path d="M618 760 Q649 800 680 760" {...STROKE} strokeWidth={18} />;
 }
@@ -167,6 +189,23 @@ function Pizza() {
         <circle cx={800} cy={1010} r={26} />
         <circle cx={604} cy={1018} r={24} />
       </g>
+    </g>
+  );
+}
+
+function Gamepad() {
+  return (
+    <g strokeLinejoin="round" strokeLinecap="round">
+      <path
+        d="M500 902 Q500 866 546 866 H754 Q800 866 800 902 L846 1046 Q858 1096 816 1100 Q786 1102 766 1072 L738 1032 H562 L534 1072 Q514 1102 484 1100 Q442 1096 454 1046 Z"
+        fill={VIOLET_DEEP}
+        stroke={INK}
+        strokeWidth={16}
+      />
+      <path d="M548 940 h22 v-22 h22 v22 h22 v22 h-22 v22 h-22 v-22 h-22 Z" fill={FILL} />
+      <circle cx={726} cy={930} r={15} fill="#FFCF5C" />
+      <circle cx={756} cy={962} r={15} fill="#E8536B" />
+      <path d="M626 916 H674" stroke={VIOLET} strokeWidth={12} />
     </g>
   );
 }
@@ -256,6 +295,7 @@ export function Mascot({
       {mood === "pizza" && <Pizza />}
       {mood === "kahve" && <Mug />}
       {mood === "kalp" && <Heart />}
+      {mood === "oyun" && <Gamepad />}
     </svg>
   );
 }

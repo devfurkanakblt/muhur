@@ -36,7 +36,7 @@ function records(table) {
   }));
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
-      is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+      is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     projects,
     project_members: [{ ...member, project_id: projects[0].id, project: { team_name: projects[0].team_name } }],
     mystery_hunters: hunters,
@@ -73,6 +73,12 @@ const server = createServer((request, response) => {
     return response.end(JSON.stringify({ name: "sb-127-auth-token", value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}` }));
   }
   if (url.pathname === "/auth/v1/user") return response.end(JSON.stringify(user));
+  // Yemek/oyun duyurusu yerelde bellekte tutulur; sayfa yenilenince maskot değişimi görülebilir.
+  if (url.pathname === "/rest/v1/rpc/admin_update_event") {
+    const body = JSON.parse(await new Promise(done => { let b = ""; request.on("data", c => b += c); request.on("end", () => done(b)); }) || "{}");
+    if ("activity" in (body.p_changes ?? {})) activity = body.p_changes.activity ? { ...body.p_changes.activity, at: new Date().toISOString() } : null;
+    return response.end("null");
+  }
   // Browser UI tests can reach a normal action error without a real database lease.
   if (url.pathname === "/rest/v1/rpc/try_worker_lease") return response.end("true");
   // Oy toplamları DB'de sayılır (vote_tallies RPC); fikstür aynı sonucu örnek oylardan üretir.

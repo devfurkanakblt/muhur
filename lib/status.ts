@@ -19,7 +19,7 @@ export async function getLiveStatus() {
     db.from("delivery_jobs").select("id, state, attempts, error").order("created_at", { ascending: false }).limit(30),
   ]) : null;
   const version = createHash("sha256").update(JSON.stringify({
-    event: [event.id, event.startsAt, event.deadline, event.locked, event.lockedAt, event.voting, event.announcementAt],
+    event: [event.id, event.startsAt, event.deadline, event.locked, event.lockedAt, event.voting, event.announcementAt, event.activity?.at],
     updates, awardCount, voteCount, project: project ? [project.id, project.accepted_sha, project.delivery_error, project.members] : null, jobs,
     admin: adminState?.map(s => s.data),
   })).digest("hex");

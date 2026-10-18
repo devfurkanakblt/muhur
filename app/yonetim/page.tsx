@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowUpRightIcon, DownloadSimpleIcon, MonitorPlayIcon } from "@phosphor-icons/react/ssr";
 import { SiteHeader } from "@/components/site-header";
-import { AnnouncementForm, AnonymizeForm, AwardForm, NewEventForm, RetryJobButton, ScheduleForm } from "@/components/admin-forms";
+import { ActivityForm, AnnouncementForm, AnonymizeForm, AwardForm, NewEventForm, RetryJobButton, ScheduleForm } from "@/components/admin-forms";
 import { HoldToLock } from "@/components/hold-to-lock";
 import { exhibitPath, getAdminSession, getEvent, getViewer, getAwards, getEvents, getMysteryHunters, type AdminSession } from "@/lib/data";
 import { SignInButton } from "@/components/buttons";
@@ -164,6 +164,10 @@ export default async function AdminPage() {
             </Section>
           </>
         )}
+
+        <Section title="Yemek ve etkinlik saati" note="Duyurduğun an ana sayfadaki maskot ve selam değişir; bitirene kadar sürer. Telegram grubuna da gider.">
+          <ActivityForm current={event.activity} since={event.activity ? formatTime(event.activity.at).slice(0, 5) : null} />
+        </Section>
 
         <Section title="Duyuru" note="Telegram grubuna da gider.">
           <AnnouncementForm current={event.announcement} />

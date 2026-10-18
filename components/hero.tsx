@@ -5,6 +5,7 @@ import { Clock, LOCK_EVENT, useRemaining } from "@/components/clock";
 import { Mascot, type MascotMood } from "@/components/mascot/mascot";
 import { formatDateTime } from "@/lib/format";
 import { greetingAt, moodAt } from "@/lib/daypart";
+import type { Activity } from "@/lib/data";
 
 // Maskota tıklayınca sırayla bu ifadeler; birkaç saniye sonra saate göre ifadeye döner.
 const PLAY: MascotMood[] = ["mutlu", "kalp", "merakli", "heyecanli", "odakli"];
@@ -16,6 +17,7 @@ export function Hero({
   locked: lockedInitially,
   serverNow,
   login,
+  activity,
   action,
 }: {
   startsAt: string;
@@ -24,6 +26,7 @@ export function Hero({
   locked: boolean;
   serverNow: number;
   login: string | null;
+  activity: Activity | null;
   action: React.ReactNode;
 }) {
   const [lockedLive, setLockedLive] = useState(false);
@@ -36,7 +39,7 @@ export function Hero({
     return () => window.removeEventListener(LOCK_EVENT, onLock);
   }, []);
 
-  // Kilit ve son 10 dakika kendi ifadesini taşır; geri kalan her an Türkiye saatine göre.
+  // Son 10 dakika, duyurulan yemek/oyun ve kilit kendi ifadesini taşır; geri kalan her an Türkiye saatine göre.
   const [play, setPlay] = useState<{ i: number; mood: MascotMood } | null>(null);
   const playTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -53,8 +56,8 @@ export function Hero({
   const started = now >= startMs;
   const final = !locked && remaining < 10 * 60 * 1000;
   const phase = locked ? "kilitli" : final ? "son-dakika" : started ? "acik" : "baslamadi";
-  const mood: MascotMood = play?.mood ?? (locked ? "uykulu" : final ? "heyecanli" : moodAt(now));
-  const greeting = greetingAt(now, login, phase);
+  const mood: MascotMood = play?.mood ?? (final ? "heyecanli" : activity ? moodAt(now, activity.kind) : locked ? "uykulu" : moodAt(now));
+  const greeting = greetingAt(now, login, phase, activity);
 
   return (
     <section className="relative mx-auto grid w-full max-w-[1240px] grid-cols-1 items-end gap-y-10 px-5 pt-14 pb-16 sm:px-8 md:grid-cols-[1fr_auto] md:pt-24 md:pb-20">

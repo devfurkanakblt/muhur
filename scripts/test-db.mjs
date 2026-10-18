@@ -43,13 +43,14 @@ try {
   CREATE SCHEMA storage;
   CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   `, database);
-  for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql"]) {
+  for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql", "0008_activity.sql"]) {
     run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("supabase/migrations", file)]);
   }
   console.log("Migration dosyaları gerçek PostgreSQL üzerinde uygulandı.");
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database.sql")]);
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-hardening.sql")]);
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-last-minute.sql")]);
+  run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-activity.sql")]);
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-mystery.sql")]);
   console.log("Veritabanı kural testleri geçti.");
   const eventId = "20000000-0000-0000-0000-000000000001";

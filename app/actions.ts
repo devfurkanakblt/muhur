@@ -509,6 +509,26 @@ export async function setAnnouncement(_: FormState, formData: FormData): Promise
   return { ok: true };
 }
 
+/** Yemek ya da mini oyun duyurusu: maskot ve selam bitirilene kadar buna göre değişir. */
+export async function setActivity(_: FormState, formData: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  const kind = String(formData.get("kind") ?? "");
+  const title = String(formData.get("title") ?? "").trim().replace(/\s+/g, " ");
+  if (kind !== "yemek" && kind !== "oyun" && kind !== "bitir") return { error: "Geçersiz istek." };
+  if (kind !== "bitir" && (title.length < 2 || title.length > 60)) return { error: "Ad 2 ile 60 karakter arasında olmalı." };
+  const event = await getEvent();
+  const once = requestKey("an", event.id, kind, kind === "bitir" ? "" : title);
+  if (!(await claimOnce(once, 30))) return { ok: true };
+  const { error } = await updateEvent(admin, event.id, "activity", { activity: kind === "bitir" ? null : { kind, title } });
+  if (error) {
+    await releaseOnce(once);
+    return { error: dbError(error.message) };
+  }
+  if (kind !== "bitir") after(() => notify([`${kind === "yemek" ? "🍽️" : "🎲"} ${tg.b(title)}`, tg.text(kind === "yemek" ? "Yemek saati başladı." : "Etkinlik başladı.")], kind === "yemek" ? "pizza" : "duyuru"));
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function lockNowAction(): Promise<{ error?: string }> {
   const { admin, error } = await requireFreshAdmin();
   if (error) return { error };

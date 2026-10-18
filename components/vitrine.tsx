@@ -109,17 +109,22 @@ export function Vitrine({
           <ol className="grid grid-cols-1 gap-x-8 gap-y-14 min-[480px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {visibleItems.map((item) => (
               <li key={item.id}>
-                {item.awards.length > 0 && (
-                  <ul className="mb-4 flex flex-wrap gap-2" aria-label="Ödüller">
-                    {item.awards.map((a) => <li key={`${a.kind}:${a.title}`}><AwardBadge winner={a} />{a.kind === "juri" && <span className="ml-2 text-[0.8125rem] font-medium">{a.title}</span>}</li>)}
-                  </ul>
-                )}
                 <ExhibitLabel
                   exhibit={item}
                   logo={item.logo}
                   locked={closed}
                   href={item.href}
                   pulse={item.pulse}
+                  awards={item.awards.length > 0 && (
+                    <ul className="grid gap-2" aria-label="Ödüller">
+                      {item.awards.map((a) => (
+                        <li key={`${a.kind}:${a.title}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <AwardBadge winner={a} />
+                          {a.kind === "juri" && <span className="text-[0.8125rem] font-medium">{a.title}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   extra={extra(item)}
                   sealSlot={
                     closedLive && !lockedInitially ? (

@@ -15,6 +15,7 @@ const logos = {
   "fixture/logo-1.png": { type: "image/png", bytes: await sharp(logoSvg(`<circle cx="256" cy="256" r="230" fill="#1f8a70"/><rect x="146" y="146" width="220" height="220" rx="36" fill="#f6f1e7"/><circle cx="256" cy="256" r="58" fill="#1f8a70"/>`)).png().toBuffer() },
   "fixture/logo-2.webp": { type: "image/webp", bytes: await sharp(logoSvg(`<path d="M256 24 488 256 256 488 24 256Z" fill="#e2712b"/><path d="M256 136 376 256 256 376 136 256Z" fill="#2b2d42"/>`)).webp().toBuffer() },
 };
+let activity = null;
 // Gizem avcıları: claim_mystery RPC ile bellekte tutulur, mod değişince sıfırlanır.
 let hunters = [];
 // Halkın seçimi oyları: oylama açıkken (voting) yazılabilir, mod değişince sıfırlanır.
@@ -26,6 +27,16 @@ let awards = [];
 let awardSeq = 1;
 // Yönetici oturumunun açılış zamanı (A21): ?oturum=eski 13 saat önce açılmış oturum verir.
 const fixtureAmr = url => [{ method: "oauth", timestamp: Math.floor((url.searchParams.get("oturum") === "eski" ? Date.now() - 13 * 3600_000 : Date.now()) / 1000) }];
+const mascotProposals = [
+  { id: "81000000-0000-0000-0000-000000000001", event_id: eventId, author_id: userId, author_login: "preview-admin", name: "Mırmır", visible: true, created_at: stamp(-240_000) },
+  { id: "81000000-0000-0000-0000-000000000002", event_id: eventId, author_id: "00000000-0000-0000-0000-000000000002", author_login: "ornek-katilimci", name: "Kıvılcım", visible: true, created_at: stamp(-180_000) },
+  { id: "81000000-0000-0000-0000-000000000003", event_id: eventId, author_id: "00000000-0000-0000-0000-000000000003", author_login: "ornek-yarismaci", name: "Nöron", visible: true, created_at: stamp(-120_000) },
+];
+const mascotVotes = [
+  { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000010", proposal_id: mascotProposals[0].id },
+  { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000011", proposal_id: mascotProposals[1].id },
+  { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000012", proposal_id: mascotProposals[1].id },
+];
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
 function records(table) {
@@ -50,7 +61,7 @@ function records(table) {
   }));
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
-      is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+      is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     projects,
     project_members: [
       { ...member, project_id: projects[0].id, project: { team_name: projects[0].team_name } },
@@ -66,10 +77,13 @@ function records(table) {
     worker_runs: [{ id: "r1", started_at: stamp(-30_000), finished_at: stamp(-15_000), processed: 3, error: null }],
     awards,
     votes,
+    mascot_naming_rounds: [{ event_id: eventId, phase: mode === "voting" ? "oylama" : mode === "sealed" ? "sonuc" : "oneriler" }],
+    mascot_name_proposals: mascotProposals,
+    mascot_name_votes: mode === "voting" || mode === "sealed" ? mascotVotes : [],
   };
   return tables[table] ?? [];
 }
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:54330");
   response.setHeader("Content-Type", "application/json");
   if (url.pathname === "/fixture/login") {
@@ -102,6 +116,12 @@ const server = createServer((request, response) => {
     return response.end(logo.bytes);
   }
   if (url.pathname === "/auth/v1/user") return response.end(JSON.stringify(user));
+  // Yemek/oyun duyurusu yerelde bellekte tutulur; sayfa yenilenince maskot değişimi görülebilir.
+  if (url.pathname === "/rest/v1/rpc/admin_update_event") {
+    const body = JSON.parse(await new Promise(done => { let b = ""; request.on("data", c => b += c); request.on("end", () => done(b)); }) || "{}");
+    if ("activity" in (body.p_changes ?? {})) activity = body.p_changes.activity ? { ...body.p_changes.activity, at: new Date().toISOString() } : null;
+    return response.end("null");
+  }
   // Browser UI tests can reach a normal action error without a real database lease.
   if (url.pathname === "/rest/v1/rpc/try_worker_lease") return response.end("true");
   // Oy toplamları DB'de sayılır (vote_tallies RPC); fikstür aynı sonucu örnek oylardan üretir.
@@ -167,6 +187,12 @@ const server = createServer((request, response) => {
       response.end();
     });
     return;
+  }
+  if (url.pathname === "/rest/v1/rpc/mascot_name_tallies") {
+    return response.end(JSON.stringify(mascotProposals.map(p => ({
+      proposal_id: p.id,
+      vote_count: records("mascot_name_votes").filter(v => v.proposal_id === p.id).length,
+    }))));
   }
   if (!url.pathname.startsWith("/rest/v1/") || !["GET", "HEAD"].includes(request.method)) {
     response.statusCode = 405; return response.end(JSON.stringify({ message: "Yerel test verisi salt okunur.", code: "FIXTURE_READ_ONLY" }));

@@ -505,6 +505,26 @@ export async function setAnnouncement(_: FormState, formData: FormData): Promise
   return { ok: true };
 }
 
+/** Yemek ya da mini oyun duyurusu: maskot ve selam bitirilene kadar buna göre değişir. */
+export async function setActivity(_: FormState, formData: FormData): Promise<FormState> {
+  const admin = await requireAdmin();
+  const kind = String(formData.get("kind") ?? "");
+  const title = String(formData.get("title") ?? "").trim().replace(/\s+/g, " ");
+  if (kind !== "yemek" && kind !== "oyun" && kind !== "bitir") return { error: "Geçersiz istek." };
+  if (kind !== "bitir" && (title.length < 2 || title.length > 60)) return { error: "Ad 2 ile 60 karakter arasında olmalı." };
+  const event = await getEvent();
+  const once = requestKey("an", event.id, kind, kind === "bitir" ? "" : title);
+  if (!(await claimOnce(once, 30))) return { ok: true };
+  const { error } = await updateEvent(admin, event.id, "activity", { activity: kind === "bitir" ? null : { kind, title } });
+  if (error) {
+    await releaseOnce(once);
+    return { error: dbError(error.message) };
+  }
+  if (kind !== "bitir") after(() => notify([`${kind === "yemek" ? "🍽️" : "🎲"} ${tg.b(title)}`, tg.text(kind === "yemek" ? "Yemek saati başladı." : "Etkinlik başladı.")], kind === "yemek" ? "pizza" : "duyuru"));
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function lockNowAction(): Promise<{ error?: string }> {
   const { admin, error } = await requireFreshAdmin();
   if (error) return { error };
@@ -660,12 +680,19 @@ export async function anonymizeUser(_: FormState, formData: FormData): Promise<F
   if (!/^[A-Za-z0-9-]{1,39}$/.test(login)) return { error: "Geçerli bir GitHub kullanıcı adı yaz." };
   if (reason.length < 5) return { error: "Başvuru gerekçesini yaz (en az 5 karakter)." };
   const db = createAdminClient();
-  const [members, votes] = await Promise.all([
+  const [members, votes, hunters, mascotProposals, mascotVotes] = await Promise.all([
     db.from("project_members").select("user_id").ilike("github_login", login),
     db.from("votes").select("user_id").ilike("github_login", login),
+    db.from("mystery_hunters").select("user_id").ilike("github_login", login),
+    db.from("mascot_name_proposals").select("author_id").ilike("author_login", login),
+    db.from("mascot_name_votes").select("voter_id").ilike("voter_login", login),
   ]);
-  if (members.error || votes.error) return { error: "Kayıtlar okunamadı. Tekrar dene." };
-  const ids = [...new Set([...(members.data ?? []), ...(votes.data ?? [])].map((r) => r.user_id))];
+  if (members.error || votes.error || hunters.error || mascotProposals.error || mascotVotes.error) return { error: "Kayıtlar okunamadı. Tekrar dene." };
+  const ids = [...new Set([
+    ...[...(members.data ?? []), ...(votes.data ?? []), ...(hunters.data ?? [])].map(r => r.user_id),
+    ...(mascotProposals.data ?? []).map(r => r.author_id),
+    ...(mascotVotes.data ?? []).map(r => r.voter_id),
+  ])];
   if (ids.length === 0) return { error: "Bu kullanıcı adına bağlı kayıt bulunamadı." };
   if (ids.length > 1) return { error: "Bu ad birden çok hesapla eşleşti; işlem durduruldu. Teknik destekle ilerle." };
   if (ids[0] === admin.id) return { error: "Kendi hesabını buradan anonimleştiremezsin." };

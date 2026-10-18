@@ -1,8 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addAward, anonymizeUser, createEvent, retryDeliveryJob, setAnnouncement, setSchedule, type FormState } from "@/app/actions";
+import { addAward, anonymizeUser, createEvent, retryDeliveryJob, setActivity, setAnnouncement, setSchedule, type FormState } from "@/app/actions";
+import type { Activity } from "@/lib/data";
 import { SubmitButton } from "@/components/buttons";
+import { buttonStyles } from "@/components/button-styles";
 import { useProtectedForm } from "@/components/protected-form";
 
 const input =
@@ -121,6 +123,50 @@ export function AnnouncementForm({ current }: { current: string | null }) {
         <Status state={state} ok={text.trim() ? "Duyuru yayında." : "Duyuru kaldırıldı."} />
       </div>
     </form>
+  );
+}
+
+/** Yemek ve mini oyun saatleri sabit değil; duyurulduğu an başlar, "Bitir" ile biter. */
+export function ActivityForm({ current, since }: { current: Activity | null; since: string | null }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(setActivity, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  const [endState, endAction, ending] = useActionState<FormState, FormData>(setActivity, undefined);
+  const endForm = useProtectedForm(endAction, endState, ending);
+  return (
+    <div className="grid gap-6">
+      {current && (
+        <form {...endForm} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-l-2 border-indigo pl-4">
+          <input type="hidden" name="kind" value="bitir" />
+          <p className="text-[0.9375rem]">
+            <span className="text-ink-3">{current.kind === "yemek" ? "Yemek saati" : "Etkinlik"} · başlangıç {since}</span>
+            <span className="block font-medium">{current.title}</span>
+          </p>
+          <SubmitButton variant="ghost" busy={ending} pending="Bitiriliyor…">Bitir</SubmitButton>
+          <Status state={endState} ok="Bitti; maskot saatine döndü." />
+        </form>
+      )}
+      <form {...protectedForm} className="grid gap-3">
+        <label htmlFor="activity-title" className={label}>
+          {current ? "Yerine yenisini duyur" : "Ne başlıyor?"}
+        </label>
+        <input id="activity-title" name="title" required minLength={2} maxLength={60} list="activity-ideas" placeholder="Öğle yemeği, Vampir köylü…" className={input} />
+        <datalist id="activity-ideas">
+          <option value="Öğle yemeği" />
+          <option value="Akşam yemeği" />
+          <option value="Gece atıştırması" />
+          <option value="Vampir köylü" />
+        </datalist>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" name="kind" value="yemek" disabled={pending} className={buttonStyles.ink}>
+            {pending ? "Duyuruluyor…" : "Yemek saati olarak duyur"}
+          </button>
+          <button type="submit" name="kind" value="oyun" disabled={pending} className={buttonStyles.ghost}>
+            {pending ? "Duyuruluyor…" : "Etkinlik olarak duyur"}
+          </button>
+          <Status state={state} ok="Duyuruldu; maskot ve selam değişti." />
+        </div>
+      </form>
+    </div>
   );
 }
 

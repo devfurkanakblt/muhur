@@ -42,7 +42,8 @@ export function useProtectedForm(
     formChanges.begin(event.currentTarget);
     window.dispatchEvent(new Event(FORM_PENDING));
     submitted.current = formChanges.revision(event.currentTarget);
-    const data = new FormData(event.currentTarget);
+    // Basılan düğmenin name/value'su da gönderilir (ör. aynı formda "Yemek" ve "Etkinlik").
+    const data = new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter);
     startTransition(() => action(data));
   };
   return { ref, onSubmit };

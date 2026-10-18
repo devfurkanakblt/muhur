@@ -63,6 +63,7 @@ export default async function Home() {
           locked={event.locked}
           serverNow={event.now}
           login={viewer?.login ?? null}
+          activity={event.activity}
           action={action}
           celebrate={announced}
         />

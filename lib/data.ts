@@ -22,7 +22,13 @@ type EventRow = {
   announcement: string | null;
   announcement_at: string | null;
   voting: "kapali" | "acik" | "sonuclandi";
+  activity_kind: "yemek" | "oyun" | null;
+  activity_title: string | null;
+  activity_at: string | null;
 };
+
+/** Yöneticinin duyurduğu yemek ya da mini oyun; bitirilene kadar sürer. */
+export type Activity = { kind: "yemek" | "oyun"; title: string; at: string };
 
 export type EventState = {
   id: string;
@@ -40,6 +46,7 @@ export type EventState = {
   announcement: string | null;
   announcementAt: string | null;
   voting: EventRow["voting"];
+  activity: Activity | null;
   /** Sunucunun okuma anı; geri sayımın ilk karesi için. */
   now: number;
 };
@@ -63,6 +70,7 @@ function toState(row: EventRow): EventState {
     announcement: row.announcement,
     announcementAt: row.announcement_at,
     voting: row.voting,
+    activity: row.activity_kind && row.activity_title && row.activity_at ? { kind: row.activity_kind, title: row.activity_title, at: row.activity_at } : null,
     now,
   };
 }

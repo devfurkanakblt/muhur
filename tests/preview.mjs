@@ -8,6 +8,7 @@ const stamp = n => new Date(now + n).toISOString();
 const userId = "00000000-0000-0000-0000-000000000001";
 const eventId = "10000000-0000-0000-0000-000000000001";
 let mode = "open";
+let activity = null;
 // Gizem avcıları: claim_mystery RPC ile bellekte tutulur, mod değişince sıfırlanır.
 let hunters = [];
 // Yönetici oturumunun açılış zamanı (A21): ?oturum=eski 13 saat önce açılmış oturum verir.

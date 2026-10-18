@@ -12,6 +12,16 @@ let mode = "open";
 let hunters = [];
 // Yönetici oturumunun açılış zamanı (A21): ?oturum=eski 13 saat önce açılmış oturum verir.
 const fixtureAmr = url => [{ method: "oauth", timestamp: Math.floor((url.searchParams.get("oturum") === "eski" ? Date.now() - 13 * 3600_000 : Date.now()) / 1000) }];
+const mascotProposals = [
+  { id: "81000000-0000-0000-0000-000000000001", event_id: eventId, author_id: userId, author_login: "preview-admin", name: "Mırmır", visible: true, created_at: stamp(-240_000) },
+  { id: "81000000-0000-0000-0000-000000000002", event_id: eventId, author_id: "00000000-0000-0000-0000-000000000002", author_login: "ornek-katilimci", name: "Kıvılcım", visible: true, created_at: stamp(-180_000) },
+  { id: "81000000-0000-0000-0000-000000000003", event_id: eventId, author_id: "00000000-0000-0000-0000-000000000003", author_login: "ornek-yarismaci", name: "Nöron", visible: true, created_at: stamp(-120_000) },
+];
+const mascotVotes = [
+  { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000010", proposal_id: mascotProposals[0].id },
+  { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000011", proposal_id: mascotProposals[1].id },
+  { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000012", proposal_id: mascotProposals[1].id },
+];
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
 function records(table) {
@@ -45,10 +55,13 @@ function records(table) {
     worker_runs: [{ id: "r1", started_at: stamp(-30_000), finished_at: stamp(-15_000), processed: 3, error: null }],
     awards: mode === "sealed" ? [{ id: "a1", event_id: eventId, project_id: projects[0].id, title: "Örnek · En iyi teknik çözüm", reason: "Bu gerekçe yerel arayüz kontrolü için oluşturulmuş örnektir.", created_at: stamp(-20_000) }] : [],
     votes: mode === "sealed" ? [{ event_id: eventId, user_id: "visitor", project_id: projects[0].id }] : [],
+    mascot_naming_rounds: [{ event_id: eventId, phase: mode === "voting" ? "oylama" : mode === "sealed" ? "sonuc" : "oneriler" }],
+    mascot_name_proposals: mascotProposals,
+    mascot_name_votes: mode === "voting" || mode === "sealed" ? mascotVotes : [],
   };
   return tables[table] ?? [];
 }
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:54330");
   response.setHeader("Content-Type", "application/json");
   if (url.pathname === "/fixture/login") {
@@ -101,6 +114,12 @@ const server = createServer((request, response) => {
       response.end(JSON.stringify(row.found_at));
     });
     return;
+  }
+  if (url.pathname === "/rest/v1/rpc/mascot_name_tallies") {
+    return response.end(JSON.stringify(mascotProposals.map(p => ({
+      proposal_id: p.id,
+      vote_count: records("mascot_name_votes").filter(v => v.proposal_id === p.id).length,
+    }))));
   }
   if (!url.pathname.startsWith("/rest/v1/") || !["GET", "HEAD"].includes(request.method)) {
     response.statusCode = 405; return response.end(JSON.stringify({ message: "Yerel test verisi salt okunur.", code: "FIXTURE_READ_ONLY" }));

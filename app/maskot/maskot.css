@@ -1,0 +1,315 @@
+.naming-page {
+  width: 100%;
+}
+
+.naming-header,
+.naming-shell,
+.naming-legal {
+  width: min(100% - 40px, 1100px);
+  margin-inline: auto;
+}
+
+.naming-header {
+  display: flex;
+  align-items: center;
+  min-height: 76px;
+}
+
+.naming-header a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.naming-shell {
+  display: grid;
+  grid-template-columns: minmax(0, .78fr) minmax(0, 1fr);
+  gap: clamp(48px, 8vw, 120px);
+  padding-block: clamp(48px, 8vw, 96px) 96px;
+}
+
+.naming-identity {
+  align-self: start;
+  position: sticky;
+  top: 48px;
+}
+
+.naming-mascot {
+  display: block;
+  width: min(100%, 300px);
+  height: auto;
+  margin-top: 38px;
+}
+
+.naming-identity h1 {
+  max-width: 10ch;
+  font-size: clamp(3rem, 6vw, 5.75rem);
+  line-height: 1.04;
+  letter-spacing: -.04em;
+  font-weight: 600;
+}
+
+.naming-content {
+  min-width: 0;
+  padding-top: 6px;
+}
+
+.naming-status {
+  margin-top: 20px;
+  max-width: 36ch;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.naming-action > form:not(.naming-form) {
+  margin-top: 22px;
+}
+
+.naming-action > form:not(.naming-form) svg {
+  display: none;
+}
+
+.naming-winner {
+  margin-top: 20px;
+  color: var(--indigo);
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  line-height: 1.1;
+  letter-spacing: -.03em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.naming-form {
+  margin-top: 24px;
+}
+
+.naming-form label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.naming-input-row {
+  display: flex;
+  border: 1px solid var(--rule-strong);
+  background: var(--plinth);
+}
+
+.naming-input-row:focus-within {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+.naming-input-row input {
+  min-width: 0;
+  width: 100%;
+  flex: 1;
+  padding: 14px;
+  background: transparent;
+  outline: none;
+  font-size: 1.05rem;
+}
+
+.naming-input-row button,
+.naming-admin-form button,
+.naming-vote-form button {
+  min-height: 52px;
+  padding-inline: 22px;
+  background: var(--indigo-fill);
+  color: white;
+  font-weight: 600;
+  transition: background 160ms ease;
+}
+
+.naming-input-row button:hover,
+.naming-admin-form button:hover,
+.naming-vote-form button:hover {
+  background: var(--indigo-fill-hover);
+}
+
+.naming-input-row button:disabled,
+.naming-admin-form button:disabled,
+.naming-vote-form button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+
+.naming-error,
+.naming-offline {
+  margin-top: 12px;
+  color: var(--danger);
+  font-size: .9rem;
+  line-height: 1.5;
+}
+
+.naming-offline {
+  margin: 0 0 26px;
+}
+
+.naming-list-area {
+  margin-top: 72px;
+}
+
+.naming-list-area h2 {
+  margin-bottom: 16px;
+  font-size: 1.15rem;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.naming-list {
+  border-top: 1px solid var(--rule-strong);
+}
+
+.naming-proposal {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.naming-proposal.is-hidden {
+  opacity: .55;
+}
+
+.naming-proposal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 18px;
+}
+
+.naming-proposal h3 {
+  font-size: clamp(1.35rem, 2.7vw, 1.9rem);
+  line-height: 1.15;
+  letter-spacing: -.03em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.naming-proposal.is-selected h3 {
+  color: var(--indigo);
+}
+
+.naming-proposal-top p {
+  margin-top: 6px;
+  color: var(--ink-2);
+  font-size: .86rem;
+}
+
+.naming-vote-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.naming-vote-form,
+.naming-admin-subtle {
+  margin-top: 14px;
+}
+
+.naming-vote-form button {
+  min-height: 42px;
+  padding-inline: 16px;
+  font-size: .9rem;
+}
+
+.naming-admin-subtle button {
+  min-height: 38px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: .85rem;
+}
+
+.naming-admin-subtle button:hover {
+  color: var(--danger);
+}
+
+.naming-empty {
+  padding-block: 26px;
+  border-top: 1px solid var(--rule-strong);
+  color: var(--ink-2);
+}
+
+.naming-admin-panel {
+  margin-top: 72px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+
+.naming-legal {
+  padding-bottom: 36px;
+  color: var(--ink-2);
+  font-size: .85rem;
+}
+
+.naming-legal a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+body:has(.naming-page) > footer {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .naming-header,
+  .naming-shell,
+  .naming-legal {
+    width: min(100% - 40px, 540px);
+  }
+
+  .naming-header {
+    min-height: 64px;
+  }
+
+  .naming-shell {
+    display: block;
+    padding-block: 32px 80px;
+  }
+
+  .naming-identity {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 58px;
+  }
+
+  .naming-mascot {
+    width: clamp(108px, 32vw, 168px);
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  .naming-identity h1 {
+    font-size: clamp(2.25rem, 9vw, 3.5rem);
+  }
+
+  .naming-list-area {
+    margin-top: 62px;
+  }
+}
+
+@media (max-width: 390px) {
+  .naming-identity {
+    gap: 14px;
+  }
+
+  .naming-mascot {
+    width: 108px;
+  }
+
+  .naming-identity h1 {
+    font-size: 2.15rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .naming-input-row button,
+  .naming-admin-form button,
+  .naming-vote-form button {
+    transition: none;
+  }
+}

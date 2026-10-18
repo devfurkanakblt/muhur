@@ -27,6 +27,7 @@ export function ExhibitLabel({
   sealSlot,
   href,
   pulse,
+  awards,
   extra,
 }: {
   exhibit: Pick<Exhibit, "exhibit_no" | "name" | "team_name" | "summary" | "repo_full_name" | "repo_url" | "frozen_sha" | "freeze_error" | "archive_sha256" | "accepted_sha">;
@@ -37,6 +38,8 @@ export function ExhibitLabel({
   href?: string;
   /** "son push 4 dk önce" gibi canlı nabız satırı. */
   pulse?: string | null;
+  /** Ödül rozetleri; adın altında durur, kaideler sırada hizalı kalır. */
+  awards?: React.ReactNode;
   /** Oy düğmesi ya da oy sayısı. */
   extra?: React.ReactNode;
 }) {
@@ -55,6 +58,7 @@ export function ExhibitLabel({
         )}
       </h3>
       <p className="text-[0.9375rem] text-ink-2">{exhibit.team_name}</p>
+      {awards && <div className="col-start-2 mt-3">{awards}</div>}
       <p className="mt-3 line-clamp-4 text-[0.875rem] leading-relaxed text-ink-2">{exhibit.summary}</p>
       <div className="col-start-2 mt-4 flex flex-col items-start gap-1 font-mono text-[0.75rem]">
         <span className="text-ink-3 tnum">{exhibitNo(exhibit.exhibit_no)}</span>

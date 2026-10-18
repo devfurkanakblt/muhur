@@ -1,6 +1,8 @@
 import "server-only";
-import { getEvent, getExhibits, getVotes } from "@/lib/data";
+import { getEvent, getExhibits } from "@/lib/data";
 import { env } from "@/lib/env";
+import type { Winner } from "@/lib/winner-model";
+import { getWinners } from "@/lib/winners";
 
 export type StageData = {
   title: string;
@@ -13,8 +15,8 @@ export type StageData = {
   now: number;
   announcement: string | null;
   recent: { no: number; name: string; team: string; pushedAt: string }[];
-  winner: { name: string; team: string; votes: number } | null;
-  winners: { name: string; team: string; votes: number }[];
+  /** Jüri ödülleri açıklanma sırasıyla, ardından halkın seçimi. */
+  winners: Winner[];
   voting: string;
   siteUrl: string;
 };
@@ -22,7 +24,7 @@ export type StageData = {
 /** Sahne modunun ihtiyaç duyduğu her şey; yalnızca herkese açık bilgiler. */
 export async function getStageData(): Promise<StageData> {
   const event = await getEvent();
-  const [exhibits, votes] = await Promise.all([getExhibits(event.id), getVotes(event, null)]);
+  const [exhibits, winners] = await Promise.all([getExhibits(event.id), getWinners(event)]);
   const recent = exhibits
     .filter((e) => {
       if (!e.last_pushed_at) return false;
@@ -32,17 +34,6 @@ export async function getStageData(): Promise<StageData> {
     .sort((a, b) => +new Date(b.last_pushed_at!) - +new Date(a.last_pushed_at!))
     .slice(0, 5)
     .map((e) => ({ no: e.exhibit_no, name: e.name, team: e.team_name, pushedAt: e.last_pushed_at! }));
-  let winner: StageData["winner"] = null;
-  let winners: StageData["winners"] = [];
-  if (votes.tallies) {
-    const top = exhibits
-      .map((e) => ({ e, v: votes.tallies![e.id] ?? 0 }))
-      .sort((a, b) => b.v - a.v)[0];
-    if (top && top.v > 0) {
-      winners = exhibits.filter(e => (votes.tallies![e.id] ?? 0) === top.v).map(e => ({ name: e.name, team: e.team_name, votes: top.v }));
-      winner = winners[0];
-    }
-  }
   return {
     title: event.title,
     startsAt: event.startsAt,
@@ -54,7 +45,6 @@ export async function getStageData(): Promise<StageData> {
     now: event.now,
     announcement: event.announcement,
     recent,
-    winner,
     winners,
     voting: event.voting,
     siteUrl: env.siteUrl,

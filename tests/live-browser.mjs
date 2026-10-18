@@ -77,6 +77,67 @@ try {
   await browser.waitFor("window.actionPosts === 2");
   await browser.waitFor("!document.querySelector('input[name=state][value=sonuclandi]').form.querySelector('button').disabled");
   console.log("PASS: Önceki işlem tamamlandıktan sonra düğme yeniden kullanılabilir");
+  // Halkın seçimi: oy geri alınmadan başka esere taşınır, sonra eski esere döner. Sayfa yenilenmeden her düğme
+  // gösterdiği işi yapmalı; "Oy ver" yazan düğme mevcut oyu silmemeli.
+  await fetch("http://127.0.0.1:54330/fixture/state?mode=voting");
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/" });
+  const button = no => `document.querySelector('input[name=projectId][value="30000000-0000-0000-0000-00000000000${no}"]').form.querySelector('button')`;
+  const voted = no => `${button(no)}.getAttribute('aria-pressed') === 'true' && !${button(no)}.disabled`;
+  const notVoted = no => `${button(no)}.getAttribute('aria-pressed') === 'false' && !${button(no)}.disabled`;
+  // Canlı durum isteği hidrasyondan sonra başlar; öncesinde tıklama React'e ulaşmaz.
+  await browser.waitFor(`performance.getEntriesByType('resource').some(e => e.name.includes('/api/durum')) && ${notVoted(2)} && ${notVoted(3)}`);
+  for (const [click, on, off] of [[2, 2, 3], [3, 3, 2], [2, 2, 3], [3, 3, 2]]) {
+    await browser.evaluate(`${button(click)}.click()`);
+    await browser.waitFor(`${voted(on)} && ${notVoted(off)}`);
+  }
+  console.log("PASS: Oy geri alınmadan eserler arasında art arda taşınır, her seferinde tek oy görünür");
+  await browser.evaluate(`${button(3)}.click()`);
+  await browser.waitFor(`${notVoted(2)} && ${notVoted(3)}`);
+  await browser.evaluate(`${button(2)}.click()`);
+  await browser.waitFor(`${voted(2)} && ${notVoted(3)}`);
+  await browser.send("Page.reload");
+  await browser.waitFor(`document.querySelector('input[name=projectId]') && ${voted(2)} && ${notVoted(3)}`);
+  console.log("PASS: Oyu geri alıp yeniden vermek, sayfa yenilendikten sonra da aynı görünür");
+  // Kazanan duyurusu: yönetimden eklenen ödül vitrinde büyük görünür; sahne açıkken eklenen ödül tören ile açılır.
+  await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed");
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/yonetim" });
+  await browser.waitFor("document.querySelector('#award-title') && performance.getEntriesByType('resource').some(e => e.name.includes('/api/durum'))");
+  await browser.evaluate(`(() => {
+    const set = (el, value) => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+    set(document.querySelector('#award-project'), '30000000-0000-0000-0000-000000000002');
+    set(document.querySelector('#award-title'), 'Birincilik');
+    set(document.querySelector('#award-reason'), 'Arşivleme akışını uçtan uca, sade ve güvenilir kurdular.');
+    document.querySelector('#award-title').form.requestSubmit();
+  })()`);
+  await browser.waitFor("document.body.innerText.includes('Ödül açıklandı')");
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/" });
+  await browser.waitFor("document.querySelector('#kazananlar') && document.querySelector('#kazananlar').innerText.includes('Birincilik') && document.querySelector('#kazananlar').innerText.includes('mehmet-k')");
+  console.log("PASS: Yönetimden açıklanan ödül vitrinin başında eser, ekip ve gerekçesiyle görünür");
+  const live = "document.querySelector('section[aria-label=Kazananlar] [aria-live]')";
+  const current = "document.querySelector('section[aria-label=Kazananlar] [aria-current=true]')";
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/sahne" });
+  await browser.waitFor(`${current} && ${live}.textContent === '' && performance.getEntriesByType('resource').some(e => e.name.includes('/api/sahne'))`);
+  console.log("PASS: Sahne açılışında var olan kazananlar törensiz gösterilir");
+  await fetch("http://127.0.0.1:54330/rest/v1/rpc/admin_add_award", { method: "POST", body: JSON.stringify({
+    p_event: "10000000-0000-0000-0000-000000000001", p_project: "30000000-0000-0000-0000-000000000003", p_title: "Jüri özel ödülü", p_reason: "Erişilebilirliği ilk günden tasarımın merkezine koydular.",
+  }) });
+  await browser.waitFor(`${live}.textContent.includes('Jüri özel ödülü') && ${current}.textContent.includes('Jüri özel ödülü')`);
+  assert.equal(await browser.evaluate("document.querySelector('section[aria-label=Kazananlar]').innerText.includes('zeynep-dbu')"), true);
+  console.log("PASS: Sahne açıkken açıklanan ödül birkaç saniye içinde törenle, ekip üyeleriyle gelir");
+  // Uzun eser adı ve üç üyeli ekip, alçak projektörde de alt şeridin üstüne binmez.
+  await browser.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+  await browser.evaluate("document.getAnimations().forEach(a => a.finish()); new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))");
+  const fit = await browser.evaluate(`(() => {
+    const s = document.querySelector('section[aria-label=Kazananlar]');
+    return { content: s.querySelector('h2').parentElement.getBoundingClientRect().bottom, footer: s.querySelector('footer').getBoundingClientRect().top };
+  })()`);
+  assert.ok(fit.content <= fit.footer, `Kazanan gösterisi alt şeride taşıyor: ${JSON.stringify(fit)}`);
+  console.log("PASS: Uzun adlı kazanan 1280×720'de alt şeride taşmaz");
+  await browser.evaluate("[...document.querySelectorAll('button')].find(b => b.textContent.includes('Sahneye dön')).click()");
+  await browser.waitFor("!document.querySelector('section[aria-label=Kazananlar]') && document.querySelector('footer').innerText.includes('Birincilik')");
+  await browser.evaluate("[...document.querySelectorAll('footer button')].find(b => b.textContent.includes('Birincilik')).click()");
+  await browser.waitFor(`${live} && ${live}.textContent.includes('Birincilik')`);
+  console.log("PASS: Gösteri kapatılabilir; alt şeritten seçilen kazananın töreni yeniden oynar");
 } finally {
   await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
   await browser.close();

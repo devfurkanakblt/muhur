@@ -244,7 +244,7 @@ export default async function AdminPage() {
           </>}
         </Section>
 
-        {event.locked && <Section title="Jüri ödülleri" note="Ödül adı ve gerekçesi eserin sergi sayfasında yayımlanır.">
+        {event.locked && <Section title="Jüri ödülleri" note="Ödülü açıkladığın anda vitrinin başında ve eser sayfasında yayımlanır, sahnede tören gösterisiyle açılır ve Telegram kanalına duyurulur. Sırayla açıklamak için ödülleri tören anında tek tek ekle.">
           <AwardForm projects={rows.filter(r => !!r.archive_path)} />
           <ul className="mt-6 divide-y divide-rule">{awards.map(a => <li key={a.id} className="py-3">
             <p className="font-medium">{a.title} · {rows.find(r => r.id === a.project_id)?.name}</p><p className="text-sm text-ink-2">{a.reason}</p>

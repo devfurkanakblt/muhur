@@ -19,6 +19,7 @@ export function Hero({
   login,
   activity,
   action,
+  celebrate = false,
 }: {
   startsAt: string;
   deadline: string;
@@ -28,6 +29,8 @@ export function Hero({
   login: string | null;
   activity: Activity | null;
   action: React.ReactNode;
+  /** Kazananlar açıklandı: kilit sonrası uykulu maskot yerine mutlu maskot. */
+  celebrate?: boolean;
 }) {
   const [lockedLive, setLockedLive] = useState(false);
   const locked = lockedInitially || lockedLive;
@@ -56,7 +59,7 @@ export function Hero({
   const started = now >= startMs;
   const final = !locked && remaining < 10 * 60 * 1000;
   const phase = locked ? "kilitli" : final ? "son-dakika" : started ? "acik" : "baslamadi";
-  const mood: MascotMood = play?.mood ?? (final ? "heyecanli" : activity ? moodAt(now, activity.kind) : locked ? "uykulu" : moodAt(now));
+  const mood: MascotMood = play?.mood ?? (final ? "heyecanli" : locked && celebrate ? "mutlu" : activity ? moodAt(now, activity.kind) : locked ? "uykulu" : moodAt(now));
   const greeting = greetingAt(now, login, phase, activity);
 
   return (

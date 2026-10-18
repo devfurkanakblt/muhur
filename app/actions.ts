@@ -16,6 +16,7 @@ import { notify, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
 import { claimOnce, releaseOnce, requestKey } from "@/lib/once";
 import { isMysteryAnswer, mysteryOpen } from "@/lib/mystery";
+import { announceAward, announcePeoplesChoice } from "@/lib/winners";
 
 /** notice: hata olmayan bilgi (ör. "bu commit zaten kabul edilmiş"); nötr gösterilir. */
 export type FormState = { error?: string; ok?: boolean; status?: string; notice?: string } | undefined;
@@ -376,27 +377,22 @@ export async function renewInvite() {
 
 // ---------------------------------------------------------------------------- halkın seçimi
 
-export async function castVote(_: FormState, formData: FormData): Promise<FormState> {
+/**
+ * Oy verme ve geri alma tek eylemdir; düğmenin gösterdiği niyet formla gelir (intent=cast|withdraw).
+ * Oy başka esere verilmişken eser değiştirmek, eski oyu taşır (event_id, user_id başına tek oy).
+ */
+export async function vote(_: FormState, formData: FormData): Promise<FormState> {
   const projectId = String(formData.get("projectId") ?? "");
   const viewer = await getViewer();
   if (!viewer) return { error: "Oy vermek için GitHub ile giriş yap." };
   const event = await getEvent();
   if (event.voting !== "acik") return { error: "Oylama açık değil." };
   const db = createAdminClient();
-  const { error } = await db
-    .from("votes")
-    .upsert({ event_id: event.id, user_id: viewer.id, project_id: projectId, github_login: viewer.login }, { onConflict: "event_id,user_id" });
-  if (error) return { error: dbError(error.message) };
-  revalidatePath("/", "layout");
-  return { ok: true };
-}
-
-export async function withdrawVote(): Promise<FormState> {
-  const viewer = await getViewer();
-  if (!viewer) return { error: "Önce GitHub ile giriş yap." };
-  const event = await getEvent();
-  const db = createAdminClient();
-  const { error } = await db.from("votes").delete().eq("event_id", event.id).eq("user_id", viewer.id);
+  const { error } = formData.get("intent") === "withdraw"
+    // Yalnızca bu esere verilmiş oy silinir; oy başka esere taşındıysa eski görünümdeki düğme onu silemez.
+    ? await db.from("votes").delete().eq("event_id", event.id).eq("user_id", viewer.id).eq("project_id", projectId)
+    : await db.from("votes")
+      .upsert({ event_id: event.id, user_id: viewer.id, project_id: projectId, github_login: viewer.login }, { onConflict: "event_id,user_id" });
   if (error) return { error: dbError(error.message) };
   revalidatePath("/", "layout");
   return { ok: true };
@@ -569,12 +565,9 @@ export async function setVoting(formData: FormData): Promise<{ error: string } |
   if (error) await releaseOnce(once);
   else {
     after(() =>
-      notify(
-        state === "acik"
-          ? [`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(env.siteUrl, "Oy ver")]
-          : [`🏆 ${tg.b("Halkın seçimi sonuçlandı.")}`, tg.link(env.siteUrl, "Sonuçlara bak")],
-        state === "acik" ? "oy" : "kazanan",
-      ),
+      state === "acik"
+        ? notify([`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(env.siteUrl, "Oy ver")], "oy")
+        : announcePeoplesChoice(event),
     );
   }
   revalidatePath("/", "layout");
@@ -620,9 +613,11 @@ export async function addAward(_: FormState, formData: FormData): Promise<FormSt
   const db = createAdminClient();
   const { data: p } = await db.from("projects").select("id").eq("id", projectId).eq("event_id", event.id).not("archive_sha256", "is", null).maybeSingle();
   if (!p) return { error: "Bu etkinliğin mühürlü eserlerinden birini seç." };
-  const { error } = await db.rpc("admin_add_award", {
+  const { data: awardId, error } = await db.rpc("admin_add_award", {
     p_event: event.id, p_project: p.id, p_title: title, p_reason: reason, p_actor: admin.id, p_login: admin.login,
   });
+  // Ödül eklendiği an açıklanmış sayılır: vitrin ve sahne yenilenir, kanal duyurusu bir kez gider.
+  if (!error && typeof awardId === "string") after(() => announceAward(event, awardId));
   if (error) {
     if (error.code !== "23505") return { error: "Ödül kaydedilemedi." };
     // Aynı ödül aynı esere aynı gerekçeyle zaten eklendiyse bu bir eş istektir.

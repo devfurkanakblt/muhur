@@ -33,7 +33,7 @@ export function AwardForm({ projects }: { projects: { id: string; name: string; 
     <input id="award-title" name="title" minLength={2} maxLength={80} required className={input} placeholder="En iyi teknik çözüm" />
     <label htmlFor="award-reason" className={label}>Jürinin gerekçesi</label>
     <textarea id="award-reason" name="reason" minLength={10} maxLength={280} required rows={3} className={`${input} h-auto py-3`} />
-    <div className="flex flex-wrap gap-3"><SubmitButton variant="ink" busy={pending} pending="Açıklanıyor…">Ödülü açıkla</SubmitButton><button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button><Status state={state} ok="Ödül sergide yayında." /></div>
+    <div className="flex flex-wrap gap-3"><SubmitButton variant="ink" busy={pending} pending="Açıklanıyor…">Ödülü açıkla</SubmitButton><button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button><Status state={state} ok="Ödül açıklandı: vitrinde ve sahnede yayında, Telegram duyurusu gönderiliyor." /></div>
   </form>;
 }
 

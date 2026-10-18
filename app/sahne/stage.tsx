@@ -9,6 +9,7 @@ import { exhibitNo, formatDateTime } from "@/lib/format";
 import type { StageData } from "@/lib/stage";
 import { useServerNow } from "@/components/live-state";
 import { synchronizedTime } from "@/lib/live-policy";
+import { useWinnerShow, WinnerStage } from "./winner-show";
 
 function ago(iso: string, now: number) {
   const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
@@ -25,8 +26,9 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
   const now = useServerNow(data.now);
   const [offline, setOffline] = useState(false);
   const fast = new Date(data.deadline).getTime() - data.now < 120_000 && new Date(data.deadline).getTime() - data.now > -60_000;
+  const show = useWinnerShow(data.winners);
 
-  // Veriyi düzenli tazele; son dakikada daha sık.
+  // Veriyi düzenli tazele; son dakikada daha sık. Kilitten sonra ödüller açıklanırken sahne birkaç saniyede yakalar.
   useEffect(() => {
     let alive = true;
     let busy = false;
@@ -46,7 +48,7 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
       } catch { if (alive && !controller.signal.aborted) setOffline(true); }
       finally { busy = false; }
     };
-    const id = setInterval(pull, fast ? 3000 : 10_000);
+    const id = setInterval(pull, fast ? 3000 : data.locked ? 4000 : 10_000);
     void pull();
     window.addEventListener("online", pull);
     return () => {
@@ -55,7 +57,7 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
       clearInterval(id);
       window.removeEventListener("online", pull);
     };
-  }, [data.deadline, fast]);
+  }, [data.deadline, data.locked, fast]);
 
   const start = new Date(data.startsAt).getTime();
   const deadline = new Date(data.deadline).getTime();
@@ -65,6 +67,7 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
   const left = Math.max(0, target - now);
   const s = Math.floor(left / 1000);
   const finalMinute = started && !locked && left <= 60_000;
+  const people = data.winners.filter((w) => w.kind === "halk");
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-wall px-[4vw] py-[3.5vh] text-ink">
@@ -126,8 +129,8 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
           )}
           <p className="mt-[3vh] text-[clamp(1.25rem,2.2vw,2.5rem)] text-ink-2">
             {locked
-              ? data.winner
-                ? `Halkın seçimi: ${data.winners.map(w => `${w.name} · ${w.team}`).join(" / ")} (${data.winner.votes} oy)`
+              ? people.length
+                ? `Halkın seçimi: ${people.map((w) => `${w.name} · ${w.team}`).join(" / ")} (${people[0].votes} oy)`
                 : `${formatDateTime(data.sealTime)} itibarıyla teslim kapandı; ${data.sealed}/${data.count} arşiv doğrulandı.`
               : started
                 ? `Son teslim ${formatDateTime(data.deadline)}. Son push'tan sonra teslim sürümünü güncelle.`
@@ -149,7 +152,16 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
       <footer className="flex min-h-[18vh] items-start justify-between gap-6 border-t border-ink pt-[2vh]">
         <div className="min-w-0 flex-1">
         {offline && <p role="status" className="mb-2 text-[clamp(1rem,1.5vw,1.75rem)] text-danger">Canlı bağlantı kesildi. Gösterilen durum eski olabilir; yeniden bağlanılıyor.</p>}
-        {data.announcement ? (
+        {locked && data.winners.length > 0 ? (
+          <div className="flex flex-wrap items-baseline gap-x-[2vw] gap-y-2 text-[clamp(1rem,1.5vw,1.75rem)]">
+            <span className="font-semibold">Kazananlar</span>
+            {data.winners.map((w) => (
+              <button key={w.id} type="button" onClick={() => show.replay(w.id)} className="press min-h-11 text-left text-ink-2 underline underline-offset-[0.25em] hover:text-ink">
+                {w.kind === "juri" ? w.title : "Halkın seçimi"} · {w.name}
+              </button>
+            ))}
+          </div>
+        ) : data.announcement ? (
           <p className="text-[clamp(1.25rem,2vw,2.25rem)] font-medium">{data.announcement}</p>
         ) : data.recent.length > 0 ? (
           <ol className="grid grid-cols-1 gap-x-[3vw] gap-y-2 text-[clamp(1rem,1.5vw,1.75rem)] md:grid-cols-2 xl:grid-cols-3">
@@ -167,6 +179,10 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
         )}
         </div>
       </footer>
+
+      {locked && show.showing && !show.hidden && (
+        <WinnerStage winners={data.winners} showing={show.showing} eventTitle={data.title} qrRows={qrRows} onReplay={show.replay} onClose={show.hide} />
+      )}
     </div>
   );
 }

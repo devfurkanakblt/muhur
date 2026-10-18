@@ -1,0 +1,86 @@
+export type Kind = "hayvan" | "bitki";
+
+export type Entry = {
+  id: string;
+  name: string;
+  kind: Kind;
+  /** Fotoğrafın alındığı İngilizce Vikipedi maddesi; görsel `scripts/fetch-images.mjs` ile indirilir. */
+  wiki: string;
+  /** Maddenin görseli uygun değilse (çizim, serbest olmayan lisans) doğrudan seçilen Commons dosyası. */
+  file?: string;
+};
+// Herkesin adıyla tanıdığı canlılar seçildi: tür adı yerine halkın kullandığı ad (kaya kartalı değil kartal).
+// Türkiye'nin doğasından ve gündelik hayatından olanlar ağırlıkta; birkaç dünya türü de oyunu kolaylaştırır.
+export const DECK: Entry[] = [
+  { id: "bal-arisi", name: "Bal arısı", kind: "hayvan", wiki: "Western_honey_bee" },
+  { id: "caretta", name: "Caretta caretta", kind: "hayvan", wiki: "Loggerhead_sea_turtle" },
+  { id: "fok", name: "Fok", kind: "hayvan", wiki: "Mediterranean_monk_seal" },
+  { id: "flamingo", name: "Flamingo", kind: "hayvan", wiki: "Greater_flamingo" },
+  { id: "kutup-ayisi", name: "Kutup ayısı", kind: "hayvan", wiki: "Polar_bear" },
+  { id: "boz-ayi", name: "Boz ayı", kind: "hayvan", wiki: "Brown_bear" },
+  { id: "kurt", name: "Kurt", kind: "hayvan", wiki: "Wolf" },
+  { id: "tilki", name: "Tilki", kind: "hayvan", wiki: "Red_fox" },
+  { id: "yunus", name: "Yunus", kind: "hayvan", wiki: "Common_bottlenose_dolphin" },
+  { id: "kartal", name: "Kartal", kind: "hayvan", wiki: "Golden_eagle" },
+  { id: "leylek", name: "Leylek", kind: "hayvan", wiki: "White_stork" },
+  { id: "karga", name: "Karga", kind: "hayvan", wiki: "Hooded_crow" },
+  { id: "kirlangic", name: "Kırlangıç", kind: "hayvan", wiki: "Barn_swallow" },
+  { id: "tavuk", name: "Tavuk", kind: "hayvan", wiki: "Chicken" },
+  { id: "baykus", name: "Baykuş", kind: "hayvan", wiki: "Eurasian_eagle-owl" },
+  { id: "kirpi", name: "Kirpi", kind: "hayvan", wiki: "European_hedgehog" },
+  { id: "ugur-bocegi", name: "Uğur böceği", kind: "hayvan", wiki: "Coccinella_septempunctata" },
+  { id: "kelebek", name: "Kelebek", kind: "hayvan", wiki: "Monarch_butterfly", file: "Monarch butterfly male (52341).jpg" },
+  { id: "ahtapot", name: "Ahtapot", kind: "hayvan", wiki: "Common_octopus" },
+  { id: "penguen", name: "Penguen", kind: "hayvan", wiki: "Emperor_penguin" },
+  { id: "panda", name: "Panda", kind: "hayvan", wiki: "Giant_panda" },
+  { id: "fil", name: "Fil", kind: "hayvan", wiki: "African_bush_elephant" },
+  { id: "orangutan", name: "Orangutan", kind: "hayvan", wiki: "Bornean_orangutan" },
+  { id: "kopek-baligi", name: "Köpek balığı", kind: "hayvan", wiki: "Great_white_shark" },
+  { id: "su-samuru", name: "Su samuru", kind: "hayvan", wiki: "Eurasian_otter" },
+  { id: "kaplan", name: "Kaplan", kind: "hayvan", wiki: "Tiger" },
+  { id: "kunduz", name: "Kunduz", kind: "hayvan", wiki: "Eurasian_beaver" },
+  { id: "denizanasi", name: "Denizanası", kind: "hayvan", wiki: "Aurelia_aurita" },
+  { id: "kurbaga", name: "Kurbağa", kind: "hayvan", wiki: "Common_frog" },
+  { id: "salyangoz", name: "Salyangoz", kind: "hayvan", wiki: "Helix_pomatia" },
+  { id: "karinca", name: "Karınca", kind: "hayvan", wiki: "Formica_rufa" },
+  { id: "bukalemun", name: "Bukalemun", kind: "hayvan", wiki: "Common_chameleon" },
+  { id: "sincap", name: "Sincap", kind: "hayvan", wiki: "Red_squirrel" },
+  { id: "yarasa", name: "Yarasa", kind: "hayvan", wiki: "Greater_horseshoe_bat" },
+  { id: "solucan", name: "Solucan", kind: "hayvan", wiki: "Lumbricus_terrestris" },
+
+  { id: "cam", name: "Çam", kind: "bitki", wiki: "Pinus_brutia" },
+  { id: "zeytin", name: "Zeytin ağacı", kind: "bitki", wiki: "Olea_europaea" },
+  { id: "aycicegi", name: "Ayçiçeği", kind: "bitki", wiki: "Helianthus_annuus", file: "Sonnenblume Helianthus 1.JPG" },
+  { id: "gelincik", name: "Gelincik", kind: "bitki", wiki: "Papaver_rhoeas" },
+  { id: "lale", name: "Lale", kind: "bitki", wiki: "Tulipa_gesneriana" },
+  { id: "mese", name: "Meşe", kind: "bitki", wiki: "Quercus_robur" },
+  { id: "kaktus", name: "Kaktüs", kind: "bitki", wiki: "Saguaro" },
+  { id: "papatya", name: "Papatya", kind: "bitki", wiki: "Matricaria_chamomilla" },
+  { id: "lavanta", name: "Lavanta", kind: "bitki", wiki: "Lavandula_angustifolia", file: "Lavandula angustifolia (13).jpg" },
+  { id: "nilufer", name: "Nilüfer", kind: "bitki", wiki: "Nymphaea_alba" },
+  { id: "karahindiba", name: "Karahindiba", kind: "bitki", wiki: "Taraxacum_officinale", file: "Taraxacum officinale head1 (16350804956).jpg" },
+  { id: "egrelti", name: "Eğrelti otu", kind: "bitki", wiki: "Pteridium_aquilinum" },
+  { id: "bambu", name: "Bambu", kind: "bitki", wiki: "Bamboo" },
+  { id: "sinekkapan", name: "Sinekkapan", kind: "bitki", wiki: "Venus_flytrap" },
+  { id: "kardelen", name: "Kardelen", kind: "bitki", wiki: "Galanthus_nivalis" },
+  { id: "kekik", name: "Kekik", kind: "bitki", wiki: "Thymus_vulgaris" },
+  { id: "sogut", name: "Salkım söğüt", kind: "bitki", wiki: "Salix_babylonica" },
+  { id: "defne", name: "Defne", kind: "bitki", wiki: "Laurus_nobilis" },
+  { id: "gul", name: "Gül", kind: "bitki", wiki: "Rose", file: "Red rose with black background.jpg" },
+  { id: "menekse", name: "Menekşe", kind: "bitki", wiki: "Viola_odorata" },
+  { id: "sumbul", name: "Sümbül", kind: "bitki", wiki: "Hyacinthus_orientalis" },
+  { id: "karanfil", name: "Karanfil", kind: "bitki", wiki: "Dianthus_caryophyllus" },
+  { id: "cinar", name: "Çınar", kind: "bitki", wiki: "Platanus_orientalis", file: "Plátan monumental de Biar.JPG" },
+  { id: "palmiye", name: "Palmiye", kind: "bitki", wiki: "Date_palm" },
+  { id: "cay", name: "Çay", kind: "bitki", wiki: "Camellia_sinensis" },
+  { id: "findik", name: "Fındık", kind: "bitki", wiki: "Corylus_avellana" },
+  { id: "bugday", name: "Buğday", kind: "bitki", wiki: "Wheat" },
+  { id: "misir", name: "Mısır", kind: "bitki", wiki: "Maize", file: "Corn - Zea mays.jpg" },
+  { id: "pamuk", name: "Pamuk", kind: "bitki", wiki: "Cotton" },
+  { id: "nane", name: "Nane", kind: "bitki", wiki: "Mentha_spicata" },
+  { id: "isirgan", name: "Isırgan otu", kind: "bitki", wiki: "Urtica_dioica", file: "Brandnetel, Urtica dioica, Locatie, Famberhorst.jpg" },
+  { id: "yonca", name: "Yonca", kind: "bitki", wiki: "Trifolium_repens" },
+  { id: "sarmasik", name: "Sarmaşık", kind: "bitki", wiki: "Hedera_helix" },
+  { id: "nar", name: "Nar", kind: "bitki", wiki: "Pomegranate" },
+  { id: "elma", name: "Elma ağacı", kind: "bitki", wiki: "Apple", file: "Tree with red apples in Barkedal 4.jpg" },
+];

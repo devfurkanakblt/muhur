@@ -44,10 +44,27 @@ select pg_temp.expect_error($cmd$insert into mascot_name_proposals(event_id,auth
   values('72000000-0000-0000-0000-000000000001','71000000-0000-0000-0000-000000000004','dort','mırmır')$cmd$,
   'duplicate key', 'Aynı isim büyük küçük harf farkıyla tekrar önerilemez');
 
+update mascot_name_proposals set name = 'Mırnav' where author_id = '71000000-0000-0000-0000-000000000001' and event_id = '72000000-0000-0000-0000-000000000001';
+select pg_temp.assert_true((select name = 'Mırnav' from mascot_name_proposals where author_id = '71000000-0000-0000-0000-000000000001' and event_id = '72000000-0000-0000-0000-000000000001'), 'Öneri aşamasında isim düzenlenir');
+select pg_temp.expect_error($cmd$update mascot_name_proposals set name = 'pofuduk'
+  where author_id = '71000000-0000-0000-0000-000000000001' and event_id = '72000000-0000-0000-0000-000000000001'$cmd$,
+  'duplicate key', 'Düzenlenen isim başka bir öneriyle aynı olamaz');
+update mascot_name_proposals set name = 'MIRNAV' where author_id = '71000000-0000-0000-0000-000000000001' and event_id = '72000000-0000-0000-0000-000000000001';
+update mascot_name_proposals set name = 'Mırmır' where author_id = '71000000-0000-0000-0000-000000000001' and event_id = '72000000-0000-0000-0000-000000000001';
+select pg_temp.expect_error($cmd$update mascot_name_proposals set author_login = 'baskasi'
+  where author_id = '71000000-0000-0000-0000-000000000001' and event_id = '72000000-0000-0000-0000-000000000001'$cmd$,
+  'Öneri değiştirilemez', 'Düzenleme isim dışındaki alanları değiştiremez');
+
 update mascot_name_proposals set visible = false where name = 'Pofuduk' and event_id = '72000000-0000-0000-0000-000000000001';
 select pg_temp.assert_true((select count(*) = 1 from mascot_name_tallies('72000000-0000-0000-0000-000000000001')), 'Gizlenen isim canlı listeden çıkar');
+select pg_temp.expect_error($cmd$update mascot_name_proposals set name = 'Temiz İsim'
+  where name = 'Pofuduk' and event_id = '72000000-0000-0000-0000-000000000001'$cmd$,
+  'Yayından kaldırılan', 'Yayından kaldırılan öneri düzenlenemez');
 update mascot_name_proposals set visible = true where name = 'Pofuduk' and event_id = '72000000-0000-0000-0000-000000000001';
 update mascot_naming_rounds set phase = 'oylama' where event_id = '72000000-0000-0000-0000-000000000001';
+select pg_temp.expect_error($cmd$update mascot_name_proposals set name = 'Geç Düzenleme'
+  where name = 'Mırmır' and event_id = '72000000-0000-0000-0000-000000000001'$cmd$,
+  'Öneri aşaması kapalı', 'Oylama başlayınca isim düzenlenemez');
 select pg_temp.expect_error($cmd$insert into mascot_name_proposals(event_id,author_id,author_login,name)
   values('72000000-0000-0000-0000-000000000001','71000000-0000-0000-0000-000000000004','dort','Yeni İsim')$cmd$,
   'Öneri aşaması kapalı', 'Oylama başlayınca öneri eklenemez');

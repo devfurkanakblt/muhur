@@ -18,7 +18,7 @@ export type NamingSnapshot = {
   canSuggest: boolean;
   isSignedIn: boolean;
   isAdmin: boolean;
-  ownProposalId: string | null;
+  ownProposal: { id: string; name: string; visible: boolean } | null;
   votedProposalId: string | null;
 };
 
@@ -56,13 +56,14 @@ export async function getMascotNamingSnapshot(): Promise<NamingSnapshot> {
     votes: counts.get(item.id) ?? 0,
     own: item.author_id === viewer?.id,
   }));
+  const own = rows.find(item => item.author_id === viewer?.id);
   return {
     phase: round.phase as NamingPhase,
     proposals,
     canSuggest: Boolean(membership.data),
     isSignedIn: Boolean(viewer),
     isAdmin: Boolean(viewer?.isAdmin),
-    ownProposalId: rows.find(item => item.author_id === viewer?.id)?.id ?? null,
+    ownProposal: own ? { id: own.id, name: own.name, visible: own.visible } : null,
     votedProposalId: vote.data?.proposal_id ?? null,
   };
 }

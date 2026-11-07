@@ -19,13 +19,19 @@ function message(error: { message: string }): string {
   return "İşlem tamamlanamadı. Biraz sonra tekrar dene.";
 }
 
+const NAME_RULE = "2–24 karakterlik bir isim yaz. Harf, rakam, boşluk, tire ve kesme işareti kullanabilirsin.";
+
+function readName(form: FormData): string | null {
+  const name = String(form.get("name") ?? "").trim().replace(/\s+/gu, " ");
+  const length = Array.from(name).length;
+  return length >= 2 && length <= 24 && NAME.test(name) ? name : null;
+}
+
 export async function suggestMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
   const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
   if (!viewer) return { error: "Öneri için GitHub ile giriş yap." };
-  const name = String(form.get("name") ?? "").trim().replace(/\s+/gu, " ");
-  if (Array.from(name).length < 2 || Array.from(name).length > 24 || !NAME.test(name)) {
-    return { error: "2–24 karakterlik bir isim yaz. Harf, rakam, boşluk, tire ve kesme işareti kullanabilirsin." };
-  }
+  const name = readName(form);
+  if (!name) return { error: NAME_RULE };
   const db = createAdminClient();
   const { data: member, error: memberError } = await db.from("project_members")
     .select("user_id").eq("event_id", event.id).eq("user_id", viewer.id).maybeSingle();
@@ -35,6 +41,19 @@ export async function suggestMascotName(_previous: NamingActionState, form: Form
     event_id: event.id, author_id: viewer.id, author_login: viewer.login, name,
   });
   if (error) return { error: message(error) };
+  revalidatePath("/maskot");
+  return { ok: true };
+}
+
+export async function editMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
+  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  if (!viewer) return { error: "Düzenlemek için GitHub ile giriş yap." };
+  const name = readName(form);
+  if (!name) return { error: NAME_RULE };
+  const { data, error } = await createAdminClient().from("mascot_name_proposals")
+    .update({ name }).eq("event_id", event.id).eq("author_id", viewer.id).select("id").maybeSingle();
+  if (error) return { error: message(error) };
+  if (!data) return { error: "Düzenlenecek önerin bulunamadı." };
   revalidatePath("/maskot");
   return { ok: true };
 }

@@ -194,6 +194,21 @@ const server = createServer(async (request, response) => {
       vote_count: records("mascot_name_votes").filter(v => v.proposal_id === p.id).length,
     }))));
   }
+  if (url.pathname === "/rest/v1/mascot_name_proposals" && request.method === "PATCH") {
+    let body = "";
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      const { name } = JSON.parse(body || "{}");
+      const own = mascotProposals.find(p => p.author_id === url.searchParams.get("author_id")?.slice(3));
+      if (mascotProposals.some(p => p !== own && p.name.toLocaleLowerCase("tr") === name?.toLocaleLowerCase("tr"))) {
+        response.statusCode = 409;
+        return response.end(JSON.stringify({ message: "duplicate key value violates unique constraint \"mascot_name_proposals_unique_name\"", code: "23505" }));
+      }
+      if (own) own.name = name;
+      response.end(JSON.stringify(own ? { id: own.id } : null));
+    });
+    return;
+  }
   if (!url.pathname.startsWith("/rest/v1/") || !["GET", "HEAD"].includes(request.method)) {
     response.statusCode = 405; return response.end(JSON.stringify({ message: "Yerel test verisi salt okunur.", code: "FIXTURE_READ_ONLY" }));
   }

@@ -4,6 +4,7 @@ import { TAGLINE, Wordmark } from "@/components/brand";
 const links = [
   { href: "/dogrula", label: "Mühür doğrula" },
   { href: "/sergiler", label: "Sergiler" },
+  { href: "/belge", label: "Katılım belgesi" },
   { href: "/gizlilik", label: "Aydınlatma metni" },
 ];
 

@@ -27,6 +27,9 @@ export async function SiteHeader({ viewer }: { viewer: Viewer | null }) {
           <Link href="/maskot" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">
             Maskota isim ver
           </Link>
+          <Link href="/belge" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">
+            Katılım belgesi
+          </Link>
           {viewer?.isAdmin && (
             <Link href="/yonetim" className="text-ink-2 hover:text-ink">
               Yönetim

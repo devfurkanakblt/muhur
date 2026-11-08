@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getEvent } from "@/lib/data";
+import { getEvent, getViewer } from "@/lib/data";
+import { certificateAccess } from "@/lib/certificate-access";
 import { formatDay } from "@/lib/format";
 import { certificateName, dateRangeTR, fileSlug } from "@/lib/certificate";
 
@@ -18,13 +19,22 @@ const H = 1240;
 
 const label = { fontSize: 22, fontWeight: 600, letterSpacing: "0.14em", color: INK_3 } as const;
 
-/** Katılım belgesi: formdaki ad ve soyad, güncel etkinliğin adı ve tarihleriyle PNG olarak basılır. */
+const noStore = { "Cache-Control": "private, no-store" };
+
+/**
+ * Katılım belgesi: formdaki ad ve soyad, güncel etkinliğin adı ve tarihleriyle PNG olarak basılır.
+ * Yalnızca GitHub ile giriş yapmış etkinlik katılımcısı (ya da yönetici) alabilir; yanıt paylaşılan önbelleğe girmez.
+ */
 export async function GET(request: Request) {
+  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  const access = await certificateAccess(viewer, event);
+  if (access === "giris") return new Response("Katılım belgesi için GitHub ile giriş yap.", { status: 401, headers: noStore });
+  if (access === "katilimci-degil") return new Response("Katılım belgesini yalnızca etkinliğe katılan ekip üyeleri alabilir.", { status: 403, headers: noStore });
+
   const params = new URL(request.url).searchParams;
   const name = certificateName(params.get("ad"), params.get("soyad"));
-  if (!name) return new Response("Ad ve soyad yalnızca harf, boşluk, kesme ve tire içerebilir (en fazla 40 karakter).", { status: 400 });
+  if (!name) return new Response("Ad ve soyad yalnızca harf, boşluk, kesme ve tire içerebilir (en fazla 40 karakter).", { status: 400, headers: noStore });
 
-  const event = await getEvent();
   const [regular, semibold, mascot] = await Promise.all([
     readFile(join(process.cwd(), "assets/schibsted-grotesk-400.woff")),
     readFile(join(process.cwd(), "assets/schibsted-grotesk-600.woff")),
@@ -89,7 +99,9 @@ export async function GET(request: Request) {
         { name: "Schibsted Grotesk", data: semibold, weight: 600, style: "normal" },
       ],
       headers: {
-        "Cache-Control": "public, max-age=3600, s-maxage=3600",
+        // Oturuma bağlı yanıt: CDN'de tutulursa adresi bilen herkes girişsiz açabilirdi.
+        "Cache-Control": "private, max-age=3600",
+        Vary: "Cookie",
         ...(params.get("indir") === "1" ? { "Content-Disposition": `attachment; filename="katilim-belgesi-${fileSlug(name)}.png"` } : {}),
       },
     },

@@ -14,7 +14,7 @@ import { checkHealth, freezeAll, getEventRow, lockNow, tick } from "@/lib/freeze
 import { processProjectJobs, retrySeal } from "@/lib/delivery";
 import { safeDemoUrl } from "@/lib/delivery-policy";
 import { normalizeLogo, type NormalizedLogo } from "@/lib/logo-image";
-import { notify, tg } from "@/lib/notify";
+import { notifyEvent, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
 import { claimOnce, releaseOnce, requestKey } from "@/lib/once";
 import { isMysteryAnswer, mysteryOpen } from "@/lib/mystery";
@@ -158,7 +158,7 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
   after(async () => {
     await processProjectJobs(project.id);
     await checkHealth(project, await getEventRow(event.id));
-    await notify([
+    await notifyEvent(event, [
       `🖼 ${tg.b("Vitrine yeni eser")} · No. ${String(project.exhibit_no).padStart(3, "0")}`,
       `${tg.b(fields.name)} · ${tg.text(fields.team)}`,
       tg.link(`${env.siteUrl}${exhibitPath(event.slug, project.exhibit_no)}`, repo.full_name),
@@ -512,7 +512,7 @@ export async function setAnnouncement(_: FormState, formData: FormData): Promise
     await releaseOnce(once);
     return { error: dbError(error.message) };
   }
-  if (text) after(() => notify([`📣 ${tg.b("Duyuru")}`, tg.text(text)], "duyuru"));
+  if (text) after(() => notifyEvent(event, [`📣 ${tg.b("Duyuru")}`, tg.text(text)], "duyuru"));
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -533,7 +533,7 @@ export async function setActivity(_: FormState, formData: FormData): Promise<For
     await releaseOnce(once);
     return { error: dbError(error.message) };
   }
-  if (kind !== "bitir") after(() => notify([`${kind === "yemek" ? "🍽️" : "🎲"} ${tg.b(title)}`, tg.text(kind === "yemek" ? "Yemek saati başladı." : "Etkinlik başladı.")], kind === "yemek" ? "pizza" : "duyuru"));
+  if (kind !== "bitir") after(() => notifyEvent(event, [`${kind === "yemek" ? "🍽️" : "🎲"} ${tg.b(title)}`, tg.text(kind === "yemek" ? "Yemek saati başladı." : "Etkinlik başladı.")], kind === "yemek" ? "pizza" : "duyuru"));
   revalidatePath("/", "layout");
   return { ok: true };
 }
@@ -585,7 +585,7 @@ export async function setVoting(formData: FormData): Promise<{ error: string } |
   else {
     after(() =>
       state === "acik"
-        ? notify([`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(env.siteUrl, "Oy ver")], "oy")
+        ? notifyEvent(event, [`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(env.siteUrl, "Oy ver")], "oy")
         : announcePeoplesChoice(event),
     );
   }

@@ -1,11 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { notify, tg } from "@/lib/notify";
+import { notifyEvent, tg } from "@/lib/notify";
 
 /** Bir etkinlik/pencere için tek bildirim; başarısız gönderim daha sonra yeniden denenir. */
-export async function sendReminders(ev: { id: string; title: string; deadline: string; locked_at: string | null }) {
-  if (!env.telegramBotToken || !env.telegramChatId || ev.locked_at) return;
+export async function sendReminders(ev: { id: string; title: string; deadline: string; locked_at: string | null; telegram: boolean }) {
+  if (!ev.telegram || !env.telegramBotToken || !env.telegramChatId || ev.locked_at) return;
   const left = +new Date(ev.deadline) - Date.now();
   if (left <= 0 || left > 60 * 60_000) return;
   const windowMinutes = left <= 15 * 60_000 ? 15 : 60;
@@ -23,7 +23,7 @@ export async function sendReminders(ev: { id: string; title: string; deadline: s
     .eq("event_id", ev.id);
   const needsAttention = (projects ?? []).filter(p => !p.accepted_sha || p.health_issues.length || (p.repo_head_sha && p.repo_head_sha !== p.accepted_sha));
   const teams = needsAttention.slice(0, 15).map(p => p.team_name).join(", ");
-  const sent = await notify([
+  const sent = await notifyEvent(ev, [
     `⏳ ${tg.b(`${ev.title} · son ${Math.ceil(left / 60_000)} dakika`)}`,
     "Son push'tan sonra panelde teslim sürümünü güncelle. Arşivin süre dolmadan kabul edilmiş olmalı.",
     ...(teams ? [`Kontrol bekleyen ekipler: ${tg.text(teams)}${needsAttention.length > 15 ? ` ve ${needsAttention.length - 15} ekip daha` : ""}`] : []),

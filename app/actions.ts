@@ -730,3 +730,38 @@ export async function anonymizeUser(_: FormState, formData: FormData): Promise<F
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------- platform askısı
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Etkinliği askıya alma / askıyı kaldırma: yalnızca head admin, taze oturumla (A21), 3–500 karakter gerekçeyle.
+ * Etkinlik formdan gelir; sayfa açıkken güncel etkinlik değişse bile ekranda görülen etkinliğe uygulanır.
+ * DB yetkiyi, gerekçeyi ve durumu yeniden denetler; işlem aynı transaction'da denetim kaydına yazılır.
+ */
+async function platformSuspension(formData: FormData, rpc: "suspend_event" | "unsuspend_event"): Promise<FormState> {
+  const eventId = String(formData.get("eventId") ?? "");
+  const event = UUID_RE.test(eventId) ? await getEventById(eventId) : null;
+  if (!event) return { error: "Etkinlik bulunamadı." };
+  const admin = await authorize(event, "askiya-al", true);
+  if (typeof admin === "string") return { error: admin };
+  const reason = String(formData.get("gerekce") ?? "").trim();
+  if (reason.length < 3 || reason.length > 500) return { error: "Gerekçe 3 ile 500 karakter arasında olmalı." };
+  const { error } = await createAdminClient().rpc(rpc, { p_event: event.id, p_actor: admin.id, p_login: admin.login, p_reason: reason });
+  if (error) {
+    // Eş istek (iki sekme, çift tıklama) ilkinden sonra bu iki mesajla reddedilir; durum ekranda görünür.
+    for (const known of ["Etkinlik zaten askıda.", "Etkinlik askıda değil."]) if (error.message.includes(known)) return { error: known };
+    return { error: dbError(error.message) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function suspendEvent(_: FormState, formData: FormData): Promise<FormState> {
+  return platformSuspension(formData, "suspend_event");
+}
+
+export async function unsuspendEvent(_: FormState, formData: FormData): Promise<FormState> {
+  return platformSuspension(formData, "unsuspend_event");
+}

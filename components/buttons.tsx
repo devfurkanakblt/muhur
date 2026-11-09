@@ -12,17 +12,19 @@ export function SubmitButton({
   variant = "primary",
   className = "",
   busy,
+  disabled = false,
 }: {
   children: React.ReactNode;
   pending: string;
   variant?: keyof typeof buttonStyles;
   className?: string;
   busy?: boolean;
+  disabled?: boolean;
 }) {
   const { pending: formPending } = useFormStatus();
   const pending = busy ?? formPending;
   return (
-    <button type="submit" disabled={pending} className={`${buttonStyles[variant]} ${className}`} aria-busy={pending}>
+    <button type="submit" disabled={pending || disabled} className={`${buttonStyles[variant]} ${className}`} aria-busy={pending}>
       {pending ? pendingLabel : children}
     </button>
   );

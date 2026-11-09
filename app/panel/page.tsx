@@ -20,19 +20,23 @@ import { HEALTH_TEXT } from "@/lib/health";
 import { getRepo, GithubError, listPublicRepos, parseRepoInput } from "@/lib/github";
 import { exhibitNo, formatDateTime, relativeTR } from "@/lib/format";
 import { env } from "@/lib/env";
+import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 import { leaveProject, recheckHealth, removeMember, renewInvite, signOut } from "@/app/actions";
 
 export const maxDuration = 300;
 
 export const metadata = { title: "Projem" };
 
-async function Shell({ viewer, children }: { viewer: Viewer | null; children: React.ReactNode }) {
+async function Shell({ viewer, notice, children }: { viewer: Viewer | null; notice?: React.ReactNode; children: React.ReactNode }) {
   const status = await getLiveStatus();
   return (
     <>
       <SiteHeader viewer={viewer} />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1240px] flex-1 px-5 pt-10 pb-28 sm:px-8 md:pt-16">
         <LiveState version={status.version} fast />
+        {notice}
         {children}
         {viewer && (
           <ActionForm action={signOut} className="mt-16 sm:hidden">
@@ -58,10 +62,15 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
   await connection();
   const params = await searchParams;
   const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  // Askıdayken katılımcı yazmaları DB'de reddedilir; burada uyarı görünür ve gönderim düğmeleri pasifleşir.
+  const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
+  const notice = event.suspended
+    ? <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} className="mb-10" />
+    : null;
 
   if (!viewer) {
     return (
-      <Shell viewer={null}>
+      <Shell viewer={null} notice={notice}>
         <div className="flex flex-col items-start gap-8">
           <Mascot mood="normal" title="" className="w-40" />
           <PageTitle note="Projeni içe aktarmak için GitHub hesabını bağla. Yalnızca public repolarını görürüz.">
@@ -87,11 +96,11 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
   }
 
   const project = await getOwnProject(viewer.id, event.id);
-  if (project) return <ProjectView viewer={viewer} project={project} event={event} justCreated={params.kayit === "tamam"} />;
+  if (project) return <ProjectView viewer={viewer} project={project} event={event} notice={notice} justCreated={params.kayit === "tamam"} />;
 
   if (event.locked) {
     return (
-      <Shell viewer={viewer}>
+      <Shell viewer={viewer} notice={notice}>
         <div className="flex flex-col items-start gap-8">
           <Mascot mood="uykulu" title="" className="w-44" />
           <PageTitle note={`Teslimler ${formatDateTime(event.sealTime)} itibarıyla mühürlendi. Yeni proje kabul edilmiyor.`}>
@@ -120,7 +129,7 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
     }
     if (!repoError) {
       return (
-        <Shell viewer={viewer}>
+        <Shell viewer={viewer} notice={notice}>
           <Link href="/panel" className="mb-8 inline-flex items-center gap-1.5 text-[0.9375rem] text-ink-2 hover:text-ink">
             <ArrowLeftIcon size={16} /> Başka repo seç
           </Link>
@@ -129,19 +138,20 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
           </PageTitle>
           <ProjectForm
             mode="create"
+            suspended={event.suspended}
             repo={repoName}
             initial={{ name: repoName.split("/")[1].replace(/[-_]/g, " "), team: "", summary: "", logo: null }}
           />
         </Shell>
       );
     }
-    return <Picker viewer={viewer} eventId={event.id} note={deadlineNote} error={repoError} />;
+    return <Picker viewer={viewer} eventId={event.id} note={deadlineNote} notice={notice} error={repoError} />;
   }
 
-  return <Picker viewer={viewer} eventId={event.id} note={deadlineNote} />;
+  return <Picker viewer={viewer} eventId={event.id} note={deadlineNote} notice={notice} />;
 }
 
-async function Picker({ viewer, eventId, note, error }: { viewer: Viewer; eventId: string; note: string; error?: string }) {
+async function Picker({ viewer, eventId, note, notice, error }: { viewer: Viewer; eventId: string; note: string; notice: React.ReactNode; error?: string }) {
   const token = (await cookies()).get("gh_token")?.value;
   // GitHub'a ulaşılamazsa liste boş sayılmaz: ekip hatayı görür, bağlantı yapıştırarak devam edebilir (A09).
   const [{ repos, listFailed }, exhibits] = await Promise.all([
@@ -156,7 +166,7 @@ async function Picker({ viewer, eventId, note, error }: { viewer: Viewer; eventI
   ]);
   const taken = new Set(exhibits.map((e) => e.repo_full_name.toLowerCase()));
   return (
-    <Shell viewer={viewer}>
+    <Shell viewer={viewer} notice={notice}>
       <div className="grid gap-12 md:grid-cols-[1fr_minmax(0,640px)]">
         <PageTitle note={note}>Hangi repo vitrine çıkacak?</PageTitle>
         <RepoPicker
@@ -179,11 +189,13 @@ async function ProjectView({
   viewer,
   project,
   event,
+  notice,
   justCreated,
 }: {
   viewer: Viewer;
   project: OwnProject;
   event: EventState;
+  notice: React.ReactNode;
   justCreated: boolean;
 }) {
   const { locked, sealTime } = event;
@@ -198,7 +210,7 @@ async function ProjectView({
   const mysteryMd = `[![gizem avcısı](${badgeUrl}/gizem)](${env.siteUrl}${href})`;
 
   return (
-    <Shell viewer={viewer}>
+    <Shell viewer={viewer} notice={notice}>
       <h1 className="mb-3 text-[clamp(1.75rem,3.4vw,2.5rem)] font-semibold tracking-[-0.02em]">Projem<span className="text-indigo">.</span></h1>
       <p className="mb-6 break-words text-ink-2">{project.name} · {project.team_name}</p>
       <nav aria-label="Proje bölümleri" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-[0.9375rem]">
@@ -277,6 +289,7 @@ async function ProjectView({
               </PageTitle>
               <ProjectForm
                 mode="edit"
+                suspended={event.suspended}
                 initial={{ name: project.name, team: project.team_name, summary: project.summary, logo, demo: project.demo_url }}
               />
             </>

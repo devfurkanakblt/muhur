@@ -6,11 +6,11 @@ import type { Member } from "@/lib/data";
 import { buttonStyles } from "@/components/button-styles";
 import { useProtectedForm } from "@/components/protected-form";
 
-export function SubmissionButton({ pendingJob, hasVersion }: { pendingJob: boolean; hasVersion: boolean }) {
+export function SubmissionButton({ pendingJob, hasVersion, suspended = false }: { pendingJob: boolean; hasVersion: boolean; suspended?: boolean }) {
   const [state, action, pending] = useActionState(submitVersion, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   return <form {...protectedForm} data-live-safe>
-    <button disabled={pending || pendingJob} aria-busy={pending || pendingJob} className={buttonStyles.primary}>
+    <button disabled={pending || pendingJob || suspended} aria-busy={pending || pendingJob} className={buttonStyles.primary}>
       {pending || pendingJob ? "Teslim sürümü hazırlanıyor…" : hasVersion ? "Teslim sürümünü güncelle" : "Kodunu teslim et"}
     </button>
     {state?.error && <p role="alert" className="mt-3 text-danger">{state.error}</p>}

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowUpRightIcon, DownloadSimpleIcon, MonitorPlayIcon } from "@phosphor-icons/react/ssr";
 import { SiteHeader } from "@/components/site-header";
-import { ActivityForm, AnnouncementForm, AnonymizeForm, AwardForm, NewEventForm, RetryJobButton, ScheduleForm } from "@/components/admin-forms";
+import { ActivityForm, AnnouncementForm, AnonymizeForm, AwardForm, NewEventForm, RetryJobButton, ScheduleForm, SuspendForm } from "@/components/admin-forms";
+import { SuspensionNotice } from "@/components/suspension-notice";
 import { HoldToLock } from "@/components/hold-to-lock";
 import { exhibitPath, getAdminSession, getEvent, getViewer, getAwards, getEvents, getMysteryHunters, type AdminSession } from "@/lib/data";
 import { getEventAccess } from "@/lib/access";
@@ -68,7 +69,7 @@ function SessionNotice({ session, now }: { session: AdminSession | null; now: nu
     return (
       <div role="alert" className="grid gap-4 border-y border-danger/40 py-5">
         <p className="max-w-[70ch]">
-          <span className="font-medium">Kilit, zamanlama, oylama, yeni etkinlik ve veri silme kapalı.</span>{" "}
+          <span className="font-medium">Kilit, zamanlama, oylama, yeni etkinlik, askı ve veri silme kapalı.</span>{" "}
           <span className="text-ink-2">Bu işlemler son 12 saat içinde açılmış bir oturum ister. Yeniden giriş yapınca hemen açılır.</span>
         </p>
         <div>{reauth}</div>
@@ -78,7 +79,7 @@ function SessionNotice({ session, now }: { session: AdminSession | null; now: nu
   const soon = until !== null && until - now < 3 * 3600_000;
   return (
     <div className="grid gap-4 text-[0.9375rem] text-ink-2">
-      <p>Kilit, zamanlama, oylama, yeni etkinlik ve veri silme {at} itibarıyla yeniden giriş isteyecek.</p>
+      <p>Kilit, zamanlama, oylama, yeni etkinlik, askı ve veri silme {at} itibarıyla yeniden giriş isteyecek.</p>
       {soon && <div><p className="mb-3 text-ink">Süre üç saatten az; kritik bir anda kapanmaması için şimdi yeniden giriş yap.</p>{reauth}</div>}
     </div>
   );
@@ -94,6 +95,7 @@ export default async function AdminPage() {
   if (!can(access, "incele")) notFound();
   const manage = can(access, "yonet");
   const anonymize = can(access, "anonimlestir");
+  const platform = can(access, "askiya-al");
   const session = await getAdminSession();
   const db = createAdminClient();
   // Okuma hatası "Henüz eser yok" ya da "zamanlayıcı hiç çalışmadı" gibi gösterilmez; sayfa hata ekranına düşer (A09).
@@ -157,12 +159,25 @@ export default async function AdminPage() {
           </Link>
         </div>
 
-        {(manage || anonymize) && <SessionNotice session={session} now={event.now} />}
+        {(manage || anonymize || platform) && <SessionNotice session={session} now={event.now} />}
+
+        {/* Sayfayı açabilen herkes etkinliği inceleyebilir; gerekçe görünür. */}
+        <SuspensionNotice event={event} showReason />
 
         {!manage && (
           <p role="status" className="border-y border-rule-strong py-4 text-ink">
             Salt okunur: bu etkinliği yönetme yetkin yok ya da etkinlik askıda.
           </p>
+        )}
+
+        {platform && (
+          <Section title="Platform" note="Askı katılımcı yazmalarını ve topluluk yönetimini durdurur; kuyruktaki teslimler işlenir, süre dolunca kilit yine vurulur. Her iki yön de gerekçesiyle denetim kaydına yazılır.">
+            <p role="status" className="mb-5 text-ink">
+              Durum: <span className="font-medium">{event.suspended ? "Askıda" : "Yayında"}</span>
+              {event.communityName && <span className="text-ink-2"> · {event.communityName}</span>}
+            </p>
+            <SuspendForm key={event.suspended ? "askida" : "yayinda"} eventId={event.id} suspended={event.suspended} />
+          </Section>
         )}
 
         {event.locked ? (

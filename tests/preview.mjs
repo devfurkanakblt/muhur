@@ -15,6 +15,9 @@ let mode = "open";
 // "yonetici" (varsayılan): head admin + etkinliğin topluluğunun sahibi; "head-admin": yalnızca head admin;
 // "yabanci": başka bir topluluğun organizatörü (bu etkinlikte yetkisi yok).
 let role = "yonetici";
+// ?askida=1: güncel etkinlik platform tarafından askıya alınmış (gerekçesiyle) gösterilir.
+let suspended = false;
+const SUSPEND_REASON = "Örnek askı gerekçesi: kural ihlali incelemesi.";
 // Örnek logolar (512×512): biri PNG, biri WEBP; üçüncü eserin logosu yok. Depo adresinden sunulur.
 const logoSvg = shape => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">${shape}</svg>`);
 const logos = {
@@ -67,7 +70,7 @@ function records(table) {
   }));
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
-      is_current: true, community_id: communityId, suspended_at: null, suspended_reason: null,
+      is_current: true, community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
       community: { name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     communities: [
       { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false },
@@ -114,10 +117,11 @@ const server = createServer(async (request, response) => {
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
     role = ["yonetici", "head-admin", "yabanci"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
+    suspended = url.searchParams.get("askida") === "1";
     hunters = [];
     votes = sealedVotes();
     awards = sealedAwards();
-    return response.end(JSON.stringify({ mode, role }));
+    return response.end(JSON.stringify({ mode, role, suspended }));
   }
   if (url.pathname === "/fixture/session") {
     const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");

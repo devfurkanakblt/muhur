@@ -54,6 +54,31 @@ for (const hidden of ["Ödülü kaldır", "name=\"announcement\"", "name=\"slug\
 assert.ok(readOnlyHtml.includes("Jüri paketi") && readOnlyHtml.includes("Kişisel veri silme"), "Head admin inceleme ve anonimleştirme bölümlerini görmüyor.");
 assert.equal((await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=csv", auth)).status, 200);
 console.log("PASS: Head admin yönetim sayfasını salt okur, jüri paketini indirebilir.");
+// Askı: herkes uyarıyı görür; gerekçe yalnızca inceleyebilenlere (head admin, topluluk rolü) gösterilir.
+const ASKIDA = "Bu etkinlik platform tarafından geçici olarak durduruldu.";
+const REASON = "Örnek askı gerekçesi: kural ihlali incelemesi.";
+const htmlOf = async (path, init) => (await fetch(`http://127.0.0.1:3100${path}`, init)).text();
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+assert.ok(!(await htmlOf("/")).includes(ASKIDA), "Askıda olmayan etkinlikte askı uyarısı görünüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&askida=1");
+const publicHome = await htmlOf("/");
+assert.ok(publicHome.includes(ASKIDA), "Askıdaki etkinlikte ana sayfada uyarı yok.");
+assert.ok(!publicHome.includes("Gerekçe:") && !publicHome.includes(REASON), "Ziyaretçi askı gerekçesini görüyor.");
+const managerHome = await htmlOf("/", auth);
+assert.ok(managerHome.includes(ASKIDA) && managerHome.includes("Gerekçe:") && managerHome.includes(REASON), "İnceleyebilen askı gerekçesini görmüyor.");
+const suspendedPanel = await htmlOf("/panel", auth);
+assert.ok(suspendedPanel.includes(ASKIDA), "Askıdaki etkinlikte panelde uyarı yok.");
+assert.ok(/<button[^>]*disabled=""[^>]*>Teslim sürümünü güncelle/.test(suspendedPanel), "Askıdayken teslim düğmesi etkin.");
+assert.ok(/<button[^>]*type="submit"[^>]*disabled=""[^>]*>Değişiklikleri kaydet/.test(suspendedPanel), "Askıdayken proje kaydetme düğmesi etkin.");
+console.log("PASS: Askı uyarısı herkese, gerekçe yalnızca inceleyenlere; panelde gönderim düğmeleri pasif.");
+// Head admin: yönetim sayfasının üstünde Platform bölümü; askıdaysa kaldırma, değilse askıya alma düğmesi.
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=head-admin&askida=1");
+const platformSuspended = await htmlOf("/yonetim", auth);
+assert.ok(platformSuspended.includes("Platform") && platformSuspended.includes("Askıyı kaldır") && platformSuspended.includes(REASON), "Head admin askıyı kaldıramıyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=head-admin");
+const platformOpen = await htmlOf("/yonetim", auth);
+assert.ok(platformOpen.includes("Platform") && platformOpen.includes("Askıya al") && platformOpen.includes('name="gerekce"'), "Head admin askıya alma formunu görmüyor.");
+console.log("PASS: Head admin yönetimde Platform bölümünden askıya alır / askıyı kaldırır.");
 await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed");
 // Telegram duyurusunun görseli: herkese açık kazanan kartı PNG; bilinmeyen kazanan 404.
 const card = await fetch("http://127.0.0.1:3100/api/kazanan/a1");

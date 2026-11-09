@@ -4,6 +4,8 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { ADMIN_REAUTH_MS, githubIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
 import { selectAll } from "@/lib/paginate";
+import { notFound } from "next/navigation";
+import { isListed } from "@/lib/event-routes";
 
 /** Okuma hatası "kayıt yok" gibi gösterilmez; sayfa hata ekranına düşer. */
 function readFailed(what: string, error: { message: string }): never {
@@ -28,11 +30,11 @@ type EventRow = {
   community_id: string | null;
   suspended_at: string | null;
   suspended_reason: string | null;
-  community: { name: string; status: string; telegram_enabled: boolean } | null;
+  community: { name: string; slug: string; city: string | null; status: string; telegram_enabled: boolean } | null;
 };
 
 /** Etkinlik satırı, bağlı olduğu toplulukla birlikte okunur. */
-const EVENT_SELECT = "*, community:communities(name,status,telegram_enabled)";
+const EVENT_SELECT = "*, community:communities(name,slug,city,status,telegram_enabled)";
 
 /** Yöneticinin duyurduğu yemek ya da mini oyun; bitirilene kadar sürer. */
 export type Activity = { kind: "yemek" | "oyun"; title: string; at: string };
@@ -57,6 +59,8 @@ export type EventState = {
   /** Etkinliği düzenleyen topluluk (Plan 1'de eski etkinlikler için null olabilir). */
   communityId: string | null;
   communityName: string | null;
+  communitySlug: string | null;
+  communityCity: string | null;
   /** Topluluk durumu: beklemede | onaylandi | reddedildi | askida. */
   communityStatus: string | null;
   /** Telegram bildirimleri yalnızca topluluğu izinliyse gider. */
@@ -90,6 +94,8 @@ function toState(row: EventRow): EventState {
     activity: row.activity_kind && row.activity_title && row.activity_at ? { kind: row.activity_kind, title: row.activity_title, at: row.activity_at } : null,
     communityId: row.community_id ?? null,
     communityName: row.community?.name ?? null,
+    communitySlug: row.community?.slug ?? null,
+    communityCity: row.community?.city ?? null,
     communityStatus: row.community?.status ?? null,
     telegram: row.community?.telegram_enabled === true,
     suspended: row.suspended_at != null,
@@ -113,6 +119,13 @@ export const getEventBySlug = cache(async (slug: string): Promise<EventState | n
   return data ? toState(data as EventRow) : null;
 });
 
+/** Slug'a göre etkinlik; yoksa 404. */
+export const requireEventBySlug = cache(async (slug: string): Promise<EventState> => {
+  const event = await getEventBySlug(slug);
+  if (!event) notFound();
+  return event;
+});
+
 /** Etkinlik kimliğiyle; yetki denetimi için kaydın bağlı olduğu etkinliği okumakta kullanılır. */
 export const getEventById = cache(async (id: string): Promise<EventState | null> => {
   const db = createAdminClient();
@@ -126,6 +139,38 @@ export const getEvents = cache(async (): Promise<EventState[]> => {
   const { data, error } = await db.from("events").select(EVENT_SELECT).order("starts_at", { ascending: false });
   if (error) readFailed("Etkinlikler", error);
   return (data ?? []).map((r) => toState(r as EventRow));
+});
+
+/** Ana sayfada listelenebilen etkinlikler (topluluğu onaylı, askıda değil). */
+export const getListedEvents = cache(async (): Promise<EventState[]> => {
+  return (await getEvents()).filter(isListed);
+});
+
+/** Kullanıcının ekip üyesi olduğu etkinlikler. */
+export const getViewerEvents = cache(async (userId: string): Promise<EventState[]> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("project_members").select("event_id").eq("user_id", userId);
+  if (error) readFailed("Ekip üyelikleri", error);
+  const ids = new Set((data ?? []).map((r) => r.event_id as string));
+  if (ids.size === 0) return [];
+  return (await getEvents()).filter((e) => ids.has(e.id));
+});
+
+export type ManagedCommunity = { id: string; slug: string; name: string; status: string; role: "owner" | "organizator" };
+
+/** Kullanıcının sahibi ya da organizatörü olduğu topluluklar. */
+export const getManagedCommunities = cache(async (userId: string): Promise<ManagedCommunity[]> => {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("community_members")
+    .select("role, community:communities(id,slug,name,status)")
+    .eq("user_id", userId);
+  if (error) readFailed("Topluluk üyelikleri", error);
+  type Row = { role: "owner" | "organizator"; community: { id: string; slug: string; name: string; status: string } | null };
+  return ((data ?? []) as unknown as Row[])
+    .filter((r) => r.community)
+    .map((r) => ({ ...r.community!, role: r.role }))
+    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
 });
 
 export type Viewer = {

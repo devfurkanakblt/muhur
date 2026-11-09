@@ -120,7 +120,10 @@ export default async function AdminPage() {
   const jobsQuery = db.from("delivery_jobs").select("id, kind, state, attempts, error, next_attempt_at, created_at, project:projects(name, team_name), event:events(title)");
   const [awards, events, status, runsResult, jobsResult, hunters, teams] = await Promise.all([
     getAwards(event.id), getEvents(), getLiveStatus(),
-    db.from("worker_runs").select("id, started_at, finished_at, error, processed").order("started_at", { ascending: false }).limit(5),
+    // Zamanlayıcı kayıtları platform geneli (hata metni başka etkinliklerin slug'larını içerir): yalnızca head admin.
+    access?.headAdmin
+      ? db.from("worker_runs").select("id, started_at, finished_at, error, processed").order("started_at", { ascending: false }).limit(5)
+      : Promise.resolve({ data: null, error: null }),
     (access?.headAdmin ? jobsQuery : jobsQuery.eq("event_id", event.id)).order("created_at", { ascending: false }).limit(30),
     getMysteryHunters(event.id),
     selectAll<MemberTeam>((from, to) => db
@@ -238,11 +241,13 @@ export default async function AdminPage() {
         </Section>
 
         <Section title="Zamanlayıcı ve teslim işleri" note="Bütün etkinliklerin tamamlanmamış işleri işlenir. Her iş en fazla 5 kez denenir.">
-          <p role="status" className={workerStale ? "text-danger" : "text-ink-2"}>
-            {lastSuccess ? `Son başarılı çalışma: ${formatDay(lastSuccess.finished_at!)}, ${formatTime(lastSuccess.finished_at!)}.` : "Henüz başarılı zamanlayıcı çalışması yok."}
-            {workerStale && " Dakikalık zamanlayıcıyı kontrol et."}
-          </p>
-          {(runs ?? []).filter(r => r.error).map(r => <p key={r.id} className="mt-2 break-all text-sm text-danger">{formatTime(r.started_at)} · {r.error}</p>)}
+          {access?.headAdmin && <>
+            <p role="status" className={workerStale ? "text-danger" : "text-ink-2"}>
+              {lastSuccess ? `Son başarılı çalışma: ${formatDay(lastSuccess.finished_at!)}, ${formatTime(lastSuccess.finished_at!)}.` : "Henüz başarılı zamanlayıcı çalışması yok."}
+              {workerStale && " Dakikalık zamanlayıcıyı kontrol et."}
+            </p>
+            {(runs ?? []).filter(r => r.error).map(r => <p key={r.id} className="mt-2 break-all text-sm text-danger">{formatTime(r.started_at)} · {r.error}</p>)}
+          </>}
           <ActionForm action={runWorker} className="mt-4"><ActionButton pending="Kuyruk işleniyor…" className="press underline underline-offset-4">Kuyruğu şimdi işle</ActionButton></ActionForm>
           <div className="mt-5 max-h-[400px] overflow-auto">
             <ul className="divide-y divide-rule">{(jobs ?? []).map(j => {

@@ -13,8 +13,12 @@ const otherCommunityId = "20000000-0000-0000-0000-000000000002";
 let mode = "open";
 // Yetki rolleri DB'den okunur (platform_roles, community_members). ?rol= ile fikstür kullanıcısının rolü seçilir:
 // "yonetici" (varsayılan): head admin + etkinliğin topluluğunun sahibi; "head-admin": yalnızca head admin;
+// "sahip": yalnızca etkinliğin topluluğunun sahibi (head admin değil); "juri": yalnızca etkinliğin jürisi;
 // "yabanci": başka bir topluluğun organizatörü (bu etkinlikte yetkisi yok).
 let role = "yonetici";
+// Denetim kayıtları (log_admin RPC) bellekte tutulur; /fixture/audit okur. ?denetim=hata ile yazma başarısız olur.
+let audits = [];
+let auditFails = false;
 // ?askida=1: güncel etkinlik platform tarafından askıya alınmış (gerekçesiyle) gösterilir.
 let suspended = false;
 const SUSPEND_REASON = "Örnek askı gerekçesi: kural ihlali incelemesi.";
@@ -76,10 +80,10 @@ function records(table) {
       { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false },
       { id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", status: "onaylandi", telegram_enabled: false },
     ],
-    platform_roles: role === "yabanci" ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
-    community_members: role === "yonetici" ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: "owner" }]
+    platform_roles: ["yabanci", "sahip", "juri"].includes(role) ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
+    community_members: role === "yonetici" || role === "sahip" ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: "owner" }]
       : role === "yabanci" ? [{ community_id: otherCommunityId, user_id: userId, github_login: "preview-admin", role: "organizator" }] : [],
-    event_jurors: [],
+    event_jurors: role === "juri" ? [{ event_id: eventId, user_id: userId }] : [],
     projects,
     project_members: [
       { ...member, project_id: projects[0].id, project: { team_name: projects[0].team_name } },
@@ -116,12 +120,25 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
-    role = ["yonetici", "head-admin", "yabanci"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
+    role = ["yonetici", "head-admin", "sahip", "juri", "yabanci"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
     suspended = url.searchParams.get("askida") === "1";
+    auditFails = url.searchParams.get("denetim") === "hata";
+    audits = [];
     hunters = [];
     votes = sealedVotes();
     awards = sealedAwards();
     return response.end(JSON.stringify({ mode, role, suspended }));
+  }
+  // Arşiv indirme bağlantısı: imzalı adres yerel sahte depoyu gösterir (içerik sunulmaz).
+  if (url.pathname.startsWith("/storage/v1/object/sign/archives/") && request.method === "POST") {
+    return response.end(JSON.stringify({ signedURL: `${url.pathname.slice("/storage/v1".length)}?token=fixture` }));
+  }
+  if (url.pathname === "/fixture/audit") return response.end(JSON.stringify(audits));
+  if (url.pathname === "/rest/v1/rpc/log_admin") {
+    const body = JSON.parse(await new Promise(done => { let b = ""; request.on("data", c => b += c); request.on("end", () => done(b)); }) || "{}");
+    if (auditFails) { response.statusCode = 500; return response.end(JSON.stringify({ message: "Denetim kaydı yazılamadı.", code: "XX000" })); }
+    audits.push(body);
+    return response.end("null");
   }
   if (url.pathname === "/fixture/session") {
     const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");

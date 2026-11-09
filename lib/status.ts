@@ -16,8 +16,10 @@ export async function getLiveStatus() {
   ]);
   if (error) throw new Error("Güncel durum okunamadı.");
   const { data: jobs } = project ? await db.from("delivery_jobs").select("id, state, attempts, error").eq("project_id", project.id).order("created_at", { ascending: false }).limit(10) : { data: null };
-  const adminState = can(await getEventAccess(viewer, event), "incele") ? await Promise.all([
-    db.from("worker_runs").select("id, finished_at, error, processed").order("started_at", { ascending: false }).limit(5),
+  const access = await getEventAccess(viewer, event);
+  // Zamanlayıcı kayıtları platform genelidir; sürüm özetine yalnızca head admin için girer.
+  const adminState = can(access, "incele") ? await Promise.all([
+    access?.headAdmin ? db.from("worker_runs").select("id, finished_at, error, processed").order("started_at", { ascending: false }).limit(5) : { data: null },
     db.from("delivery_jobs").select("id, state, attempts, error").eq("event_id", event.id).order("created_at", { ascending: false }).limit(30),
   ]) : null;
   const version = createHash("sha256").update(JSON.stringify({

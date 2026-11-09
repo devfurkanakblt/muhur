@@ -52,8 +52,40 @@ const readOnlyHtml = await readOnly.text();
 assert.ok(readOnlyHtml.includes("Salt okunur: bu etkinliği yönetme yetkin yok ya da etkinlik askıda."), "Head admin için salt okunur satırı yok.");
 for (const hidden of ["Ödülü kaldır", "name=\"announcement\"", "name=\"slug\""]) assert.ok(!readOnlyHtml.includes(hidden), `Head admin yönetim formu görüyor: ${hidden}`);
 assert.ok(readOnlyHtml.includes("Jüri paketi") && readOnlyHtml.includes("Kişisel veri silme"), "Head admin inceleme ve anonimleştirme bölümlerini görmüyor.");
+assert.ok(readOnlyHtml.includes("Son başarılı çalışma"), "Head admin zamanlayıcı kayıtlarını görmüyor.");
 assert.equal((await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=csv", auth)).status, 200);
 console.log("PASS: Head admin yönetim sayfasını salt okur, jüri paketini indirebilir.");
+// Head admin'in yalnızca platform yetkisiyle indirmeleri denetim kaydına girer; kendi ekibinin arşivi girmez.
+const auditLog = async () => (await fetch("http://127.0.0.1:54330/fixture/audit")).json();
+let audited = await auditLog();
+assert.deepEqual(audited.map(a => [a.p_action, a.p_event, a.p_login]), [["jury_package_download", "10000000-0000-0000-0000-000000000001", "preview-admin"]], "Head admin jüri paketi indirmesi kaydedilmedi.");
+assert.equal((await fetch("http://127.0.0.1:3100/api/arsiv/30000000-0000-0000-0000-000000000002", auth)).status, 307);
+assert.equal((await fetch("http://127.0.0.1:3100/api/arsiv/30000000-0000-0000-0000-000000000001", auth)).status, 307);
+audited = await auditLog();
+assert.equal(audited.length, 2, "Head admin'in kendi ekibinin arşivi de kaydedildi ya da başka ekibinki kaydedilmedi.");
+assert.deepEqual([audited[1].p_action, audited[1].p_project, audited[1].p_actor], ["archive_download", "30000000-0000-0000-0000-000000000002", "00000000-0000-0000-0000-000000000001"]);
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed&rol=head-admin&denetim=hata");
+assert.equal((await fetch("http://127.0.0.1:3100/api/arsiv/30000000-0000-0000-0000-000000000002", auth)).status, 503, "Kayıt yazılamadan arşiv verildi.");
+assert.equal((await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=csv", auth)).status, 503, "Kayıt yazılamadan jüri paketi verildi.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed");
+assert.equal((await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=csv", auth)).status, 200);
+assert.equal((await auditLog()).length, 0, "Topluluk rolüyle yapılan indirme kaydedildi.");
+console.log("PASS: Head admin indirmeleri kayda girer; kayıt yazılamazsa indirme verilmez; topluluk rolü kaydedilmez.");
+// Topluluk sahibi (head admin değil): yalnızca kendi etkinliğinin işlerini görür; platform geneli zamanlayıcı kayıtlarını görmez.
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed&rol=sahip");
+const ownerPage = await fetch("http://127.0.0.1:3100/yonetim", auth);
+assert.equal(ownerPage.status, 200);
+const ownerHtml = await ownerPage.text();
+assert.ok(ownerHtml.includes("Kuyruğu şimdi işle") && ownerHtml.includes("Jüri ödülleri"), "Topluluk sahibi yönetim bölümlerini görmüyor.");
+for (const hidden of ["Son başarılı çalışma", "Henüz başarılı zamanlayıcı çalışması yok"]) assert.ok(!ownerHtml.includes(hidden), `Topluluk sahibi zamanlayıcı kayıtlarını görüyor: ${hidden}`);
+console.log("PASS: Topluluk sahibi platform geneli zamanlayıcı kayıtlarını görmüyor.");
+// Jüri: kilitten sonra tek tek arşivleri indirebilir (kayıt gerekmez); kilitten önce indiremez.
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed&rol=juri");
+assert.equal((await fetch("http://127.0.0.1:3100/api/arsiv/30000000-0000-0000-0000-000000000002", auth)).status, 307, "Jüri kilitten sonra arşivi indiremiyor.");
+assert.equal((await auditLog()).length, 0, "Jüri indirmesi head admin kaydı gibi yazıldı.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=juri");
+assert.equal((await fetch("http://127.0.0.1:3100/api/arsiv/30000000-0000-0000-0000-000000000002", auth)).status, 403, "Jüri kilitten önce başka ekibin arşivini indirebiliyor.");
+console.log("PASS: Jüri kilitten sonra arşivleri indirir, önce indiremez.");
 // Askı: herkes uyarıyı görür; gerekçe yalnızca inceleyebilenlere (head admin, topluluk rolü) gösterilir.
 const ASKIDA = "Bu etkinlik platform tarafından geçici olarak durduruldu.";
 const REASON = "Örnek askı gerekçesi: kural ihlali incelemesi.";

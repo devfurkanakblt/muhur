@@ -107,4 +107,166 @@ end $$;
 revoke execute on function public.is_head_admin(uuid), public.event_role(uuid, uuid), public.bootstrap_head_admin(uuid, text) from public, anon, authenticated;
 grant execute on function public.is_head_admin(uuid), public.event_role(uuid, uuid), public.bootstrap_head_admin(uuid, text) to service_role;
 
+-- Katılımcı tarafı: askı ve yarışma yasağı ------------------------------------------------------
+-- Askıdaki etkinlikte katılımcı yazamaz. Topluluğun askıda olması katılımcıyı durdurmaz.
+-- Etkinlik satırı FOR SHARE kilitlenir: askıya alma, süren yazma bitene kadar bekler.
+create function public.assert_participant_writable(p_event uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare s timestamptz;
+begin
+  if p_event is null then return; end if;
+  select suspended_at into s from events where id = p_event for share;
+  if s is not null then
+    raise exception 'ASKIDA: Bu etkinlik platform tarafından geçici olarak durduruldu.' using errcode = 'P0001';
+  end if;
+end $$;
+
+-- Topluluk sahibi, organizatör ve jüri kendi etkinliğinde yarışamaz.
+create function public.assert_can_compete(p_event uuid, p_user uuid) returns void
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if public.event_role(p_event, p_user) is not null then
+    raise exception 'YARISAMAZ: Bu etkinlikte organizatör ya da jürisin; yarışmaya katılamazsın.' using errcode = 'P0001';
+  end if;
+end $$;
+
+-- new.event_id members_guard (guard_members) tarafından doldurulur; tetikleyiciler ada göre sıralandığından
+-- bu tetikleyici ondan sonra çalışır. register_project ve join_project_by_code yollarının ikisini de kapsar.
+create function public.guard_members_competition() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_can_compete(new.event_id, new.user_id);
+  return new;
+end $$;
+create trigger members_zz_competition_guard before insert on public.project_members
+for each row execute function public.guard_members_competition();
+
+create function public.guard_votes_tenancy() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable(new.event_id);
+  if public.event_role(new.event_id, new.user_id) = 'juri' then
+    raise exception 'YARISAMAZ: Jüri kendi etkinliğinde oy veremez.' using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+create trigger votes_tenancy_guard before insert on public.votes
+for each row execute function public.guard_votes_tenancy();
+
+-- Katılımcı RPC'leri: eski gövde _v0 adıyla saklanır, aynı imzalı sarmalayıcı önce askıyı denetler.
+-- İmza ve dönüş tipi değişmez; uygulama kodu aynı adları çağırmaya devam eder.
+alter function public.register_project(uuid, uuid, text, text, text, text, text, bigint, text, text, text, text, text) rename to register_project_v0;
+create function public.register_project(
+  p_event uuid, p_user uuid, p_login text, p_avatar text, p_name text, p_team text,
+  p_summary text, p_repo_id bigint, p_repo_name text, p_repo_url text, p_branch text,
+  p_demo text default null, p_sha text default null
+) returns public.projects language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable(p_event);
+  return public.register_project_v0(p_event, p_user, p_login, p_avatar, p_name, p_team, p_summary,
+    p_repo_id, p_repo_name, p_repo_url, p_branch, p_demo, p_sha);
+end $$;
+
+alter function public.join_project_by_code(text, uuid, text, text) rename to join_project_by_code_v0;
+create function public.join_project_by_code(p_code text, p_user uuid, p_login text, p_avatar text)
+returns uuid language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable((select event_id from projects where invite_code = p_code));
+  return public.join_project_by_code_v0(p_code, p_user, p_login, p_avatar);
+end $$;
+
+alter function public.leave_project(uuid, uuid) rename to leave_project_v0;
+create function public.leave_project(p_event uuid, p_user uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable(p_event);
+  return public.leave_project_v0(p_event, p_user);
+end $$;
+
+alter function public.update_project(uuid, uuid, text, text, text, text, text, boolean) rename to update_project_v0;
+create function public.update_project(p_project uuid, p_actor uuid, p_name text, p_team text, p_summary text,
+  p_demo text, p_logo text default null, p_replace_logo boolean default false)
+returns text language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable((select event_id from projects where id = p_project));
+  return public.update_project_v0(p_project, p_actor, p_name, p_team, p_summary, p_demo, p_logo, p_replace_logo);
+end $$;
+
+alter function public.withdraw_project(uuid, uuid, text) rename to withdraw_project_v0;
+create function public.withdraw_project(p_project uuid, p_actor uuid, p_confirmation text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable((select event_id from projects where id = p_project));
+  return public.withdraw_project_v0(p_project, p_actor, p_confirmation);
+end $$;
+
+alter function public.remove_member(uuid, uuid, uuid) rename to remove_member_v0;
+create function public.remove_member(p_project uuid, p_actor uuid, p_target uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable((select event_id from projects where id = p_project));
+  return public.remove_member_v0(p_project, p_actor, p_target);
+end $$;
+
+alter function public.renew_invite(uuid, uuid, text) rename to renew_invite_v0;
+create function public.renew_invite(p_project uuid, p_actor uuid, p_code text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable((select event_id from projects where id = p_project));
+  perform public.renew_invite_v0(p_project, p_actor, p_code);
+end $$;
+
+alter function public.transfer_project_owner(uuid, uuid, uuid) rename to transfer_project_owner_v0;
+create function public.transfer_project_owner(p_project uuid, p_owner uuid, p_target uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable((select event_id from projects where id = p_project));
+  perform public.transfer_project_owner_v0(p_project, p_owner, p_target);
+end $$;
+
+-- Yalnızca yeni kuyruk girişi durur; kuyruktaki işler claim/complete ile işlenmeye devam eder.
+alter function public.enqueue_submission(uuid, uuid, text, text, text) rename to enqueue_submission_v0;
+create function public.enqueue_submission(p_project uuid, p_user uuid, p_sha text, p_branch text, p_repo_name text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable((select event_id from projects where id = p_project));
+  return public.enqueue_submission_v0(p_project, p_user, p_sha, p_branch, p_repo_name);
+end $$;
+
+alter function public.claim_mystery(uuid, uuid, text) rename to claim_mystery_v0;
+create function public.claim_mystery(p_event uuid, p_user uuid, p_login text)
+returns timestamptz language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable(p_event);
+  return public.claim_mystery_v0(p_event, p_user, p_login);
+end $$;
+
+revoke execute on function
+  public.register_project_v0(uuid, uuid, text, text, text, text, text, bigint, text, text, text, text, text),
+  public.join_project_by_code_v0(text, uuid, text, text), public.leave_project_v0(uuid, uuid),
+  public.update_project_v0(uuid, uuid, text, text, text, text, text, boolean),
+  public.withdraw_project_v0(uuid, uuid, text), public.remove_member_v0(uuid, uuid, uuid),
+  public.renew_invite_v0(uuid, uuid, text), public.transfer_project_owner_v0(uuid, uuid, uuid),
+  public.enqueue_submission_v0(uuid, uuid, text, text, text), public.claim_mystery_v0(uuid, uuid, text)
+  from public, anon, authenticated, service_role;
+revoke execute on function
+  public.assert_participant_writable(uuid), public.assert_can_compete(uuid, uuid),
+  public.guard_members_competition(), public.guard_votes_tenancy(),
+  public.register_project(uuid, uuid, text, text, text, text, text, bigint, text, text, text, text, text),
+  public.join_project_by_code(text, uuid, text, text), public.leave_project(uuid, uuid),
+  public.update_project(uuid, uuid, text, text, text, text, text, boolean),
+  public.withdraw_project(uuid, uuid, text), public.remove_member(uuid, uuid, uuid),
+  public.renew_invite(uuid, uuid, text), public.transfer_project_owner(uuid, uuid, uuid),
+  public.enqueue_submission(uuid, uuid, text, text, text), public.claim_mystery(uuid, uuid, text)
+  from public, anon, authenticated;
+grant execute on function
+  public.assert_participant_writable(uuid), public.assert_can_compete(uuid, uuid),
+  public.register_project(uuid, uuid, text, text, text, text, text, bigint, text, text, text, text, text),
+  public.join_project_by_code(text, uuid, text, text), public.leave_project(uuid, uuid),
+  public.update_project(uuid, uuid, text, text, text, text, text, boolean),
+  public.withdraw_project(uuid, uuid, text), public.remove_member(uuid, uuid, uuid),
+  public.renew_invite(uuid, uuid, text), public.transfer_project_owner(uuid, uuid, uuid),
+  public.enqueue_submission(uuid, uuid, text, text, text), public.claim_mystery(uuid, uuid, text)
+  to service_role;
+
 commit;

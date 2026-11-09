@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getEvent, getViewer } from "@/lib/data";
+import { getEventBySlug, getViewer } from "@/lib/data";
 import { certificateAccess } from "@/lib/certificate-access";
 import { formatDay } from "@/lib/format";
 import { certificateName, dateRangeTR, fileSlug } from "@/lib/certificate";
@@ -22,11 +22,16 @@ const label = { fontSize: 22, fontWeight: 600, letterSpacing: "0.14em", color: I
 const noStore = { "Cache-Control": "private, no-store" };
 
 /**
- * Katılım belgesi: formdaki ad ve soyad, güncel etkinliğin adı ve tarihleriyle PNG olarak basılır.
+ * Katılım belgesi: formdaki ad ve soyad, etkinliğin adı, düzenleyen topluluğu ve tarihleriyle PNG olarak basılır.
  * Yalnızca GitHub ile giriş yapmış etkinlik katılımcısı (ya da yönetici) alabilir; yanıt paylaşılan önbelleğe girmez.
  */
 export async function GET(request: Request) {
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  // Belge sayfası etkinliği `?e=<slug>` ile verir; eksik ya da bilinmeyen slug 404.
+  const slug = new URL(request.url).searchParams.get("e")?.trim();
+  const event = slug ? await getEventBySlug(slug) : null;
+  if (!event) return new Response("Etkinlik bulunamadı.", { status: 404, headers: noStore });
+  const viewer = await getViewer();
+  const org = event.communityName ?? "mühür";
   const access = await certificateAccess(viewer, event);
   if (access === "giris") return new Response("Katılım belgesi için GitHub ile giriş yap.", { status: 401, headers: noStore });
   if (access === "katilimci-degil") return new Response("Katılım belgesini yalnızca etkinliğe katılan ekip üyeleri alabilir.", { status: 403, headers: noStore });
@@ -51,7 +56,7 @@ export async function GET(request: Request) {
               <div style={{ display: "flex", fontSize: 64, fontWeight: 600, letterSpacing: "-0.035em", lineHeight: 1 }}>
                 mühür<span style={{ color: INDIGO }}>.</span>
               </div>
-              <div style={{ display: "flex", borderLeft: `2px solid ${RULE}`, paddingLeft: 22, fontSize: 30, color: INK_3, lineHeight: 1 }}>DEÜ CS&amp;AI</div>
+              <div style={{ display: "flex", borderLeft: `2px solid ${RULE}`, paddingLeft: 22, fontSize: 30, color: INK_3, lineHeight: 1 }}>{org}</div>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`data:image/svg+xml;base64,${mascot.toString("base64")}`} width={200} height={163} alt="" />
@@ -62,7 +67,7 @@ export async function GET(request: Request) {
             <div style={{ fontSize: nameSize, fontWeight: 600, letterSpacing: "-0.035em", lineHeight: 1.04, marginTop: 30 }}>{name}</div>
             <div style={{ width: 160, height: 4, background: INK, marginTop: 40 }} />
             <div style={{ fontSize: 36, lineHeight: 1.45, color: INK_2, marginTop: 40, maxWidth: 1240 }}>
-              {`${dateRangeTR(event.startsAt, event.sealTime)} tarihlerinde DEÜ CS&AI tarafından düzenlenen ${event.title} etkinliğine katılmış, süre dolana kadar üretmiştir.`}
+              {`${dateRangeTR(event.startsAt, event.sealTime)} tarihlerinde ${org} tarafından düzenlenen ${event.title} etkinliğine katılmış, süre dolana kadar üretmiştir.`}
             </div>
           </div>
 
@@ -78,7 +83,7 @@ export async function GET(request: Request) {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={label}>DÜZENLEYEN</div>
-                <div style={{ fontSize: 32, fontWeight: 600 }}>DEÜ CS&amp;AI</div>
+                <div style={{ fontSize: 32, fontWeight: 600 }}>{org}</div>
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 14 }}>

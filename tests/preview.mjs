@@ -75,9 +75,9 @@ function records(table) {
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
       is_current: true, community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
-      community: { name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+      community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     communities: [
-      { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false },
+      { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", city: "İzmir", status: "onaylandi", telegram_enabled: false },
       { id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", status: "onaylandi", telegram_enabled: false },
     ],
     platform_roles: ["yabanci", "sahip", "juri"].includes(role) ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],

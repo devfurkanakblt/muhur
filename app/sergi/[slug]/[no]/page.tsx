@@ -11,6 +11,7 @@ import { ExhibitAwards } from "@/components/winners";
 import { getEventBySlug, getExhibit, getMembers, getOwnProject, getViewer, getVotes, logoUrl } from "@/lib/data";
 import { exhibitNo, formatDateTime } from "@/lib/format";
 import { getWinners } from "@/lib/winners";
+import { eventPath } from "@/lib/event-routes";
 
 async function load(slug: string, no: string) {
   const event = await getEventBySlug(slug);
@@ -38,14 +39,14 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
   const { event, exhibit } = data;
   const [viewer, members] = await Promise.all([getViewer(), getMembers(exhibit.id)]);
   const [votes, own] = await Promise.all([getVotes(event, viewer?.id ?? null), viewer ? getOwnProject(viewer.id, event.id) : null]);
-  const back = event.isCurrent ? "/#vitrin" : `/sergi/${event.slug}`;
+  const back = event.isCurrent ? `${eventPath(event.slug)}#vitrin` : `/sergi/${event.slug}`;
   const awards = (await getWinners(event)).filter((w) => w.projectId === exhibit.id);
 
   return (
     <>
       <SiteHeader viewer={viewer} />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1240px] flex-1 px-5 pt-10 pb-28 sm:px-8 md:pt-16">
-        {event.isCurrent && <LiveState />}
+        {event.isCurrent && <LiveState slug={event.slug} />}
         <Link href={back} className="mb-10 inline-flex items-center gap-1.5 text-[0.9375rem] text-ink-2 hover:text-ink">
           <ArrowLeftIcon size={16} /> {event.isCurrent ? "Vitrine dön" : event.title}
         </Link>

@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/brand";
 import { StageQr } from "@/components/stage-qr";
 import { exhibitNo, formatDateTime } from "@/lib/format";
 import type { StageData } from "@/lib/stage";
+import { eventPath } from "@/lib/event-routes";
 import { useServerNow } from "@/components/live-state";
 import { synchronizedTime } from "@/lib/live-policy";
 import { useWinnerShow, WinnerStage } from "./winner-show";
@@ -21,7 +22,7 @@ function ago(iso: string, now: number) {
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Projektör için tam ekran sahne: dev geri sayım, push akışı, kilit anında kapanan cam. */
-export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[] }) {
+export function Stage({ slug, initial, qrRows }: { slug: string; initial: StageData; qrRows: string[] }) {
   const [data, setData] = useState(initial);
   const now = useServerNow(data.now);
   const [offline, setOffline] = useState(false);
@@ -38,7 +39,7 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
       busy = true;
       const sent = performance.now();
       try {
-        const res = await fetch("/api/sahne", { cache: "no-store", signal: controller.signal });
+        const res = await fetch(`/api/sahne?e=${encodeURIComponent(slug)}`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) throw new Error("Stage unavailable");
         const next: StageData = await res.json();
         if (alive) {
@@ -57,7 +58,7 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
       clearInterval(id);
       window.removeEventListener("online", pull);
     };
-  }, [data.deadline, data.locked, fast]);
+  }, [slug, data.deadline, data.locked, fast]);
 
   const start = new Date(data.startsAt).getTime();
   const deadline = new Date(data.deadline).getTime();
@@ -77,7 +78,7 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
           <p className="mt-2 text-[clamp(1rem,1.4vw,1.5rem)] text-ink-2">{data.title}</p>
         </div>
         <div className="flex items-start gap-6 text-right">
-          <Link href="/" className="inline-flex min-h-11 items-center text-[1rem] text-ink-2 underline">Vitrini aç</Link>
+          <Link href={eventPath(slug)} className="inline-flex min-h-11 items-center text-[1rem] text-ink-2 underline">Vitrini aç</Link>
           <p className="text-[clamp(1rem,1.4vw,1.5rem)] text-ink-2">
             <span className="tnum font-semibold text-ink">{data.count}</span> eser
             {locked && (
@@ -138,7 +139,7 @@ export function Stage({ initial, qrRows }: { initial: StageData; qrRows: string[
           </p>
         </div>
         {/* Masadan okunabilsin diye büyük: ekran yüksekliğinin ~%60'ı. Ortada dürbünlü maskot. */}
-        <a href={data.siteUrl} className="flex flex-col items-center gap-[1.6vh]">
+        <a href={data.vitrinUrl} className="flex flex-col items-center gap-[1.6vh]">
           <StageQr rows={qrRows} className="h-[min(36vw,60vh)] w-[min(36vw,60vh)]" />
           <span className="text-[clamp(1.125rem,1.8vw,2rem)] font-semibold tracking-[-0.01em]">
             {data.voting === "acik" ? "Tara, oy ver" : "Tara, vitrini gez"}

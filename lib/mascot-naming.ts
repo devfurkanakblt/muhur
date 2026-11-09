@@ -1,9 +1,14 @@
 import "server-only";
-import { getEvent, getViewer } from "@/lib/data";
+import { getViewer, type EventState } from "@/lib/data";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
 import { createAdminClient } from "@/lib/supabase/server";
 import { selectAll } from "@/lib/paginate";
+
+/** Maskot isim oylaması yalnızca maskotun sahibi topluluğun etkinliklerinde açılır. */
+export function hasMascotNaming(event: Pick<EventState, "communitySlug">): boolean {
+  return event.communitySlug === "deu-csai";
+}
 
 export type NamingPhase = "oneriler" | "oylama" | "sonuc";
 export type NamingProposal = {
@@ -33,8 +38,8 @@ type ProposalRow = {
   visible: boolean;
 };
 
-export async function getMascotNamingSnapshot(): Promise<NamingSnapshot> {
-  const [event, viewer] = await Promise.all([getEvent(), getViewer()]);
+export async function getMascotNamingSnapshot(event: EventState): Promise<NamingSnapshot> {
+  const viewer = await getViewer();
   const canManage = can(await getEventAccess(viewer, event), "yonet");
   const db = createAdminClient();
   const [{ data: round, error: roundError }, rows, { data: tally, error: tallyError }, membership, vote] = await Promise.all([

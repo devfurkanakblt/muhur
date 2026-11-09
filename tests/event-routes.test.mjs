@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { eventPath, isListed, splitHomeEvents, pickLegacyEvent } from "@/lib/event-routes";
+import { eventPath, eventUrl, isListed, splitHomeEvents, pickLegacyEvent } from "@/lib/event-routes";
 
 const NOW = Date.parse("2026-11-09T12:00:00Z");
 const HOUR = 3_600_000;
@@ -96,4 +96,9 @@ test("pickLegacyEvent açık varsa onu seçer", () => {
 
 test("pickLegacyEvent askıdakini hiç seçmez", () => {
   assert.equal(pickLegacyEvent([ev("s", { suspended: true })], NOW), null);
+});
+
+test("eventUrl site adresine etkinlik yolunu ekler", () => {
+  assert.equal(eventUrl("https://muhur.example/", "2026-guz"), "https://muhur.example/e/2026-guz");
+  assert.equal(eventUrl("https://muhur.example", "2026-guz", "panel"), "https://muhur.example/e/2026-guz/panel");
 });

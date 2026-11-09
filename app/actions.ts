@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { exhibitPath, getAdminSession, getEventById, getOwnProject, getViewer, type EventState, type Viewer } from "@/lib/data";
-import { eventPath } from "@/lib/event-routes";
+import { eventPath, eventUrl } from "@/lib/event-routes";
 import { requireEventAction } from "@/lib/access";
 import { ASKIDA_MESAJI, YARISAMAZ_MESAJI, YETKISIZ_MESAJI, type EventAction } from "@/lib/authz";
 import { canClaimRepo, getHeadSha, getRepo, getRepoById, GithubError, parseRepoInput } from "@/lib/github";
@@ -191,7 +191,7 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
   });
 
   revalidateEvent(event);
-  redirect("/panel?kayit=tamam");
+  redirect(`${eventPath(event.slug, "panel")}?kayit=tamam`);
 }
 
 export async function updateProject(_: FormState, formData: FormData): Promise<FormState> {
@@ -241,9 +241,9 @@ export async function withdrawProject(_: FormState, formData: FormData): Promise
   if (!viewer) redirect("/");
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
-  if (event.locked) redirect("/panel");
+  if (event.locked) redirect(eventPath(event.slug, "panel"));
   const project = await getOwnProject(viewer.id, event.id);
-  if (!project || project.members.find((m) => m.user_id === viewer.id)?.role !== "owner") redirect("/panel");
+  if (!project || project.members.find((m) => m.user_id === viewer.id)?.role !== "owner") redirect(eventPath(event.slug, "panel"));
   if (String(formData.get("confirmation") ?? "").trim() !== project.name) {
     return { error: "Geri çekmek için proje adını aynen yaz." };
   }
@@ -261,7 +261,7 @@ export async function withdrawProject(_: FormState, formData: FormData): Promise
   }
   await removeLogo(removed.logo);
   revalidateEvent(event);
-  redirect("/panel");
+  redirect(eventPath(event.slug, "panel"));
 }
 
 /** Panelden "Yeniden kontrol et": eserin repo sağlığını hemen yeniler. */
@@ -369,7 +369,7 @@ export async function joinProject(_: FormState, formData: FormData): Promise<For
   });
   if (error) return { error: dbError(error.message) };
   revalidatePath(eventPath(event.slug, "panel"));
-  redirect("/panel?katildin=1");
+  redirect(`${eventPath(event.slug, "panel")}?katildin=1`);
 }
 
 export async function leaveProject(eventId: string) {
@@ -377,11 +377,11 @@ export async function leaveProject(eventId: string) {
   if (!viewer) redirect("/");
   const event = await loadEvent(eventId);
   if (typeof event === "string") redirect("/");
-  if (event.locked) redirect("/panel");
+  if (event.locked) redirect(eventPath(event.slug, "panel"));
   const { error } = await createAdminClient().rpc("leave_project", { p_event: event.id, p_user: viewer.id });
   if (error) console.error("[ekip] ayrılma:", error.message);
   revalidatePath(eventPath(event.slug, "panel"));
-  redirect("/panel");
+  redirect(eventPath(event.slug, "panel"));
 }
 
 /** Görüntüleyenin bu etkinlikte kurucusu olduğu proje; teslim kapalıysa yok sayılır. */
@@ -634,7 +634,7 @@ export async function setVoting(formData: FormData): Promise<{ error: string } |
   else {
     after(() =>
       state === "acik"
-        ? notifyEvent(event, [`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(env.siteUrl, "Oy ver")], "oy")
+        ? notifyEvent(event, [`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(eventUrl(env.siteUrl, event.slug), "Oy ver")], "oy")
         : announcePeoplesChoice(event),
     );
   }
@@ -753,6 +753,7 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
   await auditAdmin(admin, "retry_job", { projectId: job.project_id, after: { job: id } });
   after(() => processProjectJobs(job.project_id));
   revalidatePath(eventPath(owner!.slug, "yonetim"));
+  revalidatePath("/yonetim");
   return { ok: true };
 }
 

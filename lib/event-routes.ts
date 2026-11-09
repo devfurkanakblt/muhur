@@ -8,6 +8,11 @@ export function eventPath(slug: string, surface?: EventSurface): string {
   return surface ? `${base}/${surface}` : base;
 }
 
+/** Telegram gibi site dışına giden bağlantılar için tam adres; site adresinin sonundaki eğik çizgi atılır. */
+export function eventUrl(siteUrl: string, slug: string, surface?: EventSurface): string {
+  return `${siteUrl.replace(/\/+$/, "")}${eventPath(slug, surface)}`;
+}
+
 export type ListedEvent = {
   id: string;
   slug: string;

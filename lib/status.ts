@@ -1,12 +1,13 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
-import { getEvent, getOwnProject, getViewer } from "@/lib/data";
+import { getOwnProject, getViewer, type EventState } from "@/lib/data";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
 import { createHash } from "node:crypto";
 
-export async function getLiveStatus() {
-  const [event, viewer] = await Promise.all([getEvent(), getViewer()]);
+/** Etkinliğin canlı durum özeti; sürüm değişince açık sayfalar yenilenir. */
+export async function getLiveStatus(event: EventState) {
+  const viewer = await getViewer();
   const db = createAdminClient();
   const [project, { data: updates, error }, { count: awardCount }, { count: voteCount }] = await Promise.all([
     viewer ? getOwnProject(viewer.id, event.id) : null,

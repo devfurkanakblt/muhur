@@ -4,6 +4,7 @@ import { useActionState, useCallback, useEffect, useState } from "react";
 import { Mascot } from "@/components/mascot/mascot";
 import { SignInButton } from "@/components/buttons";
 import type { NamingProposal, NamingSnapshot } from "@/lib/mascot-naming";
+import { eventPath } from "@/lib/event-routes";
 import {
   editMascotName, setMascotPhase, setMascotProposalVisibility, suggestMascotName, voteMascotName,
   type NamingActionState,
@@ -128,17 +129,17 @@ function ProposalCard({ eventId, item, snapshot, reload }: {
   </li>;
 }
 
-export function NamingExperience({ eventId, initial }: { eventId: string; initial: NamingSnapshot }) {
+export function NamingExperience({ eventId, slug, initial }: { eventId: string; slug: string; initial: NamingSnapshot }) {
   const [snapshot, setSnapshot] = useState(initial);
   const [offline, setOffline] = useState(false);
   const reload = useCallback(async () => {
     try {
-      const response = await fetch("/api/maskot/durum", { cache: "no-store" });
+      const response = await fetch(`/api/maskot/durum?e=${encodeURIComponent(slug)}`, { cache: "no-store" });
       if (!response.ok) throw new Error("Durum alınamadı");
       setSnapshot(await response.json() as NamingSnapshot);
       setOffline(false);
     } catch { setOffline(true); }
-  }, []);
+  }, [slug]);
 
   useEffect(() => {
     const timer = setInterval(() => { if (!document.hidden) void reload(); }, 5000);
@@ -171,11 +172,11 @@ export function NamingExperience({ eventId, initial }: { eventId: string; initia
             : <p className="naming-status">Önerin kaydedildi</p>
             : snapshot.canSuggest ? <SuggestionForm eventId={eventId} reload={reload} />
               : snapshot.isSignedIn ? <p className="naming-status">Yalnızca kayıtlı yarışmacılar isim önerebilir</p>
-                : <><p className="naming-status">İsim önermek için yarışmacı olmalısın</p><SignInButton next="/maskot" label="GitHub ile giriş yap" /></>}
+                : <><p className="naming-status">İsim önermek için yarışmacı olmalısın</p><SignInButton next={eventPath(slug, "maskot")} label="GitHub ile giriş yap" /></>}
         </> : snapshot.phase === "oylama" ? <>
           {snapshot.votedProposalId ? <p className="naming-status">Oyun kaydedildi</p>
             : snapshot.isSignedIn ? <p className="naming-status">Kendi önerin dışında bir isim seç</p>
-              : <SignInButton next="/maskot" label="GitHub ile oy ver" />}
+              : <SignInButton next={eventPath(slug, "maskot")} label="GitHub ile oy ver" />}
         </> : <>
           {winners.length > 0 ? <p className="naming-winner">{winners.map(item => item.name).join(", ")}</p>
             : <p className="naming-status">Oy kullanılmadı</p>}

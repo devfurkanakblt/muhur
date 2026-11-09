@@ -13,30 +13,34 @@ import { SealRecord } from "@/components/seal-record";
 import { DeliveryPanel } from "@/components/delivery-panel";
 import { TransferOwnerForm, WithdrawProjectForm } from "@/components/team-actions";
 import { LiveState } from "@/components/live-state";
-import { MysteryEgg } from "@/components/mystery-egg";
 import { getLiveStatus } from "@/lib/status";
 import { ActionForm, ActionButton } from "@/components/action-form";
-import { exhibitPath, getEvent, getExhibits, getOwnProject, getViewer, getTimeline, getProjectJobs, logoUrl, projectHasMystery, type EventState, type OwnProject, type Viewer } from "@/lib/data";
+import { exhibitPath, getExhibits, requireEventBySlug, getOwnProject, getViewer, getTimeline, getProjectJobs, logoUrl, projectHasMystery, type EventState, type OwnProject, type Viewer } from "@/lib/data";
 import { HEALTH_TEXT } from "@/lib/health";
 import { getRepo, GithubError, listPublicRepos, parseRepoInput } from "@/lib/github";
 import { exhibitNo, formatDateTime, relativeTR } from "@/lib/format";
 import { env } from "@/lib/env";
-import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
+import { eventPath } from "@/lib/event-routes";
+import { askiBilgisi, gorunenEtkinlik, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
 import { leaveProject, recheckHealth, removeMember, renewInvite, signOut } from "@/app/actions";
 
 export const maxDuration = 300;
 
-export const metadata = { title: "Projem" };
+export async function generateMetadata({ params }: PageProps<"/e/[slug]/panel">) {
+  const { slug } = await params;
+  const event = await requireEventBySlug(slug);
+  return { title: { absolute: `${event.title} · mühür` } };
+}
 
-async function Shell({ viewer, eventId, notice, children }: { viewer: Viewer | null; eventId: string; notice?: React.ReactNode; children: React.ReactNode }) {
-  const status = await getLiveStatus();
+async function Shell({ viewer, event, notice, children }: { viewer: Viewer | null; event: EventState; notice?: React.ReactNode; children: React.ReactNode }) {
+  const status = await getLiveStatus(event);
   return (
     <>
-      <SiteHeader viewer={viewer} />
+      <SiteHeader viewer={viewer} event={event} />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1240px] flex-1 px-5 pt-10 pb-28 sm:px-8 md:pt-16">
-        <LiveState version={status.version} fast />
+        <LiveState slug={event.slug} version={status.version} fast />
         {notice}
         {children}
         {viewer && (
@@ -45,7 +49,6 @@ async function Shell({ viewer, eventId, notice, children }: { viewer: Viewer | n
           </ActionForm>
         )}
       </main>
-      <MysteryEgg eventId={eventId} />
     </>
   );
 }
@@ -60,19 +63,20 @@ function PageTitle({ children, note, level = 1 }: { children: React.ReactNode; n
   );
 }
 
-export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
+export default async function PanelPage({ params: route, searchParams }: PageProps<"/e/[slug]/panel">) {
   await connection();
-  const params = await searchParams;
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  const [{ slug }, params] = await Promise.all([route, searchParams]);
+  const [viewer, loaded] = await Promise.all([getViewer(), requireEventBySlug(slug)]);
   // Askıdayken katılımcı yazmaları DB'de reddedilir; burada uyarı görünür ve gönderim düğmeleri pasifleşir.
-  const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
+  const showReason = loaded.suspended && can(await getEventAccess(viewer, loaded), "incele");
+  const event = gorunenEtkinlik(loaded, showReason);
   const notice = event.suspended
     ? <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} className="mb-10" />
     : null;
 
   if (!viewer) {
     return (
-      <Shell viewer={null} eventId={event.id} notice={notice}>
+      <Shell viewer={null} event={event} notice={notice}>
         <div className="flex flex-col items-start gap-8">
           <Mascot mood="normal" title="" className="w-40" />
           <PageTitle note="Projeni içe aktarmak için GitHub hesabını bağla. Yalnızca public repolarını görürüz.">
@@ -82,7 +86,7 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
             <p className="text-ink-2">Teslim süresi doldu; yeni proje kabul edilmiyor.</p>
           ) : (
             <div>
-              <SignInButton />
+              <SignInButton next={eventPath(event.slug, "panel")} />
               <p className="mt-4 max-w-[52ch] text-[0.8125rem] text-ink-3">
                 Giriş yaptığında GitHub kullanıcı adın ve profil bilgilerin{" "}
                 <Link href="/gizlilik" className="underline underline-offset-2 hover:text-ink">
@@ -102,7 +106,7 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
 
   if (event.locked) {
     return (
-      <Shell viewer={viewer} eventId={event.id} notice={notice}>
+      <Shell viewer={viewer} event={event} notice={notice}>
         <div className="flex flex-col items-start gap-8">
           <Mascot mood="uykulu" title="" className="w-44" />
           <PageTitle note={`Teslimler ${formatDateTime(event.sealTime)} itibarıyla mühürlendi. Yeni proje kabul edilmiyor.`}>
@@ -131,8 +135,8 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
     }
     if (!repoError) {
       return (
-        <Shell viewer={viewer} eventId={event.id} notice={notice}>
-          <Link href="/panel" className="mb-8 inline-flex items-center gap-1.5 text-[0.9375rem] text-ink-2 hover:text-ink">
+        <Shell viewer={viewer} event={event} notice={notice}>
+          <Link href={eventPath(event.slug, "panel")} className="mb-8 inline-flex items-center gap-1.5 text-[0.9375rem] text-ink-2 hover:text-ink">
             <ArrowLeftIcon size={16} /> Başka repo seç
           </Link>
           <PageTitle note={<>Seçilen repo: <span className="font-mono text-[0.9375rem] text-ink">{repoName}</span></>}>
@@ -148,13 +152,13 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
         </Shell>
       );
     }
-    return <Picker viewer={viewer} eventId={event.id} note={deadlineNote} notice={notice} error={repoError} />;
+    return <Picker viewer={viewer} event={event} note={deadlineNote} notice={notice} error={repoError} />;
   }
 
-  return <Picker viewer={viewer} eventId={event.id} note={deadlineNote} notice={notice} />;
+  return <Picker viewer={viewer} event={event} note={deadlineNote} notice={notice} />;
 }
 
-async function Picker({ viewer, eventId, note, notice, error }: { viewer: Viewer; eventId: string; note: string; notice: React.ReactNode; error?: string }) {
+async function Picker({ viewer, event, note, notice, error }: { viewer: Viewer; event: EventState; note: string; notice: React.ReactNode; error?: string }) {
   const token = (await cookies()).get("gh_token")?.value;
   // GitHub'a ulaşılamazsa liste boş sayılmaz: ekip hatayı görür, bağlantı yapıştırarak devam edebilir (A09).
   const [{ repos, listFailed }, exhibits] = await Promise.all([
@@ -165,14 +169,15 @@ async function Picker({ viewer, eventId, note, notice, error }: { viewer: Viewer
         return { repos: [], listFailed: true };
       },
     ),
-    getExhibits(eventId),
+    getExhibits(event.id),
   ]);
   const taken = new Set(exhibits.map((e) => e.repo_full_name.toLowerCase()));
   return (
-    <Shell viewer={viewer} eventId={eventId} notice={notice}>
+    <Shell viewer={viewer} event={event} notice={notice}>
       <div className="grid gap-12 md:grid-cols-[1fr_minmax(0,640px)]">
         <PageTitle note={note}>Hangi repo vitrine çıkacak?</PageTitle>
         <RepoPicker
+          slug={event.slug}
           error={error}
           listFailed={listFailed}
           repos={repos.map((r) => ({
@@ -213,7 +218,7 @@ async function ProjectView({
   const mysteryMd = `[![gizem avcısı](${badgeUrl}/gizem)](${env.siteUrl}${href})`;
 
   return (
-    <Shell viewer={viewer} eventId={event.id} notice={notice}>
+    <Shell viewer={viewer} event={event} notice={notice}>
       <h1 className="mb-3 text-[clamp(1.75rem,3.4vw,2.5rem)] font-semibold tracking-[-0.02em]">Projem<span className="text-indigo">.</span></h1>
       <p className="mb-6 break-words text-ink-2">{project.name} · {project.team_name}</p>
       <nav aria-label="Proje bölümleri" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-[0.9375rem]">

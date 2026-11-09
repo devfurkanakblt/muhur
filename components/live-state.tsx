@@ -26,8 +26,8 @@ export function useServerNow(serverNow: number) {
   return now;
 }
 
-/** Değişen durumlar yenilenir; kullanıcının yazdığı form asla arka planda ezilmez. */
-export function LiveState({ version, fast = false }: { version?: string; fast?: boolean }) {
+/** Değişen durumlar yenilenir; kullanıcının yazdığı form asla arka planda ezilmez. Durum etkinliğin slug'ıyla yoklanır. */
+export function LiveState({ slug, version, fast = false }: { slug: string; version?: string; fast?: boolean }) {
   const router = useRouter();
   const deferred = useRef(false);
   const [changed, setChanged] = useState(false);
@@ -71,7 +71,7 @@ export function LiveState({ version, fast = false }: { version?: string; fast?: 
       busy = true;
       const sent = performance.now();
       try {
-        const response = await fetch("/api/durum", { cache: "no-store", signal: controller.signal });
+        const response = await fetch(`/api/durum?e=${encodeURIComponent(slug)}`, { cache: "no-store", signal: controller.signal });
         if (!response.ok) throw new Error("Status unavailable");
         const result = await response.json();
         if (typeof result.version !== "string" || !Number.isFinite(result.now)) throw new Error("Invalid status");
@@ -115,7 +115,7 @@ export function LiveState({ version, fast = false }: { version?: string; fast?: 
       window.removeEventListener(FORM_PENDING, markPending);
       window.removeEventListener(REFRESH_REQUESTED, refresh);
     };
-  }, [version, fast, router]);
+  }, [slug, version, fast, router]);
   return <>
     {offline && <p role="status" className="mb-6 border-y border-rule py-3 text-[0.9375rem] text-ink-2">
       Güncel durum alınamadı. Gösterilen bilgiler eski olabilir; bağlantı dönünce tekrar denenecek. Formunu düzenlemeye devam edebilirsin.

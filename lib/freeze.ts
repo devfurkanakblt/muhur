@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { downloadZipball, getHeadSha, getRepoById, GithubError, hasCommitsBefore } from "@/lib/github";
 import { notifyEvent, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
+import { eventUrl } from "@/lib/event-routes";
 import { drainDeliveryJobs, enqueueSeals, processDeliveryJobs } from "@/lib/delivery";
 import { sendReminders } from "@/lib/reminders";
 import { hashArchive, validateArchive } from "@/lib/delivery-core";
@@ -76,7 +77,7 @@ async function announceLock(ev: EventRow, at: Date) {
   const db = createAdminClient();
   const { count } = await db.from("projects").select("id", { count: "exact", head: true }).eq("event_id", ev.id);
   const time = new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(at);
-  await notifyEvent(ev, [`🔒 ${tg.b("Mühür vuruldu.")}`, `${tg.text(ev.title)} · ${count ?? 0} eser · ${time}`, tg.link(env.siteUrl, "Vitrine bak")], "muhur");
+  await notifyEvent(ev, [`🔒 ${tg.b("Mühür vuruldu.")}`, `${tg.text(ev.title)} · ${count ?? 0} eser · ${time}`, tg.link(eventUrl(env.siteUrl, ev.slug), "Vitrine bak")], "muhur");
 }
 
 // ---------------------------------------------------------------------------- arşiv

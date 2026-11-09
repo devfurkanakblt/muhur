@@ -8,6 +8,7 @@ import { formatDay } from "@/lib/format";
 import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
+import { eventPath } from "@/lib/event-routes";
 
 export async function generateMetadata({ params }: PageProps<"/sergi/[slug]">) {
   const { slug } = await params;
@@ -21,7 +22,7 @@ export default async function PastExhibition({ params }: PageProps<"/sergi/[slug
   const { slug } = await params;
   const event = await getEventBySlug(slug);
   if (!event) notFound();
-  if (event.isCurrent) redirect("/");
+  if (event.isCurrent) redirect(eventPath(event.slug));
   const viewer = await getViewer();
   const { items, voting, winners } = await buildVitrine(event, viewer);
   const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");

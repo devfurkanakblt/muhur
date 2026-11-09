@@ -1,6 +1,7 @@
 /**
- * Kimlik ve yetki kararları. Yalnızca sunucunun yönettiği GitHub kimlik kaydına (`identities`) dayanır.
- * `user_metadata` kullanıcı tarafından güncellenebildiği için yetki kaynağı olarak KULLANILMAZ (denetim A01/A02).
+ * Kimlik kararları. Yalnızca sunucunun yönettiği GitHub kimlik kaydına (`identities`) dayanır.
+ * `user_metadata` kullanıcı tarafından güncellenebildiği için kimlik ya da yetki kaynağı olarak KULLANILMAZ (denetim A01/A02).
+ * Yetki rolleri (head admin, topluluk rolü, jüri) veritabanından okunur; bkz. lib/data.ts ve lib/access.ts.
  */
 
 type Identity = {
@@ -30,11 +31,6 @@ export function githubIdentity(user: AuthUserLike): GithubIdentity | null {
     login: str(data.user_name) ?? str(data.preferred_username) ?? "",
     avatarUrl: str(data.avatar_url),
   };
-}
-
-/** Yönetici: sabit sayısal GitHub kimliği yönetici listesinde olan GitHub hesabı. Kullanıcı adı yetki vermez. */
-export function isAdminIdentity(identity: GithubIdentity | null, adminGithubIds: string[]) {
-  return !!identity && adminGithubIds.includes(identity.githubId);
 }
 
 /** Geri alınamaz yönetim işlemleri için oturumun en fazla bu kadar önce açılmış olması gerekir (denetim A21). */

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ADMIN_REAUTH_MS, claimDecision, githubIdentity, isAdminIdentity, isFreshSignIn, sessionSignedInAt } from "../lib/identity.ts";
+import { ADMIN_REAUTH_MS, claimDecision, githubIdentity, isFreshSignIn, sessionSignedInAt } from "../lib/identity.ts";
 
 const ADMIN_ID = "1001";
 const githubUser = (overrides = {}) => ({
@@ -10,23 +10,22 @@ const githubUser = (overrides = {}) => ({
   ...overrides,
 });
 
-test("A01: user_metadata kullanıcı adını yönetici adıyla değiştirmek yetki vermez", () => {
-  const user = githubUser({ user_metadata: { user_name: "devfurkanakblt", preferred_username: "devfurkanakblt", provider_id: ADMIN_ID } });
+test("A01: githubIdentity user_metadata'yı yok sayar; kimlik yalnızca GitHub identity kaydından okunur", () => {
+  const user = githubUser({ user_metadata: { user_name: "devfurkanakblt", preferred_username: "devfurkanakblt", provider_id: ADMIN_ID, avatar_url: "https://saldirgan/x.png" } });
   const identity = githubIdentity(user);
   assert.equal(identity.githubId, "2002");
   assert.equal(identity.login, "saldirgan");
-  assert.equal(isAdminIdentity(identity, [ADMIN_ID]), false);
+  assert.equal(identity.avatarUrl, "https://x/a.png");
 });
 
-test("A01: yönetici yalnızca sabit GitHub kimliğiyle tanınır; kullanıcı adı değişse de yetki sürer", () => {
-  const admin = githubUser({ identities: [{ provider: "github", identity_data: { provider_id: ADMIN_ID, user_name: "yeni-ad" } }] });
-  assert.equal(isAdminIdentity(githubIdentity(admin), [ADMIN_ID]), true);
+test("A01: kullanıcı adı değişse de kimlik sabit GitHub kimliğidir", () => {
+  const renamed = githubUser({ identities: [{ provider: "github", identity_data: { provider_id: ADMIN_ID, user_name: "yeni-ad" } }] });
+  assert.deepEqual(githubIdentity(renamed), { githubId: ADMIN_ID, login: "yeni-ad", avatarUrl: null });
 });
 
-test("A01: GitHub kimliği olmayan (başka sağlayıcı) hesap kimlik ve yetki almaz", () => {
+test("A01: GitHub kimliği olmayan (başka sağlayıcı) hesap kimlik almaz", () => {
   const emailUser = { id: "uuid-2", user_metadata: { user_name: "devfurkanakblt" }, identities: [{ provider: "email", id: "uuid-2", identity_data: { sub: ADMIN_ID } }] };
   assert.equal(githubIdentity(emailUser), null);
-  assert.equal(isAdminIdentity(githubIdentity(emailUser), [ADMIN_ID]), false);
   assert.equal(githubIdentity({ id: "uuid-3", identities: [] }), null);
 });
 

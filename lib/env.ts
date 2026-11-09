@@ -20,13 +20,6 @@ export const env = {
   get cronSecret() {
     return required("CRON_SECRET", process.env.CRON_SECRET);
   },
-  /** Yönetici GitHub hesaplarının sabit sayısal kimlikleri (kullanıcı adı değişebilir, kimlik değişmez). */
-  get adminGithubIds() {
-    return (process.env.ADMIN_GITHUB_IDS ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter((s) => /^\d+$/.test(s));
-  },
   get telegramBotToken() {
     return process.env.TELEGRAM_BOT_TOKEN || undefined;
   },

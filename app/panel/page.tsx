@@ -13,6 +13,7 @@ import { SealRecord } from "@/components/seal-record";
 import { DeliveryPanel } from "@/components/delivery-panel";
 import { TransferOwnerForm, WithdrawProjectForm } from "@/components/team-actions";
 import { LiveState } from "@/components/live-state";
+import { MysteryEgg } from "@/components/mystery-egg";
 import { getLiveStatus } from "@/lib/status";
 import { ActionForm, ActionButton } from "@/components/action-form";
 import { exhibitPath, getEvent, getExhibits, getOwnProject, getViewer, getTimeline, getProjectJobs, logoUrl, projectHasMystery, type EventState, type OwnProject, type Viewer } from "@/lib/data";
@@ -29,7 +30,7 @@ export const maxDuration = 300;
 
 export const metadata = { title: "Projem" };
 
-async function Shell({ viewer, notice, children }: { viewer: Viewer | null; notice?: React.ReactNode; children: React.ReactNode }) {
+async function Shell({ viewer, eventId, notice, children }: { viewer: Viewer | null; eventId: string; notice?: React.ReactNode; children: React.ReactNode }) {
   const status = await getLiveStatus();
   return (
     <>
@@ -44,6 +45,7 @@ async function Shell({ viewer, notice, children }: { viewer: Viewer | null; noti
           </ActionForm>
         )}
       </main>
+      <MysteryEgg eventId={eventId} />
     </>
   );
 }
@@ -70,7 +72,7 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
 
   if (!viewer) {
     return (
-      <Shell viewer={null} notice={notice}>
+      <Shell viewer={null} eventId={event.id} notice={notice}>
         <div className="flex flex-col items-start gap-8">
           <Mascot mood="normal" title="" className="w-40" />
           <PageTitle note="Projeni içe aktarmak için GitHub hesabını bağla. Yalnızca public repolarını görürüz.">
@@ -100,7 +102,7 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
 
   if (event.locked) {
     return (
-      <Shell viewer={viewer} notice={notice}>
+      <Shell viewer={viewer} eventId={event.id} notice={notice}>
         <div className="flex flex-col items-start gap-8">
           <Mascot mood="uykulu" title="" className="w-44" />
           <PageTitle note={`Teslimler ${formatDateTime(event.sealTime)} itibarıyla mühürlendi. Yeni proje kabul edilmiyor.`}>
@@ -129,7 +131,7 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
     }
     if (!repoError) {
       return (
-        <Shell viewer={viewer} notice={notice}>
+        <Shell viewer={viewer} eventId={event.id} notice={notice}>
           <Link href="/panel" className="mb-8 inline-flex items-center gap-1.5 text-[0.9375rem] text-ink-2 hover:text-ink">
             <ArrowLeftIcon size={16} /> Başka repo seç
           </Link>
@@ -137,6 +139,7 @@ export default async function PanelPage({ searchParams }: PageProps<"/panel">) {
             Eserini tanıt.
           </PageTitle>
           <ProjectForm
+            eventId={event.id}
             mode="create"
             suspended={event.suspended}
             repo={repoName}
@@ -166,7 +169,7 @@ async function Picker({ viewer, eventId, note, notice, error }: { viewer: Viewer
   ]);
   const taken = new Set(exhibits.map((e) => e.repo_full_name.toLowerCase()));
   return (
-    <Shell viewer={viewer} notice={notice}>
+    <Shell viewer={viewer} eventId={eventId} notice={notice}>
       <div className="grid gap-12 md:grid-cols-[1fr_minmax(0,640px)]">
         <PageTitle note={note}>Hangi repo vitrine çıkacak?</PageTitle>
         <RepoPicker
@@ -210,7 +213,7 @@ async function ProjectView({
   const mysteryMd = `[![gizem avcısı](${badgeUrl}/gizem)](${env.siteUrl}${href})`;
 
   return (
-    <Shell viewer={viewer} notice={notice}>
+    <Shell viewer={viewer} eventId={event.id} notice={notice}>
       <h1 className="mb-3 text-[clamp(1.75rem,3.4vw,2.5rem)] font-semibold tracking-[-0.02em]">Projem<span className="text-indigo">.</span></h1>
       <p className="mb-6 break-words text-ink-2">{project.name} · {project.team_name}</p>
       <nav aria-label="Proje bölümleri" className="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-[0.9375rem]">
@@ -245,7 +248,7 @@ async function ProjectView({
                   <span className="text-ink-2">{HEALTH_TEXT[i]?.fix}</span>
                 </p>
               ))}
-              <ActionForm action={recheckHealth}>
+              <ActionForm action={recheckHealth.bind(null, event.id)}>
                 <ActionButton pending="Kontrol ediliyor…" className="press text-[0.875rem] text-ink-2 underline underline-offset-4 hover:text-ink">Düzelttim, yeniden kontrol et</ActionButton>
               </ActionForm>
             </div>
@@ -288,6 +291,7 @@ async function ProjectView({
                 {project.name}
               </PageTitle>
               <ProjectForm
+                eventId={event.id}
                 mode="edit"
                 suspended={event.suspended}
                 initial={{ name: project.name, team: project.team_name, summary: project.summary, logo, demo: project.demo_url }}
@@ -310,6 +314,7 @@ async function ProjectView({
                   </a>
                   {!locked && isOwner && m.role === "member" && (
                     <ActionForm action={removeMember}>
+                      <input type="hidden" name="event" value={event.id} />
                       <input type="hidden" name="userId" value={m.user_id} />
                       <ActionButton pending="Çıkarılıyor…" className="press text-[0.875rem] text-ink-3 hover:text-danger">Çıkar</ActionButton>
                     </ActionForm>
@@ -322,19 +327,19 @@ async function ProjectView({
               <div className="mt-8 max-w-[560px]">
                 <p className="mb-3 text-[0.9375rem] text-ink-2">Ekip arkadaşların bu bağlantıyla katılır.</p>
                 <CopyField value={inviteUrl} label="Davet bağlantısı" />
-                <ActionForm action={renewInvite} className="mt-3">
+                <ActionForm action={renewInvite.bind(null, event.id)} className="mt-3">
                   <ActionButton pending="Yenileniyor…" className="press text-[0.875rem] text-ink-3 hover:text-ink">Bağlantıyı yenile</ActionButton>
                 </ActionForm>
               </div>
             )}
-            {!locked && isOwner && project.members.length > 1 && <TransferOwnerForm members={project.members} />}
+            {!locked && isOwner && project.members.length > 1 && <TransferOwnerForm eventId={event.id} members={project.members} />}
 
             {!locked && (
               <div className="mt-14">
                 {isOwner ? (
-                  <WithdrawProjectForm name={project.name} />
+                  <WithdrawProjectForm eventId={event.id} name={project.name} />
                 ) : (
-                  <ActionForm action={leaveProject}>
+                  <ActionForm action={leaveProject.bind(null, event.id)}>
                     <ActionButton pending="Ayrılınıyor…" className="press text-[0.875rem] text-ink-3 hover:text-danger">Ekipten ayrıl</ActionButton>
                   </ActionForm>
                 )}

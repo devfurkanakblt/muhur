@@ -30,7 +30,7 @@ export default async function InvitePage({ params }: PageProps<"/davet/[code]">)
   if (event.locked) body = <p className="text-ink-2">Teslim süresi doldu; ekipler artık değiştirilemez.</p>;
   else if (!viewer) body = <SignInButton next={`/davet/${code}`} label="GitHub ile giriş yap ve katıl" />;
   else if (own) body = <p className="text-ink-2">Zaten bir projenin ekibindesin. Bu ekibe katılmak için önce oradan ayrılmalısın.</p>;
-  else body = <JoinForm code={code} suspended={event.suspended} />;
+  else body = <JoinForm eventId={event.id} code={code} suspended={event.suspended} />;
   const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
 
   return (

@@ -11,6 +11,7 @@ import { buildVitrine } from "@/lib/vitrine";
 import { ensureLocked, freezeAll } from "@/lib/freeze";
 import { getLiveStatus } from "@/lib/status";
 import { LiveState } from "@/components/live-state";
+import { MysteryEgg } from "@/components/mystery-egg";
 import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
@@ -77,8 +78,9 @@ export default async function Home() {
           action={action}
           celebrate={announced}
         />
-        <Vitrine key={`vitrin-${event.id}`} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} />
+        <Vitrine key={`vitrin-${event.id}`} eventId={event.id} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} />
       </main>
+      <MysteryEgg eventId={event.id} />
     </>
   );
 }

@@ -13,10 +13,16 @@ function useActionRefresh(state: NamingActionState, reload: () => void) {
   useEffect(() => { if (state?.ok) reload(); }, [state, reload]);
 }
 
-function SuggestionForm({ reload }: { reload: () => void }) {
+/** Eylemin etkinliği; sunucu yetkiyi ve kuralları bu etkinlik için denetler. */
+function EventField({ id }: { id: string }) {
+  return <input type="hidden" name="event" value={id} />;
+}
+
+function SuggestionForm({ eventId, reload }: { eventId: string; reload: () => void }) {
   const [state, action, pending] = useActionState(suggestMascotName, undefined);
   useActionRefresh(state, reload);
   return <form action={action} className="naming-form" aria-busy={pending}>
+    <EventField id={eventId} />
     <label htmlFor="mascot-name">İsim önerin</label>
     <div className="naming-input-row">
       <input id="mascot-name" name="name" type="text" minLength={2} maxLength={24}
@@ -27,12 +33,13 @@ function SuggestionForm({ reload }: { reload: () => void }) {
   </form>;
 }
 
-function EditForm({ name, onSaved, onCancel }: { name: string; onSaved: () => void; onCancel: () => void }) {
+function EditForm({ eventId, name, onSaved, onCancel }: { eventId: string; name: string; onSaved: () => void; onCancel: () => void }) {
   const [state, action, pending] = useActionState(editMascotName, undefined);
   // Kontrollü alan: React formu eylemden sonra sıfırlar, hata alınca yazılan isim kaybolmasın.
   const [value, setValue] = useState(name);
   useActionRefresh(state, onSaved);
   return <form action={action} className="naming-form" aria-busy={pending}>
+    <EventField id={eventId} />
     <label htmlFor="mascot-name-edit">İsmi düzenle</label>
     <div className="naming-input-row">
       <input id="mascot-name-edit" name="name" type="text" minLength={2} maxLength={24}
@@ -45,23 +52,24 @@ function EditForm({ name, onSaved, onCancel }: { name: string; onSaved: () => vo
   </form>;
 }
 
-function OwnProposal({ name, reload }: { name: string; reload: () => Promise<void> }) {
+function OwnProposal({ eventId, name, reload }: { eventId: string; name: string; reload: () => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const onSaved = useCallback(async () => {
     await reload();
     setEditing(false);
   }, [reload]);
-  if (editing) return <EditForm name={name} onSaved={onSaved} onCancel={() => setEditing(false)} />;
+  if (editing) return <EditForm eventId={eventId} name={name} onSaved={onSaved} onCancel={() => setEditing(false)} />;
   return <>
     <p className="naming-status">Önerin: <strong className="naming-own-name">{name}</strong></p>
     <button type="button" className="naming-text-button" onClick={() => setEditing(true)}>İsmi düzenle</button>
   </>;
 }
 
-function VoteForm({ proposalId, name, reload }: { proposalId: string; name: string; reload: () => void }) {
+function VoteForm({ eventId, proposalId, name, reload }: { eventId: string; proposalId: string; name: string; reload: () => void }) {
   const [state, action, pending] = useActionState(voteMascotName, undefined);
   useActionRefresh(state, reload);
   return <form action={action} className="naming-vote-form" aria-busy={pending}>
+    <EventField id={eventId} />
     <input type="hidden" name="proposalId" value={proposalId} />
     <button type="submit" disabled={pending} aria-label={`${name} için oy ver`}>
       {pending ? "Gönderiliyor…" : "Oy ver"}
@@ -70,7 +78,8 @@ function VoteForm({ proposalId, name, reload }: { proposalId: string; name: stri
   </form>;
 }
 
-function AdminForm({ action, fields, label, reload, subtle = false, confirmMessage }: {
+function AdminForm({ eventId, action, fields, label, reload, subtle = false, confirmMessage }: {
+  eventId: string;
   action: (_previous: NamingActionState, form: FormData) => Promise<NamingActionState>;
   fields: Record<string, string>;
   label: string;
@@ -83,13 +92,15 @@ function AdminForm({ action, fields, label, reload, subtle = false, confirmMessa
   return <form action={dispatch} className={subtle ? "naming-admin-subtle" : "naming-admin-form"}
     aria-busy={pending}
     onSubmit={event => { if (confirmMessage && !window.confirm(confirmMessage)) event.preventDefault(); }}>
+    <EventField id={eventId} />
     {Object.entries(fields).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
     <button type="submit" disabled={pending}>{pending ? "Kaydediliyor…" : label}</button>
     {state?.error && <p role="alert" className="naming-error">{state.error}</p>}
   </form>;
 }
 
-function ProposalCard({ item, snapshot, reload }: {
+function ProposalCard({ eventId, item, snapshot, reload }: {
+  eventId: string;
   item: NamingProposal;
   snapshot: NamingSnapshot;
   reload: () => void;
@@ -107,8 +118,9 @@ function ProposalCard({ item, snapshot, reload }: {
       </div>
       {snapshot.phase !== "oneriler" && item.visible && <strong className="naming-vote-count" aria-label={`${item.votes} oy`}>{item.votes}</strong>}
     </div>
-    {canVote && <VoteForm proposalId={item.id} name={item.name} reload={reload} />}
+    {canVote && <VoteForm eventId={eventId} proposalId={item.id} name={item.name} reload={reload} />}
     {snapshot.canManage && snapshot.phase === "oneriler" && <AdminForm
+      eventId={eventId}
       action={setMascotProposalVisibility}
       fields={{ proposalId: item.id, visible: String(!item.visible) }}
       label={item.visible ? "Yayından kaldır" : "Yeniden göster"}
@@ -116,7 +128,7 @@ function ProposalCard({ item, snapshot, reload }: {
   </li>;
 }
 
-export function NamingExperience({ initial }: { initial: NamingSnapshot }) {
+export function NamingExperience({ eventId, initial }: { eventId: string; initial: NamingSnapshot }) {
   const [snapshot, setSnapshot] = useState(initial);
   const [offline, setOffline] = useState(false);
   const reload = useCallback(async () => {
@@ -155,9 +167,9 @@ export function NamingExperience({ initial }: { initial: NamingSnapshot }) {
       <section className="naming-action" aria-label="Katılım">
         {snapshot.phase === "oneriler" ? <>
           {snapshot.ownProposal ? snapshot.ownProposal.visible
-            ? <OwnProposal name={snapshot.ownProposal.name} reload={reload} />
+            ? <OwnProposal eventId={eventId} name={snapshot.ownProposal.name} reload={reload} />
             : <p className="naming-status">Önerin kaydedildi</p>
-            : snapshot.canSuggest ? <SuggestionForm reload={reload} />
+            : snapshot.canSuggest ? <SuggestionForm eventId={eventId} reload={reload} />
               : snapshot.isSignedIn ? <p className="naming-status">Yalnızca kayıtlı yarışmacılar isim önerebilir</p>
                 : <><p className="naming-status">İsim önermek için yarışmacı olmalısın</p><SignInButton next="/maskot" label="GitHub ile giriş yap" /></>}
         </> : snapshot.phase === "oylama" ? <>
@@ -172,12 +184,12 @@ export function NamingExperience({ initial }: { initial: NamingSnapshot }) {
 
       <section className="naming-list-area" aria-labelledby="naming-list-title">
         <h2 id="naming-list-title">İsimler</h2>
-        {list.length ? <ul className="naming-list">{list.map(item => <ProposalCard key={item.id} item={item} snapshot={snapshot} reload={reload} />)}</ul>
+        {list.length ? <ul className="naming-list">{list.map(item => <ProposalCard key={item.id} eventId={eventId} item={item} snapshot={snapshot} reload={reload} />)}</ul>
           : <p className="naming-empty">Henüz öneri yok</p>}
       </section>
 
       {snapshot.canManage && snapshot.phase !== "sonuc" && <section className="naming-admin-panel" aria-label="Organizatör işlemleri">
-        <AdminForm action={setMascotPhase} fields={{ phase: snapshot.phase === "oneriler" ? "oylama" : "sonuc" }}
+        <AdminForm eventId={eventId} action={setMascotPhase} fields={{ phase: snapshot.phase === "oneriler" ? "oylama" : "sonuc" }}
           label={snapshot.phase === "oneriler" ? "Oylamayı aç" : "Sonucu açıkla"} reload={reload}
           confirmMessage={snapshot.phase === "oneriler"
             ? "Öneri aşaması kapanacak ve isimler artık değiştirilemeyecek. Halk oylamasını açmak istiyor musun?"

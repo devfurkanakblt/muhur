@@ -13,7 +13,7 @@ const field =
   "w-full rounded-[2px] border border-rule-strong bg-plinth px-3 text-[1rem] placeholder:text-ink-3 focus:border-ink focus:outline-none aria-[invalid=true]:border-danger";
 
 /** `suspended`: etkinlik platform tarafından askıda; DB yazmayı zaten reddeder, düğme pasif kalır. */
-export function ProjectForm({ mode, repo, initial, suspended = false }: { mode: "create" | "edit"; repo?: string; initial: Initial; suspended?: boolean }) {
+export function ProjectForm({ eventId, mode, repo, initial, suspended = false }: { eventId: string; mode: "create" | "edit"; repo?: string; initial: Initial; suspended?: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(mode === "create" ? createProject : updateProject, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   const [summary, setSummary] = useState(initial.summary);
@@ -79,6 +79,7 @@ export function ProjectForm({ mode, repo, initial, suspended = false }: { mode: 
         setLogoError(null);
       }}
       className="grid gap-x-12 gap-y-8 md:grid-cols-[200px_1fr]">
+      <input type="hidden" name="event" value={eventId} />
       {repo && <input type="hidden" name="repo" value={repo} />}
 
       <div>

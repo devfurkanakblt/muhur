@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SaveEgg } from "@/components/save-egg";
-import { MysteryEgg } from "@/components/mystery-egg";
 import { KeyEggs } from "@/components/key-eggs";
 import { env } from "@/lib/env";
 import "./globals.css";
@@ -43,7 +42,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <SiteFooter />
         <SaveEgg />
-        <MysteryEgg />
         <KeyEggs />
       </body>
     </html>

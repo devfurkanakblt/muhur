@@ -37,7 +37,7 @@ export default async function PastExhibition({ params }: PageProps<"/sergi/[slug
           </p>
           <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} className="mt-8" />
         </div>
-        <Vitrine items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} live={false} />
+        <Vitrine eventId={event.id} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} live={false} />
       </main>
     </>
   );

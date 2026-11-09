@@ -76,7 +76,7 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
               </a>
               {exhibit.demo_url && <a href={exhibit.demo_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[0.875rem] text-indigo hover:underline">Demoyu aç <ArrowUpRightIcon size={14} /></a>}
               {event.voting === "acik" && (
-                <VoteButton projectId={exhibit.id} voted={votes.myVote === exhibit.id} own={own?.id === exhibit.id} signedIn={!!viewer} />
+                <VoteButton eventId={event.id} projectId={exhibit.id} voted={votes.myVote === exhibit.id} own={own?.id === exhibit.id} signedIn={!!viewer} />
               )}
               {votes.tallies && (
                 <p className="text-ink-2">

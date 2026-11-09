@@ -192,21 +192,21 @@ export default async function AdminPage() {
         ) : manage && (
           <>
             <Section title="Zamanlama" note="Başlangıçtan önce açılmış repolar ve önceden tarihli commit'ler aşağıdaki tabloda işaretlenir.">
-              <ScheduleForm starts={toLocalInput(event.startsAt)} deadline={toLocalInput(event.deadline)} />
+              <ScheduleForm eventId={event.id} starts={toLocalInput(event.startsAt)} deadline={toLocalInput(event.deadline)} />
             </Section>
             <Section title="Mührü şimdi vur" note={`"Süre doldu" anonsunda kullan. Yeni proje ve değişiklik kabulü anında durur. Geri alınamaz.`}>
-              <HoldToLock />
+              <HoldToLock eventId={event.id} />
             </Section>
           </>
         )}
 
         {manage && <>
           <Section title="Yemek ve etkinlik saati" note="Duyurduğun an ana sayfadaki maskot ve selam değişir; bitirene kadar sürer. Telegram grubuna da gider.">
-            <ActivityForm current={event.activity} since={event.activity ? formatTime(event.activity.at).slice(0, 5) : null} />
+            <ActivityForm eventId={event.id} current={event.activity} since={event.activity ? formatTime(event.activity.at).slice(0, 5) : null} />
           </Section>
 
           <Section title="Duyuru" note="Telegram grubuna da gider.">
-            <AnnouncementForm current={event.announcement} />
+            <AnnouncementForm eventId={event.id} current={event.announcement} />
           </Section>
         </>}
 
@@ -220,6 +220,7 @@ export default async function AdminPage() {
         >
           {manage && event.voting === "kapali" && (
             <ActionForm action={setVoting}>
+              <input type="hidden" name="event" value={event.id} />
               <input type="hidden" name="state" value="acik" />
               <ActionButton pending="Oylama açılıyor…"
                 disabled={!event.locked}
@@ -231,6 +232,7 @@ export default async function AdminPage() {
           )}
           {manage && event.voting === "acik" && (
             <ActionForm action={setVoting}>
+              <input type="hidden" name="event" value={event.id} />
               <input type="hidden" name="state" value="sonuclandi" />
               <ActionButton pending="Sonuçlar açıklanıyor…" className="press inline-flex h-12 items-center rounded-[2px] bg-ink px-5 text-[0.9375rem] font-medium text-wall">
                 Oylamayı kapat ve sonuçları açıkla
@@ -248,7 +250,7 @@ export default async function AdminPage() {
             </p>
             {(runs ?? []).filter(r => r.error).map(r => <p key={r.id} className="mt-2 break-all text-sm text-danger">{formatTime(r.started_at)} · {r.error}</p>)}
           </>}
-          <ActionForm action={runWorker} className="mt-4"><ActionButton pending="Kuyruk işleniyor…" className="press underline underline-offset-4">Kuyruğu şimdi işle</ActionButton></ActionForm>
+          <ActionForm action={runWorker.bind(null, event.id)} className="mt-4"><ActionButton pending="Kuyruk işleniyor…" className="press underline underline-offset-4">Kuyruğu şimdi işle</ActionButton></ActionForm>
           <div className="mt-5 max-h-[400px] overflow-auto">
             <ul className="divide-y divide-rule">{(jobs ?? []).map(j => {
               const p = j.project as unknown as { name: string; team_name: string } | null;
@@ -284,17 +286,17 @@ export default async function AdminPage() {
         </Section>
 
         {event.locked && <Section title="Jüri ödülleri" note="Ödülü açıkladığın anda vitrinin başında ve eser sayfasında yayımlanır, sahnede tören gösterisiyle açılır ve Telegram kanalına duyurulur. Sırayla açıklamak için ödülleri tören anında tek tek ekle.">
-          {manage && <AwardForm projects={rows.filter(r => !!r.archive_path)} />}
+          {manage && <AwardForm eventId={event.id} projects={rows.filter(r => !!r.archive_path)} />}
           <ul className="mt-6 divide-y divide-rule">{awards.map(a => <li key={a.id} className="py-3">
             <p className="font-medium">{a.title} · {rows.find(r => r.id === a.project_id)?.name}</p><p className="text-sm text-ink-2">{a.reason}</p>
-            {manage && <ActionForm action={removeAward}><input type="hidden" name="id" value={a.id} /><ActionButton pending="Kaldırılıyor…" className="mt-2 text-sm text-ink-3 underline">Ödülü kaldır</ActionButton></ActionForm>}
+            {manage && <ActionForm action={removeAward}><input type="hidden" name="event" value={event.id} /><input type="hidden" name="id" value={a.id} /><ActionButton pending="Kaldırılıyor…" className="mt-2 text-sm text-ink-3 underline">Ödülü kaldır</ActionButton></ActionForm>}
           </li>)}</ul>
           {!manage && awards.length === 0 && <p className="text-ink-2">Henüz ödül açıklanmadı.</p>}
         </Section>}
 
-        {manage && event.locked && (
-          <Section title="Yeni etkinlik" note="Bu sergi geçmiş sergilere taşınır; ana sayfa yeni etkinliği gösterir.">
-            <NewEventForm />
+        {manage && event.communityId && (
+          <Section title="Yeni etkinlik" note={`${event.communityName ?? "Topluluğun"} için yeni bir etkinlik açar. Bu etkinlik olduğu gibi sürer; birden çok etkinlik aynı anda açık olabilir.`}>
+            <NewEventForm communityId={event.communityId} />
           </Section>
         )}
 

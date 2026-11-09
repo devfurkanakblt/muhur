@@ -21,6 +21,7 @@ export type VitrineVoting = {
 };
 
 export function Vitrine({
+  eventId,
   items,
   locked: lockedInitially,
   sealTime,
@@ -28,6 +29,8 @@ export function Vitrine({
   winners,
   live = true,
 }: {
+  /** Oylar bu etkinliğe yazılır. */
+  eventId: string;
   items: VitrineItem[];
   locked: boolean;
   sealTime: string;
@@ -54,7 +57,7 @@ export function Vitrine({
 
   const extra = (item: VitrineItem) => {
     if (voting.state === "acik")
-      return <VoteButton projectId={item.id} voted={voting.myVote === item.id} own={item.own} signedIn={voting.signedIn} />;
+      return <VoteButton eventId={eventId} projectId={item.id} voted={voting.myVote === item.id} own={item.own} signedIn={voting.signedIn} />;
     if (tallies)
       return (
         <p className="text-[0.8125rem] text-ink-2">

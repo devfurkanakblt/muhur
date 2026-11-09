@@ -5,11 +5,12 @@ import { joinProject, type FormState } from "@/app/actions";
 import { SubmitButton } from "@/components/buttons";
 import { useProtectedForm } from "@/components/protected-form";
 
-export function JoinForm({ code, suspended = false }: { code: string; suspended?: boolean }) {
+export function JoinForm({ eventId, code, suspended = false }: { eventId: string; code: string; suspended?: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(joinProject, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   return (
     <form {...protectedForm} data-live-safe className="flex flex-wrap items-center gap-4">
+      <input type="hidden" name="event" value={eventId} />
       <input type="hidden" name="code" value={code} />
       <SubmitButton busy={pending} disabled={suspended} pending="Katılınıyor…">Ekibe katıl</SubmitButton>
       {state?.error && (

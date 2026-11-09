@@ -10,7 +10,7 @@ const HOLD_MS = 2000;
  * Geri alınamaz işlem: 2 sn basılı tutulur. Basış yavaş ve kasıtlı (linear),
  * bırakış hızlı (200ms ease-out) geri sarar.
  */
-export function HoldToLock() {
+export function HoldToLock({ eventId }: { eventId: string }) {
   const [holding, setHolding] = useState(false);
   const [pending, startTransition] = useTransition();
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,7 +29,7 @@ export function HoldToLock() {
       inFlight.current = true;
       startTransition(async () => {
         try {
-          const result = await lockNowAction();
+          const result = await lockNowAction(eventId);
           if (result?.error) setError(result.error);
         }
         catch { setError("Mühür işlemi doğrulanamadı. Güncel durumu kontrol edip yeniden dene."); }

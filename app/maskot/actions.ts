@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getEvent, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { getEventById, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { eventPath } from "@/lib/event-routes";
 import { getEventAccess } from "@/lib/access";
 import { ASKIDA_MESAJI, can, denialMessage } from "@/lib/authz";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -22,6 +23,17 @@ function message(error: { message: string }): string {
   return "İşlem tamamlanamadı. Biraz sonra tekrar dene.";
 }
 
+/**
+ * Etkinlik formdaki gizli `event` alanından gelir ve değiştirilebilir: yönetim eylemleri yetkiyi bu etkinlik için
+ * yeniden denetler, katılımcı yazmaları yalnızca bu etkinliğin kayıtlarına ve DB kurallarına (aşama, askı) bağlıdır.
+ */
+async function loadEvent(form: FormData): Promise<EventState | null> {
+  const id = String(form.get("event") ?? "").trim();
+  return UUID.test(id) ? getEventById(id) : null;
+}
+
+const EVENT_MISSING = "Etkinlik bulunamadı.";
+
 /** Aşama ve görünürlük doğrudan tabloya yazılır; RPC denetimi olmadığından yetki burada etkinlik kapsamında denetlenir. */
 async function manageError(viewer: Viewer | null, event: EventState): Promise<string | null> {
   const access = await getEventAccess(viewer, event);
@@ -38,7 +50,8 @@ function readName(form: FormData): string | null {
 }
 
 export async function suggestMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  if (!event) return { error: EVENT_MISSING };
   if (!viewer) return { error: "Öneri için GitHub ile giriş yap." };
   const name = readName(form);
   if (!name) return { error: NAME_RULE };
@@ -51,12 +64,13 @@ export async function suggestMascotName(_previous: NamingActionState, form: Form
     event_id: event.id, author_id: viewer.id, author_login: viewer.login, name,
   });
   if (error) return { error: message(error) };
-  revalidatePath("/maskot");
+  revalidatePath(eventPath(event.slug, "maskot"));
   return { ok: true };
 }
 
 export async function editMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  if (!event) return { error: EVENT_MISSING };
   if (!viewer) return { error: "Düzenlemek için GitHub ile giriş yap." };
   const name = readName(form);
   if (!name) return { error: NAME_RULE };
@@ -64,12 +78,13 @@ export async function editMascotName(_previous: NamingActionState, form: FormDat
     .update({ name }).eq("event_id", event.id).eq("author_id", viewer.id).select("id").maybeSingle();
   if (error) return { error: message(error) };
   if (!data) return { error: "Düzenlenecek önerin bulunamadı." };
-  revalidatePath("/maskot");
+  revalidatePath(eventPath(event.slug, "maskot"));
   return { ok: true };
 }
 
 export async function voteMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  if (!event) return { error: EVENT_MISSING };
   if (!viewer) return { error: "Oy vermek için GitHub ile giriş yap." };
   const proposalId = String(form.get("proposalId") ?? "");
   if (!UUID.test(proposalId)) return { error: "Geçersiz isim seçimi." };
@@ -77,12 +92,13 @@ export async function voteMascotName(_previous: NamingActionState, form: FormDat
     event_id: event.id, voter_id: viewer.id, voter_login: viewer.login, proposal_id: proposalId,
   });
   if (error) return { error: message(error) };
-  revalidatePath("/maskot");
+  revalidatePath(eventPath(event.slug, "maskot"));
   return { ok: true };
 }
 
 export async function setMascotPhase(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  if (!event) return { error: EVENT_MISSING };
   const denied = await manageError(viewer, event);
   if (denied) return { error: denied };
   const next = String(form.get("phase") ?? "") as NamingPhase;
@@ -99,12 +115,13 @@ export async function setMascotPhase(_previous: NamingActionState, form: FormDat
     .eq("event_id", event.id).eq("phase", previous).select("event_id").maybeSingle();
   if (error) return { error: message(error) };
   if (!data) return { error: "Aşama zaten değişmiş. Sayfayı yenile." };
-  revalidatePath("/maskot");
+  revalidatePath(eventPath(event.slug, "maskot"));
   return { ok: true };
 }
 
 export async function setMascotProposalVisibility(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
+  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  if (!event) return { error: EVENT_MISSING };
   const denied = await manageError(viewer, event);
   if (denied) return { error: denied };
   const proposalId = String(form.get("proposalId") ?? "");
@@ -114,6 +131,6 @@ export async function setMascotProposalVisibility(_previous: NamingActionState, 
     .update({ visible }).eq("id", proposalId).eq("event_id", event.id).select("id").maybeSingle();
   if (error) return { error: message(error) };
   if (!data) return { error: "Öneri bulunamadı." };
-  revalidatePath("/maskot");
+  revalidatePath(eventPath(event.slug, "maskot"));
   return { ok: true };
 }

@@ -6,7 +6,8 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { exhibitPath, getAdminSession, getEvent, getEventById, getOwnProject, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { exhibitPath, getAdminSession, getEventById, getOwnProject, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { eventPath } from "@/lib/event-routes";
 import { requireEventAction } from "@/lib/access";
 import { ASKIDA_MESAJI, YARISAMAZ_MESAJI, YETKISIZ_MESAJI, type EventAction } from "@/lib/authz";
 import { canClaimRepo, getHeadSha, getRepo, getRepoById, GithubError, parseRepoInput } from "@/lib/github";
@@ -38,6 +39,29 @@ function dbError(message: string) {
   if (message.includes("project_members_event_id_user_id_key")) return "Zaten bir projenin ekibindesin.";
   if (message.includes("events_slug_key")) return "Bu adres kısaltması başka bir etkinlikte kullanılıyor.";
   return "Bir şeyler ters gitti. Lütfen tekrar dene.";
+}
+
+// ---------------------------------------------------------------------------- etkinlik
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EVENT_MISSING = "Etkinlik bulunamadı.";
+
+/**
+ * Eylemin etkinliği formdan (gizli `event` alanı) ya da bağlı argümandan gelir; "güncel etkinlik" yoktur.
+ * Bu değer istemciden gelir ve değiştirilebilir: yalnızca hangi etkinlik üzerinde çalışılacağını söyler.
+ * Yönetim eylemleri yetkiyi bu etkinlik için `authorize` ile yeniden hesaplar; katılımcı eylemleri
+ * bu etkinliğin kilit, son teslim ve askı kurallarıyla çalışır (asıl zorlama DB'dedir).
+ */
+async function loadEvent(raw: unknown): Promise<EventState | string> {
+  const id = typeof raw === "string" ? raw.trim() : "";
+  if (!UUID_RE.test(id)) return EVENT_MISSING;
+  return (await getEventById(id)) ?? EVENT_MISSING;
+}
+
+/** Etkinliğin bütün yüzeyleri ve etkinlik listesini gösteren ana sayfa tazelenir. */
+function revalidateEvent(event: EventState) {
+  revalidatePath(eventPath(event.slug), "layout");
+  revalidatePath("/");
 }
 
 // ---------------------------------------------------------------------------- auth
@@ -106,7 +130,8 @@ async function removeLogo(path: string | null | undefined) {
 export async function createProject(_: FormState, formData: FormData): Promise<FormState> {
   const viewer = await getViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   if (event.locked) return { error: LOCKED_MSG };
   if (await getOwnProject(viewer.id, event.id)) return { error: "Zaten bir projenin ekibindesin." };
 
@@ -165,14 +190,15 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
     ], "vitrinde");
   });
 
-  revalidatePath("/");
+  revalidateEvent(event);
   redirect("/panel?kayit=tamam");
 }
 
 export async function updateProject(_: FormState, formData: FormData): Promise<FormState> {
   const viewer = await getViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   if (event.locked) return { error: LOCKED_MSG };
   const project = await getOwnProject(viewer.id, event.id);
   if (!project) return { error: "Kayıtlı bir projen yok." };
@@ -206,14 +232,15 @@ export async function updateProject(_: FormState, formData: FormData): Promise<F
   }
   await removeLogo(replaced as string | null);
 
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
   return { ok: true };
 }
 
 export async function withdrawProject(_: FormState, formData: FormData): Promise<FormState> {
   const viewer = await getViewer();
   if (!viewer) redirect("/");
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   if (event.locked) redirect("/panel");
   const project = await getOwnProject(viewer.id, event.id);
   if (!project || project.members.find((m) => m.user_id === viewer.id)?.role !== "owner") redirect("/panel");
@@ -233,27 +260,29 @@ export async function withdrawProject(_: FormState, formData: FormData): Promise
     if (archiveError) console.error("[geri çekme] arşivler silinemedi:", archiveError.message);
   }
   await removeLogo(removed.logo);
-  revalidatePath("/");
+  revalidateEvent(event);
   redirect("/panel");
 }
 
 /** Panelden "Yeniden kontrol et": eserin repo sağlığını hemen yeniler. */
-export async function recheckHealth() {
+export async function recheckHealth(eventId: string) {
   const viewer = await getViewer();
   if (!viewer) return;
-  const event = await getEvent();
+  const event = await loadEvent(eventId);
+  if (typeof event === "string") return;
   const project = await getOwnProject(viewer.id, event.id);
   if (!project) return;
   // Ekipteki herkes aynı anda bassa da GitHub'a 30 sn'de bir kez gidilir.
   if (await claimOnce(requestKey("saglik", project.id), 30)) await checkHealth(project, await getEventRow(event.id));
-  revalidatePath("/panel");
+  revalidatePath(eventPath(event.slug, "panel"));
 }
 
-export async function submitVersion(previous: FormState): Promise<FormState> {
+export async function submitVersion(eventId: string, previous: FormState): Promise<FormState> {
   void previous;
   const viewer = await getViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
-  const event = await getEvent();
+  const event = await loadEvent(eventId);
+  if (typeof event === "string") return { error: event };
   if (event.locked) return { error: LOCKED_MSG };
   const project = await getOwnProject(viewer.id, event.id);
   if (!project) return { error: "Kayıtlı bir projen yok." };
@@ -267,7 +296,7 @@ export async function submitVersion(previous: FormState): Promise<FormState> {
     });
     if (error) return { error: dbError(error.message) };
     const result = data as SubmissionResult;
-    revalidatePath("/panel");
+    revalidatePath(eventPath(event.slug, "panel"));
     const message = submissionMessage(result);
     if (result.status === "already_accepted" || result.status === "busy") return { notice: message, status: result.status };
     if (result.status !== "queued") return { error: message, status: result.status };
@@ -302,8 +331,10 @@ function submissionMessage(r: SubmissionResult) {
 }
 
 export async function transferOwner(_: FormState, formData: FormData): Promise<FormState> {
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const viewer = await getViewer();
-  const project = await ownedProject();
+  const project = await ownedProject(event);
   if (!viewer || !project) return { error: "Bu işlem yalnızca kurucu tarafından, teslim açıkken yapılabilir." };
   const target = String(formData.get("target") ?? "");
   if (!project.members.some(m => m.user_id === target && m.role === "member")) return { error: "Ekipten bir üye seç." };
@@ -314,7 +345,7 @@ export async function transferOwner(_: FormState, formData: FormData): Promise<F
     const { data: now } = await db.from("project_members").select("role").eq("project_id", project.id).eq("user_id", target).maybeSingle();
     if (now?.role !== "owner") return { error: dbError(error.message) };
   }
-  revalidatePath("/panel");
+  revalidatePath(eventPath(event.slug, "panel"));
   return { ok: true };
 }
 
@@ -324,33 +355,39 @@ export async function joinProject(_: FormState, formData: FormData): Promise<For
   const code = String(formData.get("code") ?? "");
   const viewer = await getViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   if (event.locked) return { error: LOCKED_MSG };
+  const db = createAdminClient();
+  // Kodun projesi bu etkinliğe ait olmalı; aşağıdaki denetimler başka bir etkinliğin kurallarıyla yapılmasın.
+  const { data: invited } = await db.from("projects").select("event_id").eq("invite_code", code).maybeSingle();
+  if (invited?.event_id !== event.id) return { error: "Davet bağlantısı geçersiz ya da yenilenmiş." };
   if (await getOwnProject(viewer.id, event.id)) return { error: "Zaten bir projenin ekibindesin." };
-  // Kod, güncel etkinlik ve üyelik aynı kilit altında denetlenir; yenilenen kod bekleyen katılımı da durdurur.
-  const { error } = await createAdminClient().rpc("join_project_by_code", {
+  // Kod, etkinlik kilidi ve üyelik aynı kilit altında denetlenir; yenilenen kod bekleyen katılımı da durdurur.
+  const { error } = await db.rpc("join_project_by_code", {
     p_code: code, p_user: viewer.id, p_login: viewer.login, p_avatar: viewer.avatarUrl,
   });
   if (error) return { error: dbError(error.message) };
-  revalidatePath("/panel");
+  revalidatePath(eventPath(event.slug, "panel"));
   redirect("/panel?katildin=1");
 }
 
-export async function leaveProject() {
+export async function leaveProject(eventId: string) {
   const viewer = await getViewer();
   if (!viewer) redirect("/");
-  const event = await getEvent();
+  const event = await loadEvent(eventId);
+  if (typeof event === "string") redirect("/");
   if (event.locked) redirect("/panel");
   const { error } = await createAdminClient().rpc("leave_project", { p_event: event.id, p_user: viewer.id });
   if (error) console.error("[ekip] ayrılma:", error.message);
-  revalidatePath("/panel");
+  revalidatePath(eventPath(event.slug, "panel"));
   redirect("/panel");
 }
 
-async function ownedProject() {
+/** Görüntüleyenin bu etkinlikte kurucusu olduğu proje; teslim kapalıysa yok sayılır. */
+async function ownedProject(event: EventState) {
   const viewer = await getViewer();
   if (!viewer) return null;
-  const event = await getEvent();
   if (event.locked) return null;
   const project = await getOwnProject(viewer.id, event.id);
   if (!project || project.members.find((m) => m.user_id === viewer.id)?.role !== "owner") return null;
@@ -359,18 +396,22 @@ async function ownedProject() {
 
 export async function removeMember(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return;
   const viewer = await getViewer();
-  const project = await ownedProject();
+  const project = await ownedProject(event);
   if (!viewer || !project) return;
   // Kuruculuk, çıkarma anında DB'de yeniden denetlenir.
   const { error } = await createAdminClient().rpc("remove_member", { p_project: project.id, p_actor: viewer.id, p_target: userId });
   if (error) console.error("[ekip] üye çıkarma:", error.message);
-  revalidatePath("/panel");
+  revalidatePath(eventPath(event.slug, "panel"));
 }
 
-export async function renewInvite() {
+export async function renewInvite(eventId: string) {
+  const event = await loadEvent(eventId);
+  if (typeof event === "string") return;
   const viewer = await getViewer();
-  const project = await ownedProject();
+  const project = await ownedProject(event);
   if (!viewer || !project) return;
   // Art arda gelen yenileme istekleri, az önce paylaşılan yeni bağlantıyı da geçersiz kılmasın.
   if (!(await claimOnce(requestKey("davet", project.id), 10))) return;
@@ -378,7 +419,7 @@ export async function renewInvite() {
     p_project: project.id, p_actor: viewer.id, p_code: randomBytes(9).toString("hex"),
   });
   if (error) console.error("[ekip] davet yenileme:", error.message);
-  revalidatePath("/panel");
+  revalidatePath(eventPath(event.slug, "panel"));
 }
 
 // ---------------------------------------------------------------------------- halkın seçimi
@@ -391,7 +432,8 @@ export async function vote(_: FormState, formData: FormData): Promise<FormState>
   const projectId = String(formData.get("projectId") ?? "");
   const viewer = await getViewer();
   if (!viewer) return { error: "Oy vermek için GitHub ile giriş yap." };
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   if (event.voting !== "acik") return { error: "Oylama açık değil." };
   const db = createAdminClient();
   const { error } = formData.get("intent") === "withdraw"
@@ -400,7 +442,8 @@ export async function vote(_: FormState, formData: FormData): Promise<FormState>
     : await db.from("votes")
       .upsert({ event_id: event.id, user_id: viewer.id, project_id: projectId, github_login: viewer.login }, { onConflict: "event_id,user_id" });
   if (error) return { error: dbError(error.message) };
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
+  revalidatePath(`/sergi/${event.slug}`, "layout");
   return { ok: true };
 }
 
@@ -409,7 +452,8 @@ export async function vote(_: FormState, formData: FormData): Promise<FormState>
 /** Ctrl+Shift+S penceresi. Pencere dışarıdayken cevabın doğru olup olmadığı söylenmez. */
 export async function huntMystery(_: FormState, formData: FormData): Promise<FormState> {
   const answer = String(formData.get("answer") ?? "");
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   if (!mysteryOpen(event)) return { error: "Gizem yalnızca hackathon saatlerinde açık." };
   if (!isMysteryAnswer(answer)) return { error: "Hmm… olmadı. 🤔" };
   const viewer = await getViewer();
@@ -421,8 +465,8 @@ export async function huntMystery(_: FormState, formData: FormData): Promise<For
     return { error: "Bir şeyler ters gitti. Lütfen tekrar dene." };
   }
   const project = await getOwnProject(viewer.id, event.id);
-  revalidatePath("/panel");
-  revalidatePath("/yonetim");
+  revalidatePath(eventPath(event.slug, "panel"));
+  revalidatePath(eventPath(event.slug, "yonetim"));
   return {
     ok: true,
     status: project
@@ -479,7 +523,8 @@ function trDate(value: FormDataEntryValue | null) {
 }
 
 export async function setSchedule(_: FormState, formData: FormData): Promise<FormState> {
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const admin = await requireFreshManager(event);
   if (typeof admin === "string") return { error: admin };
   const starts = trDate(formData.get("starts"));
@@ -494,12 +539,13 @@ export async function setSchedule(_: FormState, formData: FormData): Promise<For
     await releaseOnce(once);
     return { error: dbError(error.message) };
   }
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
   return { ok: true };
 }
 
 export async function setAnnouncement(_: FormState, formData: FormData): Promise<FormState> {
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const admin = await requireManager(event);
   if (typeof admin === "string") return { error: admin };
   const text = String(formData.get("announcement") ?? "").trim();
@@ -513,13 +559,14 @@ export async function setAnnouncement(_: FormState, formData: FormData): Promise
     return { error: dbError(error.message) };
   }
   if (text) after(() => notifyEvent(event, [`📣 ${tg.b("Duyuru")}`, tg.text(text)], "duyuru"));
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
   return { ok: true };
 }
 
 /** Yemek ya da mini oyun duyurusu: maskot ve selam bitirilene kadar buna göre değişir. */
 export async function setActivity(_: FormState, formData: FormData): Promise<FormState> {
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const admin = await requireManager(event);
   if (typeof admin === "string") return { error: admin };
   const kind = String(formData.get("kind") ?? "");
@@ -534,12 +581,13 @@ export async function setActivity(_: FormState, formData: FormData): Promise<For
     return { error: dbError(error.message) };
   }
   if (kind !== "bitir") after(() => notifyEvent(event, [`${kind === "yemek" ? "🍽️" : "🎲"} ${tg.b(title)}`, tg.text(kind === "yemek" ? "Yemek saati başladı." : "Etkinlik başladı.")], kind === "yemek" ? "pizza" : "duyuru"));
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
   return { ok: true };
 }
 
-export async function lockNowAction(): Promise<{ error?: string }> {
-  const event = await getEvent();
+export async function lockNowAction(eventId: string): Promise<{ error?: string }> {
+  const event = await loadEvent(eventId);
+  if (typeof event === "string") return { error: event };
   const admin = await requireFreshManager(event);
   if (typeof admin === "string") return { error: admin };
   try {
@@ -548,7 +596,7 @@ export async function lockNowAction(): Promise<{ error?: string }> {
     return { error: dbError(e instanceof Error ? e.message : "") };
   }
   after(() => freezeAll(event.id));
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
   return {};
 }
 
@@ -566,11 +614,12 @@ export async function retryFreeze(formData: FormData): Promise<{ error: string }
     await auditAdmin(admin, "retry_seal", { eventId: row.event_id, projectId: row.id });
     after(() => retrySeal(row.id, row.event_id));
   }
-  revalidatePath("/yonetim");
+  revalidatePath(eventPath(owner!.slug, "yonetim"));
 }
 
 export async function setVoting(formData: FormData): Promise<{ error: string } | void> {
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const admin = await requireFreshManager(event);
   if (typeof admin === "string") return { error: admin };
   const state = String(formData.get("state") ?? "");
@@ -589,14 +638,20 @@ export async function setVoting(formData: FormData): Promise<{ error: string } |
         : announcePeoplesChoice(event),
     );
   }
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
 }
 
+/**
+ * Toplulukta yeni etkinlik: güncel etkinlik yoktur, mevcut etkinlikler etkilenmez.
+ * Topluluğun hiç etkinliği yokken de çalışır; bu yüzden yetki bir etkinlikten değil, RPC'den gelir
+ * (topluluk sahibi ya da organizatörü; topluluk onaylı ve askıda değil). Taze oturum burada denetlenir (A21).
+ */
 export async function createEvent(_: FormState, formData: FormData): Promise<FormState> {
-  const current = await getEvent();
-  const admin = await requireFreshManager(current);
-  if (typeof admin === "string") return { error: admin };
-  if (!current.locked) return { error: "Yeni etkinlik, güncel etkinlik mühürlendikten sonra açılabilir." };
+  const admin = await getViewer();
+  if (!admin) return { error: YETKISIZ_MESAJI };
+  if (!(await getAdminSession())?.fresh) return { error: REAUTH_MSG };
+  const community = String(formData.get("community") ?? "");
+  if (!UUID_RE.test(community)) return { error: "Topluluk seç." };
   const title = String(formData.get("title") ?? "").trim();
   const slug = String(formData.get("slug") ?? "").trim().toLowerCase();
   const starts = trDate(formData.get("starts"));
@@ -606,21 +661,25 @@ export async function createEvent(_: FormState, formData: FormData): Promise<For
   if (!starts || !deadline || starts >= deadline) return { error: "Başlangıç, son teslimden önce olmalı." };
   if (deadline.getTime() <= Date.now()) return { error: "Son teslim gelecekte olmalı." };
   const db = createAdminClient();
-  const { data: created, error } = await db.rpc("admin_switch_event", {
-    p_current: current.id, p_title: title, p_slug: slug, p_starts: starts.toISOString(), p_deadline: deadline.toISOString(),
+  const { data: created, error } = await db.rpc("admin_create_event", {
+    p_community: community, p_title: title, p_slug: slug, p_starts: starts.toISOString(), p_deadline: deadline.toISOString(),
     p_actor: admin.id, p_login: admin.login,
   });
   if (error || !created) {
-    // Eş istek ilkinin ardından reddedilir; aynı etkinlik zaten güncelse işlem tamamdır.
-    const { data: existing } = await db.from("events").select("title, is_current").eq("slug", slug).maybeSingle();
-    if (!(existing?.is_current && existing.title === title)) return { error: dbError(error?.message ?? "") };
+    // Eş istek (çift tıklama, ikinci sekme) ilkinden sonra slug çakışmasıyla reddedilir; aynı toplulukta aynı
+    // adla zaten açılmışsa işlem tamamdır. Yetki, askı ve doğrulama hataları bu yoldan geçmez.
+    if (error?.code !== "23505") return { error: dbError(error?.message ?? "") };
+    const { data: existing } = await db.from("events").select("title, community_id").eq("slug", slug).maybeSingle();
+    if (!(existing?.community_id === community && existing.title === title)) return { error: dbError(error.message) };
   }
-  revalidatePath("/", "layout");
+  revalidatePath("/yonetim");
+  revalidatePath("/");
   return { ok: true };
 }
 
 export async function addAward(_: FormState, formData: FormData): Promise<FormState> {
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const admin = await requireManager(event);
   if (typeof admin === "string") return { error: admin };
   if (!event.locked) return { error: "Ödüller teslim kilitlendikten sonra açıklanabilir." };
@@ -645,28 +704,32 @@ export async function addAward(_: FormState, formData: FormData): Promise<FormSt
       .eq("project_id", p.id).eq("reason", reason).maybeSingle();
     if (!same) return { error: "Bu ödül adı zaten kullanılıyor." };
   }
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
   return { ok: true };
 }
 
 export async function removeAward(formData: FormData): Promise<{ error: string } | void> {
-  const event = await getEvent();
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const admin = await requireManager(event);
   if (typeof admin === "string") return { error: admin };
   const { error } = await createAdminClient().rpc("admin_remove_award", {
     p_award: String(formData.get("id") ?? ""), p_event: event.id, p_actor: admin.id, p_login: admin.login,
   });
   if (error) throw new Error("Ödül kaldırılamadı.");
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
 }
 
-export async function runWorker(): Promise<{ error: string } | void> {
-  const admin = await authorize(await getEvent(), "isletim");
+/** İşçi bütün etkinlikleri işler; tetikleme yetkisi, yönetim sayfası açık olan etkinlik için denetlenir. */
+export async function runWorker(eventId: string): Promise<{ error: string } | void> {
+  const event = await loadEvent(eventId);
+  if (typeof event === "string") return { error: event };
+  const admin = await authorize(event, "isletim");
   if (typeof admin === "string") return { error: admin };
-  if (!(await claimOnce(requestKey("calistir"), 30))) return revalidatePath("/yonetim");
-  await auditAdmin(admin, "run_worker");
+  if (!(await claimOnce(requestKey("calistir"), 30))) return revalidatePath(eventPath(event.slug, "yonetim"));
+  await auditAdmin(admin, "run_worker", { eventId: event.id });
   after(async () => { await tick(); });
-  revalidatePath("/yonetim");
+  revalidatePath(eventPath(event.slug, "yonetim"));
 }
 
 export async function retryDeliveryJob(previous: FormState, formData: FormData): Promise<FormState> {
@@ -689,7 +752,7 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
   }
   await auditAdmin(admin, "retry_job", { projectId: job.project_id, after: { job: id } });
   after(() => processProjectJobs(job.project_id));
-  revalidatePath("/yonetim");
+  revalidatePath(eventPath(owner!.slug, "yonetim"));
   return { ok: true };
 }
 
@@ -698,9 +761,10 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
  * Eser kaydı, teslim SHA'sı, arşiv hash'i ve zamanlar korunur. Arayüzü yönetim sayfasına ayrıca eklenecek.
  */
 export async function anonymizeUser(_: FormState, formData: FormData): Promise<FormState> {
-  // Anonimleştirme platform işidir (yalnızca head admin; DB de denetler). Etkinlik, yetki girdisi içindir.
-  const admin = await authorize(await getEvent(), "anonimlestir", true);
-  if (typeof admin === "string") return { error: admin };
+  // Anonimleştirme platform işidir: etkinliğe bağlı değildir, yalnızca head admin yapar (DB de denetler).
+  const admin = await getViewer();
+  if (!admin?.isHeadAdmin) return { error: YETKISIZ_MESAJI };
+  if (!(await getAdminSession())?.fresh) return { error: REAUTH_MSG };
   const login = String(formData.get("login") ?? "").trim().replace(/^@/, "");
   const reason = String(formData.get("reason") ?? "").trim();
   if (!/^[A-Za-z0-9-]{1,39}$/.test(login)) return { error: "Geçerli bir GitHub kullanıcı adı yaz." };
@@ -727,23 +791,21 @@ export async function anonymizeUser(_: FormState, formData: FormData): Promise<F
   // Yumuşak silme: auth kaydı yabancı anahtarlar için kalır; e-posta, kimlikler ve profil bilgisi kaldırılır, giriş kapanır.
   const { error: authError } = await db.auth.admin.deleteUser(ids[0], true);
   if (authError) return { error: "Kayıtlar anonimleştirildi ancak hesap kapatılamadı. Supabase panelinden kontrol et." };
+  // Ad her etkinlikte görünebilir: bütün sayfalar tazelenir.
   revalidatePath("/", "layout");
   return { ok: true };
 }
 
 // ---------------------------------------------------------------------------- platform askısı
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Etkinliği askıya alma / askıyı kaldırma: yalnızca head admin, taze oturumla (A21), 3–500 karakter gerekçeyle.
- * Etkinlik formdan gelir; sayfa açıkken güncel etkinlik değişse bile ekranda görülen etkinliğe uygulanır.
+ * Etkinlik formdan (gizli `event` alanı) gelir; ekranda görülen etkinliğe uygulanır.
  * DB yetkiyi, gerekçeyi ve durumu yeniden denetler; işlem aynı transaction'da denetim kaydına yazılır.
  */
 async function platformSuspension(formData: FormData, rpc: "suspend_event" | "unsuspend_event"): Promise<FormState> {
-  const eventId = String(formData.get("eventId") ?? "");
-  const event = UUID_RE.test(eventId) ? await getEventById(eventId) : null;
-  if (!event) return { error: "Etkinlik bulunamadı." };
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
   const admin = await authorize(event, "askiya-al", true);
   if (typeof admin === "string") return { error: admin };
   const reason = String(formData.get("gerekce") ?? "").trim();
@@ -754,7 +816,7 @@ async function platformSuspension(formData: FormData, rpc: "suspend_event" | "un
     for (const known of ["Etkinlik zaten askıda.", "Etkinlik askıda değil."]) if (error.message.includes(known)) return { error: known };
     return { error: dbError(error.message) };
   }
-  revalidatePath("/", "layout");
+  revalidateEvent(event);
   return { ok: true };
 }
 

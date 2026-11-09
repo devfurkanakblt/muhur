@@ -6,7 +6,7 @@ import { vote, type FormState } from "@/app/actions";
 import { useProtectedForm } from "@/components/protected-form";
 
 /** Halkın seçimi: tek oy, değiştirilebilir. Kendi ekibine oy verilemez. */
-export function VoteButton({ projectId, voted, own, signedIn }: { projectId: string; voted: boolean; own: boolean; signedIn: boolean }) {
+export function VoteButton({ eventId, projectId, voted, own, signedIn }: { eventId: string; projectId: string; voted: boolean; own: boolean; signedIn: boolean }) {
   // Eylem sabit kalmalı: useActionState yeni eylemi yalnızca ilk render'daki eylemle karşılaştırır. Eylem
   // ver → geri al → ver diye değişirse düğme "Oy ver" gösterirken geri alma eyleminde takılı kalır.
   const [state, action, pending] = useActionState<FormState, FormData>(vote, undefined);
@@ -15,6 +15,7 @@ export function VoteButton({ projectId, voted, own, signedIn }: { projectId: str
   if (!signedIn) return <p className="text-[0.8125rem] text-ink-3">Oy vermek için giriş yap.</p>;
   return (
     <form {...protectedForm} data-live-safe className="flex flex-col items-start gap-1">
+      <input type="hidden" name="event" value={eventId} />
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="intent" value={voted ? "withdraw" : "cast"} />
       <button

@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import Link from "next/link";
 import { Wordmark } from "@/components/brand";
+import { getEvent } from "@/lib/data";
 import { getMascotNamingSnapshot } from "@/lib/mascot-naming";
 import { NamingExperience } from "./naming-experience";
 import "./maskot.css";
@@ -12,7 +13,7 @@ export const metadata = {
 
 export default async function MascotNamingPage() {
   await connection();
-  const snapshot = await getMascotNamingSnapshot();
+  const [event, snapshot] = await Promise.all([getEvent(), getMascotNamingSnapshot()]);
   return <>
     <header className="naming-header">
       <Link href="/" aria-label="mühür ana sayfa">
@@ -20,7 +21,7 @@ export default async function MascotNamingPage() {
       </Link>
     </header>
     <main id="main-content" tabIndex={-1} className="naming-page flex-1">
-      <NamingExperience initial={snapshot} />
+      <NamingExperience eventId={event.id} initial={snapshot} />
     </main>
     <div className="naming-legal"><Link href="/gizlilik">Aydınlatma metni</Link></div>
   </>;

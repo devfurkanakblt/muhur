@@ -1,9 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getEventBySlug, getViewer } from "@/lib/data";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 import { hashArchive } from "@/lib/delivery-core";
 import { csvTable, zipEntries } from "@/lib/zip";
 import { selectAll } from "@/lib/paginate";
 import { exclusionReason, type JuryRow } from "@/lib/jury";
+import { auditHeadAdminDownload, isHeadAdminOnly } from "@/lib/download-audit";
 
 export const maxDuration = 300;
 
@@ -11,13 +14,17 @@ export const maxDuration = 300;
  * ?paket=eksiksiz (varsayılan): tüm kayıtların mühürlü arşivi olmalı; biri eksikse paket verilmez.
  * ?paket=gecerli: yalnızca mühürlü teslimler pakete girer; dışarıda kalanlar nedenleriyle manifest/CSV'de listelenir.
  * ?format=csv: tüm kayıtların durumu.
+ * Yetki etkinlik kapsamındadır: topluluk rolü, head admin ya da (kilitten sonra) etkinliğin jürisi.
+ * Yalnızca head admin yetkisiyle yapılan indirme (CSV dahil) içerik verilmeden önce denetim kaydına girer.
  */
 export async function GET(request: Request, ctx: { params: Promise<{ slug: string }> }) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return Response.json({ error: "Yetkisiz" }, { status: 403 });
+  if (!viewer) return Response.json({ error: "Yetkisiz" }, { status: 403 });
   const { slug } = await ctx.params;
   const event = await getEventBySlug(slug);
   if (!event) return Response.json({ error: "Etkinlik bulunamadı" }, { status: 404 });
+  const access = await getEventAccess(viewer, event);
+  if (!can(access, "juri-paketi")) return Response.json({ error: "Yetkisiz" }, { status: 403 });
   if (!event.locked) return Response.json({ error: "Jüri paketi teslim kilitlendikten sonra indirilebilir." }, { status: 409 });
   const params = new URL(request.url).searchParams;
   const mode = params.get("paket") === "gecerli" ? "gecerli" : "eksiksiz";
@@ -47,7 +54,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     ["No", "Proje", "Ekip", "Üyeler", "Özet", "Demo", "Repo", "Commit", "Dal", "Kabul zamanı", "SHA-256", "Bayt", "Durum", "Pakete girmeme nedeni"],
     ...manifest.projects.map(p => [p.no, p.name, p.team, p.members.join("; "), p.summary, p.demo, p.repo, p.sha, p.branch, p.acceptedAt, p.sha256, p.bytes, p.status, p.reason]),
   ]);
+  // Kayıt yazılamazsa içerik verilmez.
+  const audit = async (format: string) => !isHeadAdminOnly(access)
+    || auditHeadAdminDownload(viewer, "jury_package_download", { eventId: event.id, after: { format, package: mode } });
+  const auditFailed = () => Response.json({ error: "İndirme kaydı yazılamadı. Tekrar dene." }, { status: 503 });
   if (params.get("format") === "csv") {
+    if (!(await audit("csv"))) return auditFailed();
     return new Response(csv, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${event.slug}-teslimler.csv"`, "Cache-Control": "private, no-store" } });
   }
   if (mode === "eksiksiz" && missing.length) {
@@ -61,6 +73,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
   if (included.reduce((n, p) => n + Number(p.archive_bytes ?? 0), 0) > 500 * 1024 * 1024) {
     return Response.json({ error: "Toplu paket 500 MB sınırını aşıyor. CSV listesini ve arşivleri ayrı indir." }, { status: 413 });
   }
+  if (!(await audit("zip"))) return auditFailed();
   const encode = (text: string) => new TextEncoder().encode(text);
   const entries = [
     { name: "teslimler.json", read: async () => encode(JSON.stringify(manifest, null, 2)) },

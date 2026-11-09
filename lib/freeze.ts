@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 import { downloadZipball, getHeadSha, getRepoById, GithubError, hasCommitsBefore } from "@/lib/github";
-import { notify, tg } from "@/lib/notify";
+import { notifyEvent, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
 import { drainDeliveryJobs, enqueueSeals, processDeliveryJobs } from "@/lib/delivery";
 import { sendReminders } from "@/lib/reminders";
@@ -10,7 +10,7 @@ import { hashArchive, validateArchive } from "@/lib/delivery-core";
 import { sweepStorage } from "@/lib/storage-sweep";
 import { claimOnce, pruneRequestKeys } from "@/lib/once";
 
-type EventRow = { id: string; slug: string; title: string; starts_at: string; deadline: string; locked_at: string | null };
+type EventRow = { id: string; slug: string; title: string; starts_at: string; deadline: string; locked_at: string | null; telegram: boolean };
 type Row = {
   id: string;
   event_id: string;
@@ -30,11 +30,19 @@ const SNAPSHOT_EVERY_MS = 25 * 60_000;
 
 const no = (n: number) => String(n).padStart(3, "0");
 
+const EVENT_COLUMNS = "id, slug, title, starts_at, deadline, locked_at";
+/** Topluluğun Telegram izni; topluluğu okunamayan etkinlik bildirim göndermez. */
+function withTelegram<T extends { community?: { telegram_enabled: boolean } | { telegram_enabled: boolean }[] | null }>(row: T): Omit<T, "community"> & { telegram: boolean } {
+  const { community, ...rest } = row;
+  const c = Array.isArray(community) ? community[0] : community;
+  return { ...rest, telegram: c?.telegram_enabled === true };
+}
+
 async function getEventRow(eventId: string) {
   const db = createAdminClient();
-  const { data, error } = await db.from("events").select("id, slug, title, starts_at, deadline, locked_at").eq("id", eventId).single();
+  const { data, error } = await db.from("events").select(`${EVENT_COLUMNS}, community:communities(telegram_enabled)`).eq("id", eventId).single();
   if (error || !data) throw new Error("Etkinlik bulunamadı.");
-  return data as EventRow;
+  return withTelegram(data);
 }
 
 // ---------------------------------------------------------------------------- kilit
@@ -68,7 +76,7 @@ async function announceLock(ev: EventRow, at: Date) {
   const db = createAdminClient();
   const { count } = await db.from("projects").select("id", { count: "exact", head: true }).eq("event_id", ev.id);
   const time = new Intl.DateTimeFormat("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(at);
-  await notify([`🔒 ${tg.b("Mühür vuruldu.")}`, `${tg.text(ev.title)} · ${count ?? 0} eser · ${time}`, tg.link(env.siteUrl, "Vitrine bak")], "muhur");
+  await notifyEvent(ev, [`🔒 ${tg.b("Mühür vuruldu.")}`, `${tg.text(ev.title)} · ${count ?? 0} eser · ${time}`, tg.link(env.siteUrl, "Vitrine bak")], "muhur");
 }
 
 // ---------------------------------------------------------------------------- arşiv
@@ -236,17 +244,18 @@ export async function tick() {
   };
   const withinBudget = () => Date.now() - started < HELPER_BUDGET_MS;
   try {
-    const { data: events, error } = await db.from("events").select("id, slug, title, starts_at, deadline, locked_at, is_current");
+    const { data: rows, error } = await db.from("events").select(`${EVENT_COLUMNS}, is_current, community:communities(telegram_enabled)`);
     if (error) throw new Error(error.message);
+    const events = (rows ?? []).map(withTelegram);
 
     let processed = (await step("teslim kuyruğu", () => processDeliveryJobs(null, 4))) ?? [];
-    for (const ev of events ?? []) {
+    for (const ev of events) {
       await step(`kilit ${ev.slug}`, async () => { if (await ensureLocked(ev.id, "otomatik")) await enqueueSeals(ev.id); });
     }
     processed = [...processed, ...((await step("mühür kuyruğu", () => drainDeliveryJobs(SEAL_DRAIN_MS))) ?? [])];
     details.jobs = { processed: processed.length, failed: processed.filter((r) => !r.ok).length };
 
-    const open = (events ?? []).find((ev) => ev.is_current && !ev.locked_at && Date.now() < new Date(ev.deadline).getTime());
+    const open = events.find((ev) => ev.is_current && !ev.locked_at && Date.now() < new Date(ev.deadline).getTime());
     if (open && withinBudget() && (await step("kira", () => tryLease("yardimci", 50)))) {
       details.health = await step("sağlık", () => checkHealthDue(open));
       if (withinBudget()) details.snapshots = await step("ara mühür", () => takeSnapshots(open));

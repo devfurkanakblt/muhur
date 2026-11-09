@@ -11,12 +11,17 @@ import { buildVitrine } from "@/lib/vitrine";
 import { ensureLocked, freezeAll } from "@/lib/freeze";
 import { getLiveStatus } from "@/lib/status";
 import { LiveState } from "@/components/live-state";
+import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 
 export default async function Home() {
   await connection();
   const [event, viewer] = await Promise.all([getEvent(), getViewer()]);
   const { items, voting, own, winners } = await buildVitrine(event, viewer);
   const status = await getLiveStatus();
+  // Askı gerekçesi yalnızca etkinliği inceleyebilenlere; yetki sorgusu yalnızca askıdayken yapılır.
+  const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
 
   // Zamanlayıcı henüz çalışmadıysa, son tarihten sonraki ilk ziyaret kilidi yazar ve mühürlemeyi başlatır.
   if (event.locked && !event.lockedAt) {
@@ -55,6 +60,11 @@ export default async function Home() {
       <SiteHeader viewer={viewer} />
       <main id="main-content" tabIndex={-1} className="flex-1">
         <LiveState version={status.version} />
+        {event.suspended && (
+          <div className="mx-auto w-full max-w-[1240px] px-5 pt-6 sm:px-8">
+            <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} />
+          </div>
+        )}
         <Hero
           key={`hero-${event.id}`}
           startsAt={event.startsAt}

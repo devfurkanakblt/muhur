@@ -27,6 +27,7 @@ select pg_temp.assert_true(pg_temp.fails(
   $q$select public.claim_mystery('71000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000002', '  ')$q$,
   'Geçersiz kullanıcı'), 'Boş kullanıcı adıyla kayıt yapılmaz');
 
+insert into public.platform_roles(user_id, login, role) values ('70000000-0000-0000-0000-000000000002', 'yonetici', 'head_admin'); -- 0012: anonimleştirme head admin'e açık.
 select public.anonymize_user('70000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000002', 'yonetici', 'KVKK silme başvurusu');
 select pg_temp.assert_true((select github_login like 'anonim-%' from mystery_hunters where user_id = '70000000-0000-0000-0000-000000000001'),
   'Kişisel veri silme gizem kaydındaki adı anonimleştirir');

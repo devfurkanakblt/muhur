@@ -43,7 +43,7 @@ try {
   CREATE SCHEMA storage;
   CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   `, database);
-  for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql", "0008_activity.sql", "0009_mascot_naming.sql", "0010_mascot_name_edit.sql"]) {
+  for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql", "0008_activity.sql", "0009_mascot_naming.sql", "0010_mascot_name_edit.sql", "0011_bayat_teslim_hatasi.sql", "0012_topluluklar.sql"]) {
     run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("supabase/migrations", file)]);
   }
   console.log("Migration dosyaları gerçek PostgreSQL üzerinde uygulandı.");
@@ -53,6 +53,7 @@ try {
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-activity.sql")]);
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-mystery.sql")]);
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-mascot.sql")]);
+  run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-tenancy.sql")]);
   console.log("Veritabanı kural testleri geçti.");
   const eventId = "20000000-0000-0000-0000-000000000001";
   const userId = "20000000-0000-0000-0000-000000000002";
@@ -106,10 +107,12 @@ try {
 
   // Oylama kapanışı: sonuçlandırma devam eden oyu bekler; sonrasında gelen oy reddedilir.
   const voteEvent = "20000000-0000-0000-0000-000000000020";
-  const [author, voterA, voterB] = ["20000000-0000-0000-0000-000000000021", "20000000-0000-0000-0000-000000000022", "20000000-0000-0000-0000-000000000023"];
+  const [author, voterA, voterB, organizer] = ["20000000-0000-0000-0000-000000000021", "20000000-0000-0000-0000-000000000022", "20000000-0000-0000-0000-000000000023", "20000000-0000-0000-0000-000000000024"];
+  // Yönetim RPC'leri yalnızca etkinliğin topluluğundaki organizatöre açık: etkinlik DEÜ CS&AI'ya bağlanır.
   const voteProject = psql(`UPDATE events SET is_current=false WHERE is_current;
-    INSERT INTO events(id,slug,title,starts_at,deadline,is_current) VALUES('${voteEvent}','vote-race','Oy Yarışı',clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 hour',true);
-    INSERT INTO auth.users(id) VALUES('${author}'),('${voterA}'),('${voterB}');
+    INSERT INTO events(id,slug,title,starts_at,deadline,is_current,community_id) VALUES('${voteEvent}','vote-race','Oy Yarışı',clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 hour',true,(SELECT id FROM communities WHERE slug='deu-csai'));
+    INSERT INTO auth.users(id) VALUES('${author}'),('${voterA}'),('${voterB}'),('${organizer}');
+    INSERT INTO community_members(community_id,user_id,github_login,role) SELECT id,'${organizer}','admin','organizator' FROM communities WHERE slug='deu-csai';
     SELECT id FROM register_project('${voteEvent}','${author}','author',null,'Oy Proje','Oy Ekip','Eşzamanlı oy testi.',301,'vote/repo','https://github.com/vote/repo','main',null,repeat('a',40));`, database)
     .match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/)[0];
   psql(`SELECT complete_submission(id, lease_token, 'teslim/'||id||'.zip', repeat('a',64), 10) FROM claim_delivery_jobs('${voteProject}',1);
@@ -120,7 +123,7 @@ try {
   const vote = user => `INSERT INTO votes(event_id,user_id,project_id,github_login) VALUES('${voteEvent}','${user}','${voteProject}','v');`;
   const [slowVote, finalize] = await Promise.allSettled([
     asyncPsql(`BEGIN; ${vote(voterA)} SELECT pg_sleep(0.6); COMMIT;`),
-    later(150, `SELECT admin_update_event('${voteEvent}',null,'admin','voting','{"voting":"sonuclandi"}'); SELECT vote_tallies('${voteEvent}');`),
+    later(150, `SELECT admin_update_event('${voteEvent}','${organizer}','admin','voting','{"voting":"sonuclandi"}'); SELECT vote_tallies('${voteEvent}');`),
   ]);
   assert.equal(slowVote.status, "fulfilled");
   assert.equal(finalize.status, "fulfilled");

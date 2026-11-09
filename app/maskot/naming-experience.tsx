@@ -108,7 +108,7 @@ function ProposalCard({ item, snapshot, reload }: {
       {snapshot.phase !== "oneriler" && item.visible && <strong className="naming-vote-count" aria-label={`${item.votes} oy`}>{item.votes}</strong>}
     </div>
     {canVote && <VoteForm proposalId={item.id} name={item.name} reload={reload} />}
-    {snapshot.isAdmin && snapshot.phase === "oneriler" && <AdminForm
+    {snapshot.canManage && snapshot.phase === "oneriler" && <AdminForm
       action={setMascotProposalVisibility}
       fields={{ proposalId: item.id, visible: String(!item.visible) }}
       label={item.visible ? "Yayından kaldır" : "Yeniden göster"}
@@ -176,7 +176,7 @@ export function NamingExperience({ initial }: { initial: NamingSnapshot }) {
           : <p className="naming-empty">Henüz öneri yok</p>}
       </section>
 
-      {snapshot.isAdmin && snapshot.phase !== "sonuc" && <section className="naming-admin-panel" aria-label="Organizatör işlemleri">
+      {snapshot.canManage && snapshot.phase !== "sonuc" && <section className="naming-admin-panel" aria-label="Organizatör işlemleri">
         <AdminForm action={setMascotPhase} fields={{ phase: snapshot.phase === "oneriler" ? "oylama" : "sonuc" }}
           label={snapshot.phase === "oneriler" ? "Oylamayı aç" : "Sonucu açıkla"} reload={reload}
           confirmMessage={snapshot.phase === "oneriler"

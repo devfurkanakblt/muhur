@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getEvent, getViewer } from "@/lib/data";
+import { getEvent, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { getEventAccess } from "@/lib/access";
+import { ASKIDA_MESAJI, can, denialMessage } from "@/lib/authz";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { NamingPhase } from "@/lib/mascot-naming";
 
@@ -12,11 +14,19 @@ const NAME = /^[\p{L}\p{N}]+(?:[ '\-][\p{L}\p{N}]+)*$/u;
 function message(error: { message: string }): string {
   const raw = error.message;
   if (raw.includes("MASCOT:")) return raw.split("MASCOT:")[1].split("\n")[0].trim();
+  if (raw.includes("ASKIDA:")) return ASKIDA_MESAJI;
   if (raw.includes("mascot_name_proposals_unique_name")) return "Bu isim zaten önerilmiş.";
   if (raw.includes("mascot_name_proposals_event_id_author_id_key")) return "Bu etkinlikte bir öneri hakkını kullandın.";
   if (raw.includes("mascot_name_votes_pkey")) return "Bu etkinlikte oyunu kullandın.";
   console.error("[maskot]", raw);
   return "İşlem tamamlanamadı. Biraz sonra tekrar dene.";
+}
+
+/** Aşama ve görünürlük doğrudan tabloya yazılır; RPC denetimi olmadığından yetki burada etkinlik kapsamında denetlenir. */
+async function manageError(viewer: Viewer | null, event: EventState): Promise<string | null> {
+  const access = await getEventAccess(viewer, event);
+  if (can(access, "yonet")) return null;
+  return denialMessage(access, "yonet") === ASKIDA_MESAJI ? ASKIDA_MESAJI : "Bu işlem yalnızca organizatöre açık.";
 }
 
 const NAME_RULE = "2–24 karakterlik bir isim yaz. Harf, rakam, boşluk, tire ve kesme işareti kullanabilirsin.";
@@ -73,7 +83,8 @@ export async function voteMascotName(_previous: NamingActionState, form: FormDat
 
 export async function setMascotPhase(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
   const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
-  if (!viewer?.isAdmin) return { error: "Bu işlem yalnızca organizatöre açık." };
+  const denied = await manageError(viewer, event);
+  if (denied) return { error: denied };
   const next = String(form.get("phase") ?? "") as NamingPhase;
   if (next !== "oylama" && next !== "sonuc") return { error: "Geçersiz aşama." };
   const previous = next === "oylama" ? "oneriler" : "oylama";
@@ -94,7 +105,8 @@ export async function setMascotPhase(_previous: NamingActionState, form: FormDat
 
 export async function setMascotProposalVisibility(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
   const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
-  if (!viewer?.isAdmin) return { error: "Bu işlem yalnızca organizatöre açık." };
+  const denied = await manageError(viewer, event);
+  if (denied) return { error: denied };
   const proposalId = String(form.get("proposalId") ?? "");
   if (!UUID.test(proposalId)) return { error: "Geçersiz öneri." };
   const visible = form.get("visible") === "true";

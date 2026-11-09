@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { ADMIN_REAUTH_MS, githubIdentity, isAdminIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
+import { ADMIN_REAUTH_MS, githubIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
 import { selectAll } from "@/lib/paginate";
 
 /** Okuma hatası "kayıt yok" gibi gösterilmez; sayfa hata ekranına düşer. */
@@ -25,7 +25,14 @@ type EventRow = {
   activity_kind: "yemek" | "oyun" | null;
   activity_title: string | null;
   activity_at: string | null;
+  community_id: string | null;
+  suspended_at: string | null;
+  suspended_reason: string | null;
+  community: { name: string; status: string; telegram_enabled: boolean } | null;
 };
+
+/** Etkinlik satırı, bağlı olduğu toplulukla birlikte okunur. */
+const EVENT_SELECT = "*, community:communities(name,status,telegram_enabled)";
 
 /** Yöneticinin duyurduğu yemek ya da mini oyun; bitirilene kadar sürer. */
 export type Activity = { kind: "yemek" | "oyun"; title: string; at: string };
@@ -47,6 +54,16 @@ export type EventState = {
   announcementAt: string | null;
   voting: EventRow["voting"];
   activity: Activity | null;
+  /** Etkinliği düzenleyen topluluk (Plan 1'de eski etkinlikler için null olabilir). */
+  communityId: string | null;
+  communityName: string | null;
+  /** Topluluk durumu: beklemede | onaylandi | reddedildi | askida. */
+  communityStatus: string | null;
+  /** Telegram bildirimleri yalnızca topluluğu izinliyse gider. */
+  telegram: boolean;
+  /** Platform tarafından askıya alındı mı (etkinlik düzeyinde). */
+  suspended: boolean;
+  suspendedReason: string | null;
   /** Sunucunun okuma anı; geri sayımın ilk karesi için. */
   now: number;
 };
@@ -71,6 +88,12 @@ function toState(row: EventRow): EventState {
     announcementAt: row.announcement_at,
     voting: row.voting,
     activity: row.activity_kind && row.activity_title && row.activity_at ? { kind: row.activity_kind, title: row.activity_title, at: row.activity_at } : null,
+    communityId: row.community_id ?? null,
+    communityName: row.community?.name ?? null,
+    communityStatus: row.community?.status ?? null,
+    telegram: row.community?.telegram_enabled === true,
+    suspended: row.suspended_at != null,
+    suspendedReason: row.suspended_reason ?? null,
     now,
   };
 }
@@ -78,21 +101,29 @@ function toState(row: EventRow): EventState {
 /** Güncel etkinlik. Ana sayfa, panel ve yönetim her zaman bunu kullanır. */
 export const getEvent = cache(async (): Promise<EventState> => {
   const db = createAdminClient();
-  const { data, error } = await db.from("events").select("*").eq("is_current", true).single();
+  const { data, error } = await db.from("events").select(EVENT_SELECT).eq("is_current", true).single();
   if (error || !data) throw new Error("Güncel etkinlik bulunamadı.");
   return toState(data as EventRow);
 });
 
 export const getEventBySlug = cache(async (slug: string): Promise<EventState | null> => {
   const db = createAdminClient();
-  const { data, error } = await db.from("events").select("*").eq("slug", slug).maybeSingle();
+  const { data, error } = await db.from("events").select(EVENT_SELECT).eq("slug", slug).maybeSingle();
+  if (error) readFailed("Etkinlik", error);
+  return data ? toState(data as EventRow) : null;
+});
+
+/** Etkinlik kimliğiyle; yetki denetimi için kaydın bağlı olduğu etkinliği okumakta kullanılır. */
+export const getEventById = cache(async (id: string): Promise<EventState | null> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("events").select(EVENT_SELECT).eq("id", id).maybeSingle();
   if (error) readFailed("Etkinlik", error);
   return data ? toState(data as EventRow) : null;
 });
 
 export const getEvents = cache(async (): Promise<EventState[]> => {
   const db = createAdminClient();
-  const { data, error } = await db.from("events").select("*").order("starts_at", { ascending: false });
+  const { data, error } = await db.from("events").select(EVENT_SELECT).order("starts_at", { ascending: false });
   if (error) readFailed("Etkinlikler", error);
   return (data ?? []).map((r) => toState(r as EventRow));
 });
@@ -103,7 +134,8 @@ export type Viewer = {
   githubId: string;
   login: string;
   avatarUrl: string | null;
-  isAdmin: boolean;
+  /** Platform yöneticisi (DB `platform_roles`); ADMIN_GITHUB_IDS artık yetki vermez. */
+  isHeadAdmin: boolean;
 };
 
 export const getViewer = cache(async (): Promise<Viewer | null> => {
@@ -114,24 +146,28 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   // user_metadata kullanıcı tarafından değiştirilebilir; kimlik ve yetki yalnızca GitHub identity kaydından okunur.
   const github = githubIdentity(user);
   if (!github) return null;
+  const { data: role, error } = await createAdminClient()
+    .from("platform_roles").select("role").eq("user_id", user.id).eq("role", "head_admin").maybeSingle();
+  if (error) readFailed("Platform rolü", error);
   return {
     id: user.id,
     githubId: github.githubId,
     login: github.login,
     avatarUrl: github.avatarUrl,
-    isAdmin: isAdminIdentity(github, env.adminGithubIds),
+    isHeadAdmin: !!role,
   };
 });
 
 export type AdminSession = { signedInAt: number | null; freshUntil: number | null; fresh: boolean };
 
 /**
- * Yöneticinin bu oturumu ne zaman açtığı; geri alınamaz işlemler yalnızca yeni oturumla yapılır (A21).
+ * Oturumun ne zaman açıldığı; geri alınamaz işlemler yalnızca yeni oturumla yapılır (A21).
+ * Tazelik rolden bağımsızdır; yetki ayrıca `lib/access.ts` ile denetlenir.
  * JWT `getClaims` ile doğrulanır ve oturumun sahibi görüntüleyenle aynı olmalıdır.
  */
 export const getAdminSession = cache(async (): Promise<AdminSession | null> => {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return null;
+  if (!viewer) return null;
   const { data, error } = await (await createClient()).auth.getClaims();
   if (error || !data || data.claims.sub !== viewer.id) return { signedInAt: null, freshUntil: null, fresh: false };
   const signedInAt = sessionSignedInAt(data.claims.amr);

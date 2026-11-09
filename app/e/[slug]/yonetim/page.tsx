@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowUpRightIcon, DownloadSimpleIcon, MonitorPlayIcon } from "@phosphor-icons/react/ssr";
 import { SiteHeader } from "@/components/site-header";
-import { ActivityForm, AnnouncementForm, AwardForm, RetryJobButton, ScheduleForm, SuspendForm } from "@/components/admin-forms";
-import { Section, SessionNotice } from "@/components/admin-sections";
+import { ActivityForm, AnnouncementForm, AwardForm, ScheduleForm, SuspendForm } from "@/components/admin-forms";
+import { DeliveryJobList, Section, SessionNotice } from "@/components/admin-sections";
 import { SuspensionNotice } from "@/components/suspension-notice";
 import { HoldToLock } from "@/components/hold-to-lock";
 import { exhibitPath, getAdminSession, getViewer, getAwards, getMysteryHunters, requireEventBySlug } from "@/lib/data";
@@ -205,18 +205,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
 
         <Section title="Teslim işleri" note="Bu etkinliğin tamamlanmamış işleri. Kuyruk dakikalık zamanlayıcıyla da işlenir; her iş en fazla 5 kez denenir.">
           <ActionForm action={runWorker.bind(null, event.id)}><ActionButton pending="Kuyruk işleniyor…" className="press underline underline-offset-4">Kuyruğu şimdi işle</ActionButton></ActionForm>
-          <div className="mt-5 max-h-[400px] overflow-auto">
-            <ul className="divide-y divide-rule">{(jobs ?? []).map(j => {
-              const p = j.project as unknown as { name: string; team_name: string } | null;
-              return <li key={j.id} className="py-3 text-[0.875rem]">
-                <p className="font-medium">{p?.name ?? "Eser"} · {p?.team_name}</p>
-                <p className="text-ink-3">{j.kind === "submit" ? "Teslim" : "Mühür"} · {({ queued: "Sırada", processing: "İşleniyor", completed: "Tamamlandı", failed: "Başarısız" } as Record<string, string>)[j.state]} · {j.attempts}/5 deneme</p>
-                {j.error && <p className="mt-1 break-all text-danger">{j.error}</p>}
-                {j.state === "failed" && <RetryJobButton id={j.id} />}
-                {j.state === "queued" && <p className="text-ink-3">Sonraki deneme: {formatTime(j.next_attempt_at)}</p>}
-              </li>;
-            })}</ul>
-          </div>
+          <DeliveryJobList jobs={jobs ?? []} />
         </Section>
 
         <Section title="Jüri paketi" note="Geçerli teslimler paketi yalnızca mühürlü arşivleri içerir; dışarıda kalanları nedenleriyle listeler. Eksiksiz paket için bütün kayıtların mührü tamamlanmış olmalı.">

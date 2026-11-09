@@ -203,12 +203,31 @@ export function ActivityForm({ eventId, current, since }: { eventId: string; cur
 }
 
 /** Yeni etkinlik verilen toplulukta açılır; yetkiyi sunucuda RPC denetler. */
-export function NewEventForm({ communityId }: { communityId: string }) {
+/** Yeni etkinlik: onaylı topluluklardan biri seçilir; yetki sunucuda `admin_create_event` ile yeniden denetlenir. */
+export function NewEventForm({ communities }: { communities: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(createEvent, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   return (
     <form {...protectedForm} className="grid gap-4">
-      <input type="hidden" name="community" value={communityId} />
+      {communities.length === 1 ? (
+        <p className="text-[0.9375rem] text-ink-2">
+          <input type="hidden" name="community" value={communities[0].id} />
+          Topluluk: <span className="font-medium text-ink">{communities[0].name}</span>
+        </p>
+      ) : (
+        <div className="grid gap-2">
+          <label htmlFor="new-community" className={label}>
+            Topluluk
+          </label>
+          <select id="new-community" name="community" required defaultValue={communities[0]?.id} className={input}>
+            {communities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
         <div className="grid gap-2">
           <label htmlFor="title" className={label}>

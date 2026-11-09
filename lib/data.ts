@@ -20,7 +20,6 @@ type EventRow = {
   starts_at: string;
   deadline: string;
   locked_at: string | null;
-  is_current: boolean;
   announcement: string | null;
   announcement_at: string | null;
   voting: "kapali" | "acik" | "sonuclandi";
@@ -46,7 +45,6 @@ export type EventState = {
   startsAt: string;
   deadline: string;
   lockedAt: string | null;
-  isCurrent: boolean;
   /** Etkinlik başladı mı (başlangıç saatine göre). */
   started: boolean;
   locked: boolean;
@@ -84,7 +82,6 @@ function toState(row: EventRow): EventState {
     startsAt: row.starts_at,
     deadline: row.deadline,
     lockedAt: row.locked_at,
-    isCurrent: row.is_current,
     started: now >= new Date(row.starts_at).getTime(),
     locked: lockedAt !== null || now >= deadline,
     sealTime: new Date(seal).toISOString(),
@@ -104,13 +101,8 @@ function toState(row: EventRow): EventState {
   };
 }
 
-/** Güncel etkinlik. Ana sayfa, panel ve yönetim her zaman bunu kullanır. */
-export const getEvent = cache(async (): Promise<EventState> => {
-  const db = createAdminClient();
-  const { data, error } = await db.from("events").select(EVENT_SELECT).eq("is_current", true).single();
-  if (error || !data) throw new Error("Güncel etkinlik bulunamadı.");
-  return toState(data as EventRow);
-});
+/** İsteğin sunucu anı: bir istek boyunca aynı kalır; sayfa bileşenleri saf kalır. */
+export const getRequestNow = cache((): number => Date.now());
 
 export const getEventBySlug = cache(async (slug: string): Promise<EventState | null> => {
   const db = createAdminClient();
@@ -171,6 +163,26 @@ export const getManagedCommunities = cache(async (userId: string): Promise<Manag
     .filter((r) => r.community)
     .map((r) => ({ ...r.community!, role: r.role }))
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+});
+
+export type ManagementScope = {
+  /** Sahibi ya da organizatörü olunan topluluklar. */
+  communities: ManagedCommunity[];
+  /** Yeni etkinlik açılabilen (onaylı) topluluklar. */
+  creatable: ManagedCommunity[];
+  /** Yönetilebilen ya da incelenebilen etkinlikler: head admin için hepsi, diğerleri için topluluklarınınkiler. */
+  events: EventState[];
+  /** Yönetim merkezinde gösterilecek bir şey var mı; yoksa merkez 404 döner ve başlıkta bağlantı görünmez. */
+  open: boolean;
+};
+
+/** Yönetim merkezinin kapsamı. Yetki `getEventAccess` ile aynıdır: topluluk rolü (durumdan bağımsız) inceler, head admin hepsini inceler. */
+export const getManagementScope = cache(async (viewer: Viewer): Promise<ManagementScope> => {
+  const [communities, all] = await Promise.all([getManagedCommunities(viewer.id), getEvents()]);
+  const ids = new Set(communities.map((c) => c.id));
+  const events = viewer.isHeadAdmin ? all : all.filter((e) => e.communityId != null && ids.has(e.communityId));
+  const creatable = communities.filter((c) => c.status === "onaylandi");
+  return { communities, creatable, events, open: viewer.isHeadAdmin || events.length > 0 || creatable.length > 0 };
 });
 
 export type Viewer = {
@@ -290,7 +302,7 @@ export type OwnProject = Exhibit & {
   members: Member[];
 };
 
-/** Kullanıcının güncel etkinlikteki eseri. */
+/** Kullanıcının bu etkinlikteki eseri. */
 export const getOwnProject = cache(async (userId: string, eventId: string): Promise<OwnProject | null> => {
   const db = createAdminClient();
   const { data: membership, error: memberError } = await db

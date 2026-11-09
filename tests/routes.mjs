@@ -46,6 +46,62 @@ assert.ok(vitrin.includes('href="/e/ornek-etkinlik/belge"') && vitrin.includes('
 assert.ok(vitrin.includes('id="mystery-title"'), "Gizem penceresi etkinlik vitrininde yok.");
 for (const path of ["/e/ornek-etkinlik/belge", "/e/ornek-etkinlik/maskot"]) assert.equal((await fetch(`http://127.0.0.1:3100${path}`)).status, 200, `${path} açılmıyor.`);
 console.log("PASS: Etkinlik adresleri /e/<slug>; bilinmeyen slug 404; durum uçları slug'a göre.");
+// Platform ana sayfası: listelenen etkinlikler; askıdaki etkinlik listede yok.
+const home = await htmlOf("/");
+for (const text of ["Süre dolar, mühür vurulur.", "Hackathon teslimlerini sunucuda mühürleyen platform.", "Aktif etkinlikler", "Geçmiş etkinlikler · sergiler", "Örnek Hackathon · Yerel Test", 'href="/e/ornek-etkinlik"']) {
+  assert.ok(home.includes(text), `Ana sayfada '${text}' yok.`);
+}
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&askida=1");
+const homeSuspended = await htmlOf("/");
+assert.ok(!homeSuspended.includes("Örnek Hackathon · Yerel Test"), "Askıdaki etkinlik ana sayfada listeleniyor.");
+assert.ok(homeSuspended.includes("Şu an aktif etkinlik yok.") && !homeSuspended.includes("Örnek askı gerekçesi"), "Askıdaki etkinlik boş durumu göstermiyor ya da gerekçe sızıyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed");
+const homeSealed = await htmlOf("/");
+assert.ok(homeSealed.includes('href="/sergi/ornek-etkinlik"') && homeSealed.includes("Şu an aktif etkinlik yok."), "Mühürlü etkinlik geçmiş sergiler listesinde değil.");
+console.log("PASS: Ana sayfa listelenen etkinlikleri gösterir; askıdaki etkinlik listede yok.");
+// Eski adresler: 307 ile en uygun etkinliğe, sorgu dizesi korunarak.
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+const legacy = async (path, init = {}) => {
+  const response = await fetch(`http://127.0.0.1:3100${path}`, { ...init, redirect: "manual" });
+  const location = response.headers.get("location");
+  return { status: response.status, to: location && (({ pathname, search }) => pathname + search)(new URL(location, "http://127.0.0.1:3100")) };
+};
+for (const surface of ["panel", "sahne", "belge", "maskot"]) {
+  assert.deepEqual(await legacy(`/${surface}`), { status: 307, to: `/e/ornek-etkinlik/${surface}` }, `/${surface} yönlendirmesi yanlış.`);
+}
+assert.deepEqual(await legacy("/panel?hata=giris&x=1"), { status: 307, to: "/e/ornek-etkinlik/panel?hata=giris&x=1" }, "Sorgu dizesi korunmuyor.");
+assert.deepEqual(await legacy("/panel", { headers: { Cookie: `${session.name}=${session.value}` } }), { status: 307, to: "/e/ornek-etkinlik/panel" }, "Girişli /panel ekibin etkinliğine gitmiyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&askida=1");
+assert.deepEqual(await legacy("/sahne"), { status: 307, to: "/" }, "Listelenecek etkinlik yokken /sahne ana sayfaya dönmüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+assert.equal((await fetch("http://127.0.0.1:3100/davet/preview-invite")).status, 200, "Davet bağlantısı açılmıyor.");
+assert.equal((await fetch("http://127.0.0.1:3100/davet/yok")).status, 404, "Geçersiz davet 404 dönmüyor.");
+assert.equal((await fetch("http://127.0.0.1:3100/sergi/ornek-etkinlik/1")).status, 200, "Eser sayfası açılmıyor.");
+assert.deepEqual(await legacy("/sergi/ornek-etkinlik"), { status: 307, to: "/e/ornek-etkinlik" }, "Açık etkinliğin sergisi vitrine yönlenmiyor.");
+console.log("PASS: /panel, /sahne, /belge, /maskot 307 ile yönlenir; davet ve eser sayfası açılır.");
+// Yönetim merkezi: anonim ve yabancı 404; yönetici etkinliğin yönetimine giden bağlantıyı ve yeni etkinlik formunu görür.
+const hubAuth = { headers: { Cookie: `${session.name}=${session.value}` } };
+assert.equal((await fetch("http://127.0.0.1:3100/yonetim")).status, 404, "Anonim yönetim merkezini görüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=yabanci");
+assert.equal((await fetch("http://127.0.0.1:3100/yonetim", hubAuth)).status, 404, "Yabancı yönetim merkezini görüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+const hub = await fetch("http://127.0.0.1:3100/yonetim", hubAuth);
+assert.equal(hub.status, 200, "Yönetici yönetim merkezini açamıyor.");
+const hubHtml = await hub.text();
+assert.ok(hubHtml.includes('href="/e/ornek-etkinlik/yonetim"') && hubHtml.includes("Yeni etkinlik") && hubHtml.includes('name="community"'), "Yönetim merkezinde etkinlik bağlantısı ya da yeni etkinlik formu yok.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=sahip");
+const ownerHub = await htmlOf("/yonetim", hubAuth);
+assert.ok(ownerHub.includes('href="/e/ornek-etkinlik/yonetim"') && !ownerHub.includes("Kişisel veri silme"), "Topluluk sahibi merkezde etkinliğini görmüyor ya da head admin bölümlerini görüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=komsu");
+const neighbour = await fetch("http://127.0.0.1:3100/yonetim", hubAuth);
+assert.equal(neighbour.status, 200, "Onaylı başka topluluğun organizatörü kendi merkezini açamıyor.");
+const neighbourHtml = await neighbour.text();
+assert.ok(!neighbourHtml.includes("/e/ornek-etkinlik/yonetim") && neighbourHtml.includes("Başka Topluluk"), "Başka topluluğun organizatörü bu etkinliği merkezde görüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=head-admin&askida=1");
+const headHub = await htmlOf("/yonetim", hubAuth);
+assert.ok(headHub.includes('href="/e/ornek-etkinlik/yonetim"') && headHub.includes("Askıda") && !headHub.includes('name="community"'), "Head admin askıdaki etkinliği merkezde görmüyor ya da topluluksuz form görüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+console.log("PASS: Yönetim merkezi yalnızca yetkili etkinlikleri listeler; anonim ve yabancı 404.");
 await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed");
 const anonymous = await fetch("http://127.0.0.1:3100/e/ornek-etkinlik/yonetim");
 assert.equal(anonymous.status, 404, "Anonim ziyaretçi yönetim sayfasını görebiliyor.");

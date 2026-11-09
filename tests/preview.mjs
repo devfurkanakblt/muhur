@@ -14,7 +14,8 @@ let mode = "open";
 // Yetki rolleri DB'den okunur (platform_roles, community_members). ?rol= ile fikstür kullanıcısının rolü seçilir:
 // "yonetici" (varsayılan): head admin + etkinliğin topluluğunun sahibi; "head-admin": yalnızca head admin;
 // "sahip": yalnızca etkinliğin topluluğunun sahibi (head admin değil); "juri": yalnızca etkinliğin jürisi;
-// "yabanci": başka bir topluluğun organizatörü (bu etkinlikte yetkisi yok).
+// "yabanci": başka (henüz onay bekleyen) bir topluluğun organizatörü (bu etkinlikte yetkisi yok, yönetim merkezi de boş);
+// "komsu": başka (onaylı) bir topluluğun organizatörü; merkezde yalnızca kendi topluluğunu görür.
 let role = "yonetici";
 // Denetim kayıtları (log_admin RPC) bellekte tutulur; /fixture/audit okur. ?denetim=hata ile yazma başarısız olur.
 let audits = [];
@@ -50,6 +51,8 @@ const mascotVotes = [
   { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000011", proposal_id: mascotProposals[1].id },
   { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000012", proposal_id: mascotProposals[1].id },
 ];
+// Başka topluluk: "komsu" rolünde onaylı, diğer rollerde onay bekliyor (etkinliği yok).
+const otherCommunity = () => ({ id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", city: null, status: role === "komsu" ? "onaylandi" : "beklemede", telegram_enabled: false });
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
 function records(table) {
@@ -60,7 +63,7 @@ function records(table) {
     team_name: ["Örnek Ekip", "Arşiv Ekibi", "Düşün, Bağlan, Üret"][i], summary: "Bu kayıt yalnızca yerel arayüz testinde kullanılan örnek bir projedir. Gerçek bir teslim değildir.",
     demo_url: i === 0 ? "https://example.com/demo" : null, logo_path: [`fixture/logo-1.png`, `fixture/logo-2.webp`, null][i], repo_id: 100 + i,
     repo_full_name: `preview/project-${i}`, repo_url: `https://github.com/preview/project-${i}`, default_branch: "main",
-    invite_code: "preview-invite", created_by: userId, created_at: stamp(-3600_000), updated_at: stamp(-300_000),
+    invite_code: i === 0 ? "preview-invite" : `preview-invite-${i + 1}`, created_by: userId, created_at: stamp(-3600_000), updated_at: stamp(-300_000),
     last_pushed_at: stamp(-120_000), health_checked_at: stamp(-30_000), health_issues: mode === "failed" ? ["erisilemiyor"] : [],
     repo_head_sha: "a".repeat(40), repo_created_at: stamp(-7200_000), pre_event_commits: false, repo_size_kb: 100,
     accepted_sha: "a".repeat(40), accepted_at: stamp(-300_000), accepted_branch: "main", accepted_archive_sha256: "b".repeat(64), accepted_archive_bytes: 25000,
@@ -74,15 +77,18 @@ function records(table) {
   }));
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
-      is_current: true, community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
+      community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
       community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     communities: [
       { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", city: "İzmir", status: "onaylandi", telegram_enabled: false },
-      { id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", status: "onaylandi", telegram_enabled: false },
+      otherCommunity(),
     ],
-    platform_roles: ["yabanci", "sahip", "juri"].includes(role) ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
-    community_members: role === "yonetici" || role === "sahip" ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: "owner" }]
-      : role === "yabanci" ? [{ community_id: otherCommunityId, user_id: userId, github_login: "preview-admin", role: "organizator" }] : [],
+    platform_roles: ["yabanci", "komsu", "sahip", "juri"].includes(role) ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
+    // Üyelik satırı topluluğuyla birlikte döner (getManagedCommunities gömülü seçimi).
+    community_members: role === "yonetici" || role === "sahip"
+      ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: "owner", community: { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi" } }]
+      : role === "yabanci" || role === "komsu"
+        ? [{ community_id: otherCommunityId, user_id: userId, github_login: "preview-admin", role: "organizator", community: (({ id, slug, name, status }) => ({ id, slug, name, status }))(otherCommunity()) }] : [],
     event_jurors: role === "juri" ? [{ event_id: eventId, user_id: userId }] : [],
     projects,
     project_members: [
@@ -120,7 +126,7 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
-    role = ["yonetici", "head-admin", "sahip", "juri", "yabanci"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
+    role = ["yonetici", "head-admin", "sahip", "juri", "yabanci", "komsu"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
     suspended = url.searchParams.get("askida") === "1";
     auditFails = url.searchParams.get("denetim") === "hata";
     audits = [];

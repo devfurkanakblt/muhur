@@ -3,7 +3,7 @@ import { Mascot } from "@/components/mascot/mascot";
 import { Wordmark } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Announcement } from "@/components/announcement";
-import type { EventState, Viewer } from "@/lib/data";
+import { getManagementScope, type EventState, type Viewer } from "@/lib/data";
 import { eventPath } from "@/lib/event-routes";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
@@ -15,11 +15,13 @@ const navLink = "inline-flex min-h-11 items-center text-ink-2 hover:text-ink";
 
 /**
  * Etkinlik sayfalarında (`event` verilince) gezinme o etkinliğin yüzeylerine gider ve duyuru şeridi o etkinliğindir.
- * Platform sayfalarında yalnızca wordmark, sergiler, (girişliyse) yönetim merkezi ve tema düğmesi görünür.
+ * Platform sayfalarında yalnızca wordmark, sergiler, (yetkisi olana) yönetim merkezi ve tema düğmesi görünür.
  */
 export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; event?: EventState }) {
   // "Yönetim" bağlantısı etkinliği inceleyebilenlere (topluluk rolü, head admin) görünür.
   const canInspect = event ? can(await getEventAccess(viewer, event), "incele") : false;
+  // Platform başlığında "Yönetim" yalnızca merkezde gösterecek bir şeyi olana görünür (diğerleri için merkez 404).
+  const hub = !event && viewer ? (await getManagementScope(viewer)).open : false;
   return (
     <>
       {event?.announcement && event.announcementAt && <Announcement text={event.announcement} stamp={event.announcementAt} />}
@@ -74,7 +76,7 @@ export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; eve
             <Link href="/sergiler" className={navLink}>
               Sergiler
             </Link>
-            {viewer && (
+            {hub && (
               <Link href="/yonetim" className={navLink}>
                 Yönetim
               </Link>

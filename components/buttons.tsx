@@ -30,6 +30,7 @@ export function SubmitButton({
   );
 }
 
+/** Varsayılan dönüş `/panel`: eski adres en uygun etkinliğin paneline yönlendirir. */
 export function SignInButton({ next = "/panel", label = "GitHub ile içe aktar" }: { next?: string; label?: string }) {
   return (
     <ActionForm action={signIn}>

@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 import { openBrowser } from "./browser-driver.mjs";
 
 const cases = [
+  { path: "/", mode: "open", width: 1366, height: 900, name: "home-desktop", expect: ["Süre dolar, mühür vurulur.", "Aktif etkinlikler", "Örnek Hackathon · Yerel Test"] },
+  { path: "/", mode: "open", width: 390, height: 844, name: "home-mobile", expect: ["Süre dolar, mühür vurulur.", "Geçmiş etkinlikler · sergiler", "Örnek Hackathon · Yerel Test"] },
+  { path: "/yonetim", mode: "open", width: 390, height: 844, name: "hub-mobile", expect: ["Yönetim", "Etkinlikler", "Yeni etkinlik"] },
   { path: "/e/ornek-etkinlik/panel", mode: "open", width: 1366, height: 900, name: "panel-desktop", expect: ["Teslim sürümü kabul edildi", "Teslim sürümünü güncelle"] },
   { path: "/e/ornek-etkinlik/panel", mode: "sealed", width: 1366, height: 900, name: "panel-sealed", expect: ["Arşiv doğrulandı", "Mühür makbuzu"] },
   { path: "/e/ornek-etkinlik/yonetim", mode: "sealed", width: 1366, height: 900, name: "admin-desktop", expect: ["Jüri paketi", "Jüri ödülleri", "Diğer sütunları görmek"] },

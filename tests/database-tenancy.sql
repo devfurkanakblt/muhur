@@ -84,4 +84,105 @@ update public.events set suspended_at = null, suspended_reason = null where id =
 select pg_temp.assert_true((public.update_project((select id from projects where repo_id = 904), '50000000-0000-0000-0000-000000000005', 'Yeni Ad', 'Yeni Ekip', 'Askı kalkınca düzenleme.', null)) is null, 'Askı kalkınca proje yeniden düzenlenebilir');
 update public.events set is_current = false where id = '60000000-0000-0000-0000-000000000002';
 
+-- Bölüm 3 · yönetim tarafı: etkinlik kapsamı ve askıya alma ------------------------------------
+-- 50..06: sahiplik devri hedefi. B ödülü ve B oyu kurulum için koruma tetikleyicileri kapatılarak yazılır.
+insert into auth.users(id) values ('50000000-0000-0000-0000-000000000006');
+alter table public.awards disable trigger awards_guard;
+insert into public.awards(id, event_id, project_id, title, reason)
+values ('80000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000002', (select id from projects where repo_id = 904), 'B Ödülü', 'B topluluğunun verdiği ödül.');
+alter table public.awards enable trigger awards_guard;
+alter table public.votes disable trigger votes_guard;
+insert into public.votes(event_id, user_id, project_id, github_login)
+values ('60000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000005', (select id from projects where repo_id = 903), 'katilimci');
+alter table public.votes enable trigger votes_guard;
+insert into public.mascot_name_proposals(event_id, author_id, author_login, name)
+values ('60000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000002', 'deu-org', 'Pamuk');
+
+-- Topluluklar arası çapraz istek.
+select pg_temp.expect_error($c$ select public.admin_lock_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000002','org') $c$, 'YETKI', 'DEÜ organizatörü B etkinliğini kilitleyemez');
+select pg_temp.expect_error(format('select public.admin_add_award(%L, %L, ''Çapraz'', ''Başka topluluğa ödül denemesi.'', %L, ''org'')',
+  '60000000-0000-0000-0000-000000000002', (select id from projects where repo_id = 904), '50000000-0000-0000-0000-000000000002'), 'YETKI', 'Başka topluluğa ödül verilemez');
+select pg_temp.expect_error(format('select public.admin_add_award(%L, %L, ''Platform'', ''Head admin ödül denemesi.'', %L, ''bas'')',
+  '60000000-0000-0000-0000-000000000002', (select id from projects where repo_id = 904), '50000000-0000-0000-0000-000000000001'), 'YETKI', 'Head admin başka topluluğa ödül veremez');
+select pg_temp.assert_true(not public.admin_remove_award('80000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002', 'org'), 'Kendi etkinlik id''si ile başka topluluğun ödülü bulunamaz');
+select pg_temp.assert_true((select count(*) = 1 from awards where id = '80000000-0000-0000-0000-000000000001'), 'Yanlış etkinlik id ile başka topluluğun ödülü silinemez');
+select pg_temp.expect_error($c$ select public.admin_remove_award('80000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000002','org') $c$, 'YETKI', 'Başka topluluğun etkinlik id''siyle ödül silinemez');
+select pg_temp.expect_error($c$ select public.admin_update_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','deadline',jsonb_build_object('deadline', clock_timestamp() + interval '3 hours')) $c$, 'YETKI', 'Head admin etkinlik zamanını değiştiremez');
+select pg_temp.expect_error($c$ select public.admin_update_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000004','b-juri','announcement','{"announcement":"Jüri duyurusu"}') $c$, 'YETKI', 'Jüri etkinliği yönetemez');
+select public.admin_update_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','b-sahip','announcement','{"announcement":"B duyurusu"}');
+select pg_temp.assert_true((select announcement = 'B duyurusu' from events where id = '60000000-0000-0000-0000-000000000002'), 'Topluluk sahibi kendi etkinliğini yönetir');
+
+-- Etkinlik askısı.
+select pg_temp.expect_error($c$ select public.suspend_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000002','org','Yetkisiz askı denemesi') $c$, 'YETKI', 'Organizatör askıya alamaz');
+select pg_temp.expect_error($c$ select public.suspend_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','') $c$, 'gerekçe', 'Gerekçesiz askı reddedilir');
+select pg_temp.expect_error($c$ select public.suspend_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas',repeat('x',501)) $c$, 'gerekçe', 'Çok uzun gerekçe reddedilir');
+select public.suspend_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','Kural ihlali incelemesi');
+select pg_temp.assert_true((select suspended_at is not null and suspended_reason = 'Kural ihlali incelemesi' and suspended_by = '50000000-0000-0000-0000-000000000001' from events where id = '60000000-0000-0000-0000-000000000002'), 'Askı etkinliğe yazılır');
+select pg_temp.expect_error($c$ select public.admin_update_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','b-sahip','announcement','{"announcement":"Askıda duyuru"}') $c$, 'ASKIDA', 'Askıdaki etkinlikte organizatör de yönetemez');
+select pg_temp.assert_true((select count(*) = 1 from admin_audit where action = 'event_suspended' and reason = 'Kural ihlali incelemesi' and event_id = '60000000-0000-0000-0000-000000000002'), 'Askı gerekçesiyle kayda girer');
+-- Askıda katılımcı salt okunur: oy geri çekme, maskot önerisi/düzenlemesi ve maskot oyu da durur.
+alter table public.votes disable trigger votes_guard;
+select pg_temp.expect_error($c$ delete from votes where event_id = '60000000-0000-0000-0000-000000000002' and user_id = '50000000-0000-0000-0000-000000000005' $c$, 'ASKIDA', 'Askıda oy geri çekilemez');
+alter table public.votes enable trigger votes_guard;
+select pg_temp.expect_error($c$ insert into mascot_name_proposals(event_id, author_id, author_login, name) values ('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000005','katilimci','Tarçın') $c$, 'ASKIDA', 'Askıda maskot ismi önerilemez');
+select pg_temp.expect_error($c$ update mascot_name_proposals set name = 'Pamukçuk' where event_id = '60000000-0000-0000-0000-000000000002' and author_id = '50000000-0000-0000-0000-000000000002' $c$, 'ASKIDA', 'Askıda maskot önerisi düzenlenemez');
+update public.mascot_naming_rounds set phase = 'oylama' where event_id = '60000000-0000-0000-0000-000000000002';
+select pg_temp.expect_error($c$ insert into mascot_name_votes(event_id, voter_id, voter_login, proposal_id) select event_id, '50000000-0000-0000-0000-000000000005', 'katilimci', id from mascot_name_proposals where event_id = '60000000-0000-0000-0000-000000000002' and name = 'Pamuk' $c$, 'ASKIDA', 'Askıda maskot oyu verilemez');
+select pg_temp.expect_error($c$ select public.unsuspend_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','b-sahip','Askıyı kaldırma denemesi') $c$, 'YETKI', 'Topluluk sahibi askıyı kaldıramaz');
+select public.unsuspend_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','İnceleme tamamlandı');
+select pg_temp.assert_true((select suspended_at is null and suspended_reason is null and suspended_by is null from events where id = '60000000-0000-0000-0000-000000000002'), 'Askı kalkar');
+select pg_temp.assert_true((select count(*) = 1 from admin_audit where action = 'event_unsuspended' and reason = 'İnceleme tamamlandı'), 'Askının kalkması kayda girer');
+insert into mascot_name_votes(event_id, voter_id, voter_login, proposal_id)
+select event_id, '50000000-0000-0000-0000-000000000005', 'katilimci', id from mascot_name_proposals where event_id = '60000000-0000-0000-0000-000000000002' and name = 'Pamuk';
+select pg_temp.assert_true((select count(*) = 1 from mascot_name_votes where event_id = '60000000-0000-0000-0000-000000000002'), 'Askı kalkınca maskot oyu verilir');
+alter table public.votes disable trigger votes_guard;
+delete from votes where event_id = '60000000-0000-0000-0000-000000000002' and user_id = '50000000-0000-0000-0000-000000000005';
+alter table public.votes enable trigger votes_guard;
+select pg_temp.assert_true((select count(*) = 0 from votes where event_id = '60000000-0000-0000-0000-000000000002'), 'Askı kalkınca oy geri çekilir');
+
+-- Topluluk askısı: topluluğun bütün etkinlikleri yönetime kapanır.
+select pg_temp.expect_error($c$ select public.suspend_community('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','b-sahip','Yetkisiz topluluk askısı') $c$, 'YETKI', 'Topluluk sahibi topluluğu askıya alamaz');
+select public.suspend_community('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','Topluluk incelemesi');
+select pg_temp.assert_true((select status = 'askida' and suspended_reason = 'Topluluk incelemesi' from communities where id = '70000000-0000-0000-0000-000000000002'), 'Topluluk askıya alınır');
+select pg_temp.assert_true((select count(*) = 1 from admin_audit where action = 'community_suspended' and before->>'community' = '70000000-0000-0000-0000-000000000002' and reason = 'Topluluk incelemesi'), 'Topluluk askısı kayda girer');
+select pg_temp.expect_error($c$ select public.admin_switch_event('60000000-0000-0000-0000-000000000002','B Yeni','b-yeni',clock_timestamp(),clock_timestamp()+interval '2 hours','50000000-0000-0000-0000-000000000003','b-sahip') $c$, 'ASKIDA', 'Askıdaki topluluk yeni etkinlik açamaz');
+select pg_temp.expect_error($c$ select public.admin_update_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','b-sahip','announcement','{"announcement":"Askıda duyuru"}') $c$, 'ASKIDA', 'Askıdaki topluluk etkinliğini yönetemez');
+select pg_temp.expect_error($c$ select public.suspend_community('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','İkinci askı') $c$, 'onaylı', 'Askıdaki topluluk yeniden askıya alınmaz');
+select public.unsuspend_community('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','Topluluk incelemesi bitti');
+select pg_temp.assert_true((select status = 'onaylandi' and suspended_reason is null from communities where id = '70000000-0000-0000-0000-000000000002'), 'Topluluk askısı kalkar');
+select pg_temp.assert_true((select count(*) = 1 from admin_audit where action = 'community_unsuspended'), 'Topluluk askısının kalkması kayda girer');
+
+-- Anonimleştirme ve sahiplik devri yalnızca head admin'e açık.
+select pg_temp.expect_error($c$ select public.anonymize_user('50000000-0000-0000-0000-000000000005','50000000-0000-0000-0000-000000000002','org','KVKK silme başvurusu') $c$, 'YETKI', 'Organizatör anonimleştiremez');
+select pg_temp.assert_true(public.anonymize_user('50000000-0000-0000-0000-000000000006','50000000-0000-0000-0000-000000000001','bas','KVKK silme başvurusu') = 0, 'Head admin anonimleştirebilir');
+select pg_temp.expect_error($c$ select public.set_community_owner('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000006','yeni-sahip','50000000-0000-0000-0000-000000000003','b-sahip','Sahiplik devri denemesi') $c$, 'YETKI', 'Topluluk sahibi sahipliği platform yetkisiyle devredemez');
+select pg_temp.expect_error($c$ select public.set_community_owner('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000006','yeni-sahip','50000000-0000-0000-0000-000000000001','bas','') $c$, 'gerekçe', 'Gerekçesiz sahiplik devri reddedilir');
+select public.set_community_owner('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000006','yeni-sahip','50000000-0000-0000-0000-000000000001','bas','Sahip hesabını kaybetti');
+select pg_temp.assert_true(public.event_role('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000006') = 'owner'
+  and public.event_role('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003') = 'organizator', 'Yeni sahip atanır, eski sahip organizatör olur');
+select pg_temp.assert_true((select count(*) = 1 from admin_audit where action = 'community_owner_set' and reason = 'Sahip hesabını kaybetti'), 'Sahiplik devri kayda girer');
+
+-- Yeni etkinlik aynı topluluğa bağlanır.
+update public.events set is_current = false where is_current;
+update public.events set is_current = true where id = '60000000-0000-0000-0000-000000000001';
+select public.lock_delivery_event('60000000-0000-0000-0000-000000000001', 'test', true);
+create temp table t3_new as select public.admin_switch_event('60000000-0000-0000-0000-000000000001','DEÜ Yeni','deu-yeni',clock_timestamp(),clock_timestamp()+interval '2 hours','50000000-0000-0000-0000-000000000002','deu-org') as id;
+select pg_temp.assert_true((select community_id = (select id from communities where slug = 'deu-csai') and is_current from events where id = (select id from t3_new)), 'Yeni etkinlik aynı topluluğa bağlanır');
+
+-- Erişim: iç _v0 fonksiyonları kapalı, sarmalayıcılar ve yeni RPC'ler yalnızca service_role için açık.
+select pg_temp.assert_true((select not has_function_privilege('service_role', 'public.admin_update_event_v0(uuid, uuid, text, text, jsonb)', 'execute')
+  and not has_function_privilege('service_role', 'public.anonymize_user_v0(uuid, uuid, text, text)', 'execute')
+  and has_function_privilege('service_role', 'public.admin_update_event(uuid, uuid, text, text, jsonb)', 'execute')
+  and has_function_privilege('service_role', 'public.suspend_event(uuid, uuid, text, text)', 'execute')
+  and has_function_privilege('service_role', 'public.set_community_owner(uuid, uuid, text, uuid, text, text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.suspend_event(uuid, uuid, text, text)', 'execute')
+  and not has_function_privilege('anon', 'public.suspend_community(uuid, uuid, text, text)', 'execute')
+  and not has_function_privilege('authenticated', 'public.admin_switch_event(uuid, text, text, timestamptz, timestamptz, uuid, text)', 'execute')),
+  'Yönetim fonksiyonlarının erişimi doğru');
+
+-- Son: askıdaki etkinlik süre dolunca yine kilitlenir (etkinliği kalıcı kilitler, bu yüzden en sonda).
+select public.suspend_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','İkinci inceleme');
+select pg_temp.assert_true(public.lock_delivery_event('60000000-0000-0000-0000-000000000002','cron',true), 'Askıdaki etkinlik kilitlenebilir (süre işler)');
+select pg_temp.assert_true((select locked_at is not null from events where id = '60000000-0000-0000-0000-000000000002'), 'Askıdaki etkinliğin kilidi yazılır');
+
 rollback;

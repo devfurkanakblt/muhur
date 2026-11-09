@@ -16,16 +16,20 @@ end $$;
 update events set is_current = false where is_current;
 insert into events(id, slug, title, starts_at, deadline, locked_at, is_current)
 values ('73000000-0000-0000-0000-000000000001', 'activity-test', 'Mola Testi', now() - interval '2 hour', now() - interval '1 hour', now() - interval '1 hour', true);
+-- 0012: yönetim RPC'leri etkinliğin topluluğundaki organizatöre açık.
+insert into auth.users(id) values ('73000000-0000-0000-0000-000000000009');
+update events set community_id = (select id from communities where slug = 'deu-csai') where id = '73000000-0000-0000-0000-000000000001';
+insert into community_members(community_id, user_id, github_login, role) select id, '73000000-0000-0000-0000-000000000009', 'admin', 'organizator' from communities where slug = 'deu-csai';
 
-select public.admin_update_event('73000000-0000-0000-0000-000000000001', null, 'admin', 'activity', '{"activity":{"kind":"yemek","title":"  Öğle yemeği "}}');
+select public.admin_update_event('73000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000009', 'admin', 'activity', '{"activity":{"kind":"yemek","title":"  Öğle yemeği "}}');
 select pg_temp.assert_true((select activity_kind = 'yemek' and activity_title = 'Öğle yemeği' and activity_at is not null from events where id = '73000000-0000-0000-0000-000000000001'), 'Yemek saati kilitli etkinlikte de duyurulur');
-select public.admin_update_event('73000000-0000-0000-0000-000000000001', null, 'admin', 'activity', '{"activity":{"kind":"oyun","title":"Vampir köylü"}}');
+select public.admin_update_event('73000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000009', 'admin', 'activity', '{"activity":{"kind":"oyun","title":"Vampir köylü"}}');
 select pg_temp.assert_true((select activity_kind = 'oyun' and activity_title = 'Vampir köylü' from events where id = '73000000-0000-0000-0000-000000000001'), 'Yeni duyuru öncekinin yerine geçer');
 select pg_temp.assert_true((select before->>'activity_kind' = 'yemek' and after->>'activity_title' = 'Vampir köylü' from admin_audit where action = 'activity' order by occurred_at desc limit 1), 'Denetim kaydı önce/sonra değerini tutar');
-select pg_temp.expect_error($c$ select public.admin_update_event('73000000-0000-0000-0000-000000000001', null, 'admin', 'activity', '{"activity":{"kind":"parti","title":"Parti"}}') $c$, 'activity_kind', 'Bilinmeyen tür reddedilir');
-select pg_temp.expect_error($c$ select public.admin_update_event('73000000-0000-0000-0000-000000000001', null, 'admin', 'activity', '{"activity":{"kind":"oyun","title":" "}}') $c$, 'events_activity_complete', 'Adsız etkinlik reddedilir');
-select pg_temp.expect_error($c$ select public.admin_update_event('73000000-0000-0000-0000-000000000001', null, 'admin', 'activity', '{"activity":"oyun"}') $c$, 'Geçersiz', 'Nesne olmayan değer reddedilir');
-select public.admin_update_event('73000000-0000-0000-0000-000000000001', null, 'admin', 'activity', '{"activity":null}');
+select pg_temp.expect_error($c$ select public.admin_update_event('73000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000009', 'admin', 'activity', '{"activity":{"kind":"parti","title":"Parti"}}') $c$, 'activity_kind', 'Bilinmeyen tür reddedilir');
+select pg_temp.expect_error($c$ select public.admin_update_event('73000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000009', 'admin', 'activity', '{"activity":{"kind":"oyun","title":" "}}') $c$, 'events_activity_complete', 'Adsız etkinlik reddedilir');
+select pg_temp.expect_error($c$ select public.admin_update_event('73000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000009', 'admin', 'activity', '{"activity":"oyun"}') $c$, 'Geçersiz', 'Nesne olmayan değer reddedilir');
+select public.admin_update_event('73000000-0000-0000-0000-000000000001', '73000000-0000-0000-0000-000000000009', 'admin', 'activity', '{"activity":null}');
 select pg_temp.assert_true((select activity_kind is null and activity_title is null and activity_at is null from events where id = '73000000-0000-0000-0000-000000000001'), 'Bitirince alanlar temizlenir');
 
 rollback;

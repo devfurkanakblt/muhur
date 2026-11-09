@@ -88,6 +88,7 @@ select pg_temp.expect_error($cmd$insert into mascot_name_votes(event_id,voter_id
   'Oylama açık değil', 'Sonuçtan sonra oy verilemez');
 select pg_temp.expect_error($cmd$update mascot_naming_rounds set phase='oneriler' where event_id='72000000-0000-0000-0000-000000000001'$cmd$,
   'Geçersiz aşama', 'Sonuçtan öneriye dönülemez');
+insert into public.platform_roles(user_id, login, role) values ('71000000-0000-0000-0000-000000000004', 'dort', 'head_admin'); -- 0012: anonimleştirme head admin'e açık.
 select anonymize_user('71000000-0000-0000-0000-000000000001', '71000000-0000-0000-0000-000000000004', 'dort', 'Test anonimleştirmesi');
 select anonymize_user('71000000-0000-0000-0000-000000000003', '71000000-0000-0000-0000-000000000004', 'dort', 'Test anonimleştirmesi');
 select pg_temp.assert_true((select author_login like 'anonim-%' from mascot_name_proposals where name='Mırmır' and event_id='72000000-0000-0000-0000-000000000001'), 'Öneren kullanıcı adı sonuç aşamasında anonimleşir');

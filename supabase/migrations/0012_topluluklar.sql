@@ -269,4 +269,246 @@ grant execute on function
   public.enqueue_submission(uuid, uuid, text, text, text), public.claim_mystery(uuid, uuid, text)
   to service_role;
 
+-- Katılımcı salt okunurluğu tablo yazmalarına da uzanır: oy geri çekme ve maskot isim etkinliği.
+-- Oy silme yalnızca doğrudan silmede denetlenir (pg_trigger_depth() = 1); proje ya da hesap silinince
+-- zincirleme silinen oylar engellenmez. Proje silme yolu (withdraw_project) zaten askıyı denetler.
+create or replace function public.guard_votes_tenancy() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'DELETE' then
+    if pg_trigger_depth() = 1 then perform public.assert_participant_writable(old.event_id); end if;
+    return old;
+  end if;
+  perform public.assert_participant_writable(new.event_id);
+  if public.event_role(new.event_id, new.user_id) = 'juri' then
+    raise exception 'YARISAMAZ: Jüri kendi etkinliğinde oy veremez.' using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+drop trigger votes_tenancy_guard on public.votes;
+create trigger votes_tenancy_guard before insert or delete on public.votes
+for each row execute function public.guard_votes_tenancy();
+
+-- Öneri ekleme ve isim düzenleme katılımcı yazmasıdır; görünürlük (moderasyon) ve anonimleştirme değildir.
+create function public.guard_mascot_proposal_tenancy() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' or new.name is distinct from old.name then
+    perform public.assert_participant_writable(new.event_id);
+  end if;
+  return new;
+end $$;
+create trigger mascot_name_proposal_tenancy_guard before insert or update on public.mascot_name_proposals
+for each row execute function public.guard_mascot_proposal_tenancy();
+
+create function public.guard_mascot_vote_tenancy() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.assert_participant_writable(new.event_id);
+  return new;
+end $$;
+create trigger mascot_name_vote_tenancy_guard before insert on public.mascot_name_votes
+for each row execute function public.guard_mascot_vote_tenancy();
+
+-- Yönetim tarafı: etkinlik kapsamı ve askıya alma ---------------------------------------------
+-- Yalnızca etkinliğin topluluğundaki sahip/organizatör yönetir; head admin rolü yoksa geçemez.
+-- Etkinlik satırı FOR NO KEY UPDATE, topluluk satırı FOR SHARE kilitlenir: askıya alma süren yönetim
+-- işlemi bitene kadar bekler. FOR SHARE yerine NO KEY UPDATE, eşzamanlı iki yönetim işleminin _v0
+-- içindeki FOR UPDATE yükseltmesinde kilitlenmemesi için; katılımcıların FK (KEY SHARE) kilitleriyle çakışmaz.
+create function public.require_event_manager(p_event uuid, p_actor uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare s timestamptz; c uuid; cs text;
+begin
+  if p_actor is null or coalesce(public.event_role(p_event, p_actor), '') not in ('owner', 'organizator') then
+    raise exception 'YETKI: Bu etkinliği yönetme yetkin yok.' using errcode = 'P0001';
+  end if;
+  select suspended_at, community_id into s, c from events where id = p_event for no key update;
+  select status into cs from communities where id = c for share;
+  if s is not null or cs = 'askida' then
+    raise exception 'ASKIDA: Bu etkinlik platform tarafından geçici olarak durduruldu.' using errcode = 'P0001';
+  end if;
+end $$;
+
+create function public.require_head_admin(p_actor uuid) returns void
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if p_actor is null or not public.is_head_admin(p_actor) then
+    raise exception 'YETKI: Bu işlem yalnızca platform yöneticisine açık.' using errcode = 'P0001';
+  end if;
+end $$;
+
+create function public.require_reason(p_reason text) returns void
+language plpgsql immutable set search_path = public as $$
+begin
+  if p_reason is null or char_length(btrim(p_reason)) not between 3 and 500 then
+    raise exception 'Platform işlemi için 3-500 karakterlik gerekçe gerekli.' using errcode = 'P0001';
+  end if;
+end $$;
+
+-- Yönetim RPC'leri: eski gövde _v0 adıyla saklanır; sarmalayıcı önce etkinlik yetkisini ve askıyı denetler.
+-- _v0 gövdeleri birbirini değil yalnızca switch_event / lock_delivery_event'i çağırır; bunlar sarmalanmaz
+-- (cron kilidi askıdan etkilenmez).
+alter function public.admin_update_event(uuid, uuid, text, text, jsonb) rename to admin_update_event_v0;
+create function public.admin_update_event(p_event uuid, p_actor uuid, p_login text, p_action text, p_changes jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform public.require_event_manager(p_event, p_actor);
+  perform public.admin_update_event_v0(p_event, p_actor, p_login, p_action, p_changes);
+end $$;
+
+alter function public.admin_lock_event(uuid, uuid, text) rename to admin_lock_event_v0;
+create function public.admin_lock_event(p_event uuid, p_actor uuid, p_login text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  perform public.require_event_manager(p_event, p_actor);
+  return public.admin_lock_event_v0(p_event, p_actor, p_login);
+end $$;
+
+alter function public.admin_add_award(uuid, uuid, text, text, uuid, text) rename to admin_add_award_v0;
+create function public.admin_add_award(p_event uuid, p_project uuid, p_title text, p_reason text, p_actor uuid, p_login text)
+returns uuid language plpgsql security definer set search_path = public as $$
+begin
+  perform public.require_event_manager(p_event, p_actor);
+  return public.admin_add_award_v0(p_event, p_project, p_title, p_reason, p_actor, p_login);
+end $$;
+
+-- _v0 ödülü (id, event_id) çiftiyle siler: başka etkinliğin ödül id'si false döner.
+alter function public.admin_remove_award(uuid, uuid, uuid, text) rename to admin_remove_award_v0;
+create function public.admin_remove_award(p_award uuid, p_event uuid, p_actor uuid, p_login text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  perform public.require_event_manager(p_event, p_actor);
+  return public.admin_remove_award_v0(p_award, p_event, p_actor, p_login);
+end $$;
+
+-- Yeni etkinlik, güncel etkinliğin topluluğuna bağlanır.
+alter function public.admin_switch_event(uuid, text, text, timestamptz, timestamptz, uuid, text) rename to admin_switch_event_v0;
+create function public.admin_switch_event(p_current uuid, p_title text, p_slug text, p_starts timestamptz,
+  p_deadline timestamptz, p_actor uuid, p_login text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare new_id uuid;
+begin
+  perform public.require_event_manager(p_current, p_actor);
+  new_id := public.admin_switch_event_v0(p_current, p_title, p_slug, p_starts, p_deadline, p_actor, p_login);
+  update events set community_id = (select community_id from events where id = p_current) where id = new_id;
+  return new_id;
+end $$;
+
+-- Anonimleştirme platform işlemidir: yalnızca head admin.
+alter function public.anonymize_user(uuid, uuid, text, text) rename to anonymize_user_v0;
+create function public.anonymize_user(p_user uuid, p_actor uuid, p_login text, p_reason text)
+returns integer language plpgsql security definer set search_path = public as $$
+begin
+  perform public.require_head_admin(p_actor);
+  return public.anonymize_user_v0(p_user, p_actor, p_login, p_reason);
+end $$;
+
+-- Etkinlik askısı: katılımcı ve yönetim yazmaları durur; kuyruktaki işler ve cron kilidi sürer.
+create function public.suspend_event(p_event uuid, p_actor uuid, p_login text, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare b events;
+begin
+  perform public.require_head_admin(p_actor);
+  perform public.require_reason(p_reason);
+  select * into b from events where id = p_event for update;
+  if not found then raise exception 'Etkinlik bulunamadı.'; end if;
+  if b.suspended_at is not null then raise exception 'Etkinlik zaten askıda.'; end if;
+  update events set suspended_at = clock_timestamp(), suspended_reason = btrim(p_reason), suspended_by = p_actor
+  where id = p_event;
+  perform public.log_admin(p_actor, p_login, 'event_suspended', p_event, null,
+    jsonb_build_object('suspended', false), jsonb_build_object('suspended', true, 'suspended_reason', btrim(p_reason)), p_reason);
+end $$;
+
+create function public.unsuspend_event(p_event uuid, p_actor uuid, p_login text, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare b events;
+begin
+  perform public.require_head_admin(p_actor);
+  perform public.require_reason(p_reason);
+  select * into b from events where id = p_event for update;
+  if not found then raise exception 'Etkinlik bulunamadı.'; end if;
+  if b.suspended_at is null then raise exception 'Etkinlik askıda değil.'; end if;
+  update events set suspended_at = null, suspended_reason = null, suspended_by = null where id = p_event;
+  perform public.log_admin(p_actor, p_login, 'event_unsuspended', p_event, null,
+    jsonb_build_object('suspended', true, 'suspended_at', b.suspended_at, 'suspended_reason', b.suspended_reason, 'suspended_by', b.suspended_by),
+    jsonb_build_object('suspended', false), p_reason);
+end $$;
+
+-- Topluluk askısı: topluluğun etkinlikleri yönetime kapanır (katılımcılar etkilenmez).
+create function public.suspend_community(p_community uuid, p_actor uuid, p_login text, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare b communities;
+begin
+  perform public.require_head_admin(p_actor);
+  perform public.require_reason(p_reason);
+  select * into b from communities where id = p_community for update;
+  if not found then raise exception 'Topluluk bulunamadı.'; end if;
+  if b.status <> 'onaylandi' then raise exception 'Yalnızca onaylı topluluk askıya alınabilir.'; end if;
+  update communities set status = 'askida', suspended_reason = btrim(p_reason) where id = p_community;
+  perform public.log_admin(p_actor, p_login, 'community_suspended', null, null,
+    jsonb_build_object('community', b.id, 'status', b.status), jsonb_build_object('community', b.id, 'status', 'askida'), p_reason);
+end $$;
+
+create function public.unsuspend_community(p_community uuid, p_actor uuid, p_login text, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare b communities;
+begin
+  perform public.require_head_admin(p_actor);
+  perform public.require_reason(p_reason);
+  select * into b from communities where id = p_community for update;
+  if not found then raise exception 'Topluluk bulunamadı.'; end if;
+  if b.status <> 'askida' then raise exception 'Topluluk askıda değil.'; end if;
+  update communities set status = 'onaylandi', suspended_reason = null where id = p_community;
+  perform public.log_admin(p_actor, p_login, 'community_unsuspended', null, null,
+    jsonb_build_object('community', b.id, 'status', b.status, 'suspended_reason', b.suspended_reason),
+    jsonb_build_object('community', b.id, 'status', 'onaylandi'), p_reason);
+end $$;
+
+-- Sahip hesabını kaybederse: eski sahip organizatöre iner, hedef sahip olur (üye değilse eklenir).
+create function public.set_community_owner(p_community uuid, p_user uuid, p_login text, p_actor uuid,
+  p_actor_login text, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare old_owner uuid;
+begin
+  perform public.require_head_admin(p_actor);
+  perform public.require_reason(p_reason);
+  perform id from communities where id = p_community for update;
+  if not found then raise exception 'Topluluk bulunamadı.'; end if;
+  select user_id into old_owner from community_members where community_id = p_community and role = 'owner';
+  update community_members set role = 'organizator' where community_id = p_community and role = 'owner' and user_id <> p_user;
+  insert into community_members(community_id, user_id, github_login, role) values (p_community, p_user, p_login, 'owner')
+  on conflict (community_id, user_id) do update set role = 'owner', github_login = excluded.github_login;
+  perform public.log_admin(p_actor, p_actor_login, 'community_owner_set', null, null,
+    jsonb_build_object('community', p_community, 'owner', old_owner),
+    jsonb_build_object('community', p_community, 'owner', p_user, 'login', p_login), p_reason);
+end $$;
+
+revoke execute on function
+  public.admin_update_event_v0(uuid, uuid, text, text, jsonb), public.admin_lock_event_v0(uuid, uuid, text),
+  public.admin_add_award_v0(uuid, uuid, text, text, uuid, text), public.admin_remove_award_v0(uuid, uuid, uuid, text),
+  public.admin_switch_event_v0(uuid, text, text, timestamptz, timestamptz, uuid, text),
+  public.anonymize_user_v0(uuid, uuid, text, text)
+  from public, anon, authenticated, service_role;
+revoke execute on function
+  public.guard_mascot_proposal_tenancy(), public.guard_mascot_vote_tenancy(),
+  public.require_event_manager(uuid, uuid), public.require_head_admin(uuid), public.require_reason(text),
+  public.admin_update_event(uuid, uuid, text, text, jsonb), public.admin_lock_event(uuid, uuid, text),
+  public.admin_add_award(uuid, uuid, text, text, uuid, text), public.admin_remove_award(uuid, uuid, uuid, text),
+  public.admin_switch_event(uuid, text, text, timestamptz, timestamptz, uuid, text),
+  public.anonymize_user(uuid, uuid, text, text),
+  public.suspend_event(uuid, uuid, text, text), public.unsuspend_event(uuid, uuid, text, text),
+  public.suspend_community(uuid, uuid, text, text), public.unsuspend_community(uuid, uuid, text, text),
+  public.set_community_owner(uuid, uuid, text, uuid, text, text)
+  from public, anon, authenticated;
+grant execute on function
+  public.require_event_manager(uuid, uuid), public.require_head_admin(uuid),
+  public.admin_update_event(uuid, uuid, text, text, jsonb), public.admin_lock_event(uuid, uuid, text),
+  public.admin_add_award(uuid, uuid, text, text, uuid, text), public.admin_remove_award(uuid, uuid, uuid, text),
+  public.admin_switch_event(uuid, text, text, timestamptz, timestamptz, uuid, text),
+  public.anonymize_user(uuid, uuid, text, text),
+  public.suspend_event(uuid, uuid, text, text), public.unsuspend_event(uuid, uuid, text, text),
+  public.suspend_community(uuid, uuid, text, text), public.unsuspend_community(uuid, uuid, text, text),
+  public.set_community_owner(uuid, uuid, text, uuid, text, text)
+  to service_role;
+
 commit;

@@ -98,11 +98,11 @@ test("cihaz saati değişse bile monoton sunucu saati geri gitmez", () => {
   assert.equal(serverTimeAt(1000000, 100, 90), 1000000);
 });
 
-test("arşiv yalnızca yönetici ve o projenin üyelerine açıktır", () => {
-  assert.equal(canDownloadArchive(null, ["owner"]), false);
-  assert.equal(canDownloadArchive({ id: "visitor", isAdmin: false }, ["owner"]), false);
-  assert.equal(canDownloadArchive({ id: "owner", isAdmin: false }, ["owner"]), true);
-  assert.equal(canDownloadArchive({ id: "admin", isAdmin: true }, []), true);
+test("arşiv yalnızca etkinliği inceleyebilenlere ve o projenin üyelerine açıktır", () => {
+  assert.equal(canDownloadArchive(null, ["o"], true), false);
+  assert.equal(canDownloadArchive({ id: "v" }, ["o"], false), false);
+  assert.equal(canDownloadArchive({ id: "o" }, ["o"], false), true);
+  assert.equal(canDownloadArchive({ id: "a" }, [], true), true);
 });
 
 test("demo URL doğrulaması HTTPS ister, kullanıcı bilgisi ve script URL reddeder", () => {

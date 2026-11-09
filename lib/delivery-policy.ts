@@ -38,6 +38,7 @@ export function serverTimeAt(serverNow: number, reference: number, monotonicNow:
   return serverNow + Math.max(0, monotonicNow - reference);
 }
 
-export function canDownloadArchive(viewer: { id: string; isAdmin: boolean } | null, memberIds: string[]) {
-  return !!viewer && (viewer.isAdmin || memberIds.includes(viewer.id));
+/** Arşivi projenin üyeleri ve etkinliği inceleme yetkisi olanlar (`can(access, "incele")`) indirebilir. */
+export function canDownloadArchive(viewer: { id: string } | null, memberIds: string[], canInspect: boolean) {
+  return !!viewer && (canInspect || memberIds.includes(viewer.id));
 }

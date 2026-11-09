@@ -6,6 +6,8 @@ import { SiteHeader } from "@/components/site-header";
 import { ActivityForm, AnnouncementForm, AnonymizeForm, AwardForm, NewEventForm, RetryJobButton, ScheduleForm } from "@/components/admin-forms";
 import { HoldToLock } from "@/components/hold-to-lock";
 import { exhibitPath, getAdminSession, getEvent, getViewer, getAwards, getEvents, getMysteryHunters, type AdminSession } from "@/lib/data";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 import { SignInButton } from "@/components/buttons";
 import { selectAll } from "@/lib/paginate";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -85,8 +87,13 @@ function SessionNotice({ session, now }: { session: AdminSession | null; now: nu
 export default async function AdminPage() {
   await connection();
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) notFound();
+  if (!viewer) notFound();
   const event = await getEvent();
+  // Sayfa etkinlik kapsamındadır: inceleyemeyen için yoktur; yönetemeyen (head admin ya da askıdaki etkinlik) salt okur.
+  const access = await getEventAccess(viewer, event);
+  if (!can(access, "incele")) notFound();
+  const manage = can(access, "yonet");
+  const anonymize = can(access, "anonimlestir");
   const session = await getAdminSession();
   const db = createAdminClient();
   // Okuma hatası "Henüz eser yok" ya da "zamanlayıcı hiç çalışmadı" gibi gösterilmez; sayfa hata ekranına düşer (A09).
@@ -107,11 +114,12 @@ export default async function AdminPage() {
   const voteCount = votes.count;
   const sealed = rows.filter((r) => r.archive_path).length;
   const startMs = new Date(event.startsAt).getTime();
+  // Teslim işleri: head admin bütün etkinliklerinkini, topluluk rolü yalnızca bu etkinliğinkini görür.
+  const jobsQuery = db.from("delivery_jobs").select("id, kind, state, attempts, error, next_attempt_at, created_at, project:projects(name, team_name), event:events(title)");
   const [awards, events, status, runsResult, jobsResult, hunters, teams] = await Promise.all([
     getAwards(event.id), getEvents(), getLiveStatus(),
     db.from("worker_runs").select("id, started_at, finished_at, error, processed").order("started_at", { ascending: false }).limit(5),
-    db.from("delivery_jobs").select("id, kind, state, attempts, error, next_attempt_at, created_at, project:projects(name, team_name), event:events(title)")
-      .order("created_at", { ascending: false }).limit(30),
+    (access?.headAdmin ? jobsQuery : jobsQuery.eq("event_id", event.id)).order("created_at", { ascending: false }).limit(30),
     getMysteryHunters(event.id),
     selectAll<MemberTeam>((from, to) => db
       .from("project_members")
@@ -123,6 +131,9 @@ export default async function AdminPage() {
   ]);
   if (runsResult.error) throw new Error(`Zamanlayıcı kayıtları okunamadı: ${runsResult.error.message}`);
   if (jobsResult.error) throw new Error(`Teslim işleri okunamadı: ${jobsResult.error.message}`);
+  // Jüri paketi bağlantıları yalnızca paketi indirebileceği etkinlikler için listelenir.
+  const juryEvents = (await Promise.all(events.filter(e => e.locked)
+    .map(async e => (can(await getEventAccess(viewer, e), "juri-paketi") ? e : null)))).filter(e => e !== null);
   const runs = runsResult.data;
   const jobs = jobsResult.data;
   const teamOf = new Map(teams.map(t => [t.user_id, t.project?.team_name]));
@@ -146,7 +157,13 @@ export default async function AdminPage() {
           </Link>
         </div>
 
-        <SessionNotice session={session} now={event.now} />
+        {(manage || anonymize) && <SessionNotice session={session} now={event.now} />}
+
+        {!manage && (
+          <p role="status" className="border-y border-rule-strong py-4 text-ink">
+            Salt okunur: bu etkinliği yönetme yetkin yok ya da etkinlik askıda.
+          </p>
+        )}
 
         {event.locked ? (
           <Section title="Mühür vuruldu">
@@ -154,7 +171,7 @@ export default async function AdminPage() {
               Mühür anı {formatDay(event.sealTime)}, {formatTime(event.sealTime)}. Kilit kalıcıdır; geri alınamaz ve zamanlama değiştirilemez.
             </p>
           </Section>
-        ) : (
+        ) : manage && (
           <>
             <Section title="Zamanlama" note="Başlangıçtan önce açılmış repolar ve önceden tarihli commit'ler aşağıdaki tabloda işaretlenir.">
               <ScheduleForm starts={toLocalInput(event.startsAt)} deadline={toLocalInput(event.deadline)} />
@@ -165,13 +182,15 @@ export default async function AdminPage() {
           </>
         )}
 
-        <Section title="Yemek ve etkinlik saati" note="Duyurduğun an ana sayfadaki maskot ve selam değişir; bitirene kadar sürer. Telegram grubuna da gider.">
-          <ActivityForm current={event.activity} since={event.activity ? formatTime(event.activity.at).slice(0, 5) : null} />
-        </Section>
+        {manage && <>
+          <Section title="Yemek ve etkinlik saati" note="Duyurduğun an ana sayfadaki maskot ve selam değişir; bitirene kadar sürer. Telegram grubuna da gider.">
+            <ActivityForm current={event.activity} since={event.activity ? formatTime(event.activity.at).slice(0, 5) : null} />
+          </Section>
 
-        <Section title="Duyuru" note="Telegram grubuna da gider.">
-          <AnnouncementForm current={event.announcement} />
-        </Section>
+          <Section title="Duyuru" note="Telegram grubuna da gider.">
+            <AnnouncementForm current={event.announcement} />
+          </Section>
+        </>}
 
         <Section
           title="Halkın seçimi"
@@ -181,7 +200,7 @@ export default async function AdminPage() {
               : "Oylama, mühür vurulduktan sonra açılabilir."
           }
         >
-          {event.voting === "kapali" && (
+          {manage && event.voting === "kapali" && (
             <ActionForm action={setVoting}>
               <input type="hidden" name="state" value="acik" />
               <ActionButton pending="Oylama açılıyor…"
@@ -192,7 +211,7 @@ export default async function AdminPage() {
               </ActionButton>
             </ActionForm>
           )}
-          {event.voting === "acik" && (
+          {manage && event.voting === "acik" && (
             <ActionForm action={setVoting}>
               <input type="hidden" name="state" value="sonuclandi" />
               <ActionButton pending="Sonuçlar açıklanıyor…" className="press inline-flex h-12 items-center rounded-[2px] bg-ink px-5 text-[0.9375rem] font-medium text-wall">
@@ -226,12 +245,12 @@ export default async function AdminPage() {
         </Section>
 
         <Section title="Jüri paketi" note="Geçerli teslimler paketi yalnızca mühürlü arşivleri içerir; dışarıda kalanları nedenleriyle listeler. Eksiksiz paket için bütün kayıtların mührü tamamlanmış olmalı.">
-          <ul className="grid gap-3">{events.filter(e => e.locked).map(e => <li key={e.id} className="flex flex-wrap gap-x-4 gap-y-1 text-[0.9375rem]">
+          <ul className="grid gap-3">{juryEvents.map(e => <li key={e.id} className="flex flex-wrap gap-x-4 gap-y-1 text-[0.9375rem]">
             <span>{e.title}</span><a href={`/api/juri/${e.slug}?paket=gecerli`} className="underline underline-offset-4">Mühürlü teslimler ZIP</a>
             <a href={`/api/juri/${e.slug}?paket=eksiksiz`} className="underline underline-offset-4">Eksiksiz ZIP</a>
             <a href={`/api/juri/${e.slug}?format=csv`} className="underline underline-offset-4">CSV listesi</a>
           </li>)}</ul>
-          {!events.some(e => e.locked) && <p className="text-ink-2">İlk etkinlik kilitlendiğinde paket hazır olacak.</p>}
+          {juryEvents.length === 0 && <p className="text-ink-2">İlk etkinlik kilitlendiğinde paket hazır olacak.</p>}
         </Section>
 
         <Section title="Gizem avcıları" note="Açılış videosundaki gizli mesajı çözüp Ctrl+Shift+S penceresine doğru cümleyi yazanlar. Yalnızca hackathon saatlerinde kaydedilir; rozet takıma verilir.">
@@ -245,22 +264,25 @@ export default async function AdminPage() {
         </Section>
 
         {event.locked && <Section title="Jüri ödülleri" note="Ödülü açıkladığın anda vitrinin başında ve eser sayfasında yayımlanır, sahnede tören gösterisiyle açılır ve Telegram kanalına duyurulur. Sırayla açıklamak için ödülleri tören anında tek tek ekle.">
-          <AwardForm projects={rows.filter(r => !!r.archive_path)} />
+          {manage && <AwardForm projects={rows.filter(r => !!r.archive_path)} />}
           <ul className="mt-6 divide-y divide-rule">{awards.map(a => <li key={a.id} className="py-3">
             <p className="font-medium">{a.title} · {rows.find(r => r.id === a.project_id)?.name}</p><p className="text-sm text-ink-2">{a.reason}</p>
-            <ActionForm action={removeAward}><input type="hidden" name="id" value={a.id} /><ActionButton pending="Kaldırılıyor…" className="mt-2 text-sm text-ink-3 underline">Ödülü kaldır</ActionButton></ActionForm>
+            {manage && <ActionForm action={removeAward}><input type="hidden" name="id" value={a.id} /><ActionButton pending="Kaldırılıyor…" className="mt-2 text-sm text-ink-3 underline">Ödülü kaldır</ActionButton></ActionForm>}
           </li>)}</ul>
+          {!manage && awards.length === 0 && <p className="text-ink-2">Henüz ödül açıklanmadı.</p>}
         </Section>}
 
-        {event.locked && (
+        {manage && event.locked && (
           <Section title="Yeni etkinlik" note="Bu sergi geçmiş sergilere taşınır; ana sayfa yeni etkinliği gösterir.">
             <NewEventForm />
           </Section>
         )}
 
-        <Section title="Kişisel veri silme" note="Aydınlatma metnindeki silme başvurusu için. Eser kaydı, commit, arşiv hash'i ve zamanlar korunur; ekip ve oy kayıtlarındaki ad anonimleşir.">
-          <AnonymizeForm />
-        </Section>
+        {anonymize && (
+          <Section title="Kişisel veri silme" note="Aydınlatma metnindeki silme başvurusu için. Eser kaydı, commit, arşiv hash'i ve zamanlar korunur; ekip ve oy kayıtlarındaki ad anonimleşir.">
+            <AnonymizeForm />
+          </Section>
+        )}
 
         <section>
           <div className="flex flex-wrap items-baseline justify-between gap-3 border-t border-ink pt-5">

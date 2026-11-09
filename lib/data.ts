@@ -113,6 +113,14 @@ export const getEventBySlug = cache(async (slug: string): Promise<EventState | n
   return data ? toState(data as EventRow) : null;
 });
 
+/** Etkinlik kimliğiyle; yetki denetimi için kaydın bağlı olduğu etkinliği okumakta kullanılır. */
+export const getEventById = cache(async (id: string): Promise<EventState | null> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("events").select(EVENT_SELECT).eq("id", id).maybeSingle();
+  if (error) readFailed("Etkinlik", error);
+  return data ? toState(data as EventRow) : null;
+});
+
 export const getEvents = cache(async (): Promise<EventState[]> => {
   const db = createAdminClient();
   const { data, error } = await db.from("events").select(EVENT_SELECT).order("starts_at", { ascending: false });

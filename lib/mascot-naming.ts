@@ -1,5 +1,7 @@
 import "server-only";
 import { getEvent, getViewer } from "@/lib/data";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 import { createAdminClient } from "@/lib/supabase/server";
 import { selectAll } from "@/lib/paginate";
 
@@ -17,7 +19,8 @@ export type NamingSnapshot = {
   proposals: NamingProposal[];
   canSuggest: boolean;
   isSignedIn: boolean;
-  isAdmin: boolean;
+  /** Etkinliği yönetebilir (`can(access, "yonet")`): aşama ve öneri görünürlüğü. */
+  canManage: boolean;
   ownProposal: { id: string; name: string; visible: boolean } | null;
   votedProposalId: string | null;
 };
@@ -32,6 +35,7 @@ type ProposalRow = {
 
 export async function getMascotNamingSnapshot(): Promise<NamingSnapshot> {
   const [event, viewer] = await Promise.all([getEvent(), getViewer()]);
+  const canManage = can(await getEventAccess(viewer, event), "yonet");
   const db = createAdminClient();
   const [{ data: round, error: roundError }, rows, { data: tally, error: tallyError }, membership, vote] = await Promise.all([
     db.from("mascot_naming_rounds").select("phase").eq("event_id", event.id).single(),
@@ -48,7 +52,7 @@ export async function getMascotNamingSnapshot(): Promise<NamingSnapshot> {
   }
   const counts = new Map<string, number>(((tally ?? []) as { proposal_id: string; vote_count: number | string }[])
     .map(item => [item.proposal_id, Number(item.vote_count)]));
-  const proposals = rows.filter(item => item.visible || viewer?.isAdmin).map(item => ({
+  const proposals = rows.filter(item => item.visible || canManage).map(item => ({
     id: item.id,
     name: item.name,
     createdAt: item.created_at,
@@ -62,7 +66,7 @@ export async function getMascotNamingSnapshot(): Promise<NamingSnapshot> {
     proposals,
     canSuggest: Boolean(membership.data),
     isSignedIn: Boolean(viewer),
-    isAdmin: Boolean(viewer?.isAdmin),
+    canManage,
     ownProposal: own ? { id: own.id, name: own.name, visible: own.visible } : null,
     votedProposalId: vote.data?.proposal_id ?? null,
   };

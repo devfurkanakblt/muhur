@@ -8,7 +8,13 @@ const now = Date.now();
 const stamp = n => new Date(now + n).toISOString();
 const userId = "00000000-0000-0000-0000-000000000001";
 const eventId = "10000000-0000-0000-0000-000000000001";
+const communityId = "20000000-0000-0000-0000-000000000001";
+const otherCommunityId = "20000000-0000-0000-0000-000000000002";
 let mode = "open";
+// Yetki rolleri DB'den okunur (platform_roles, community_members). ?rol= ile fikstür kullanıcısının rolü seçilir:
+// "yonetici" (varsayılan): head admin + etkinliğin topluluğunun sahibi; "head-admin": yalnızca head admin;
+// "yabanci": başka bir topluluğun organizatörü (bu etkinlikte yetkisi yok).
+let role = "yonetici";
 // Örnek logolar (512×512): biri PNG, biri WEBP; üçüncü eserin logosu yok. Depo adresinden sunulur.
 const logoSvg = shape => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">${shape}</svg>`);
 const logos = {
@@ -61,7 +67,16 @@ function records(table) {
   }));
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
-      is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+      is_current: true, community_id: communityId, suspended_at: null, suspended_reason: null,
+      community: { name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+    communities: [
+      { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false },
+      { id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", status: "onaylandi", telegram_enabled: false },
+    ],
+    platform_roles: role === "yabanci" ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
+    community_members: role === "yonetici" ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: "owner" }]
+      : role === "yabanci" ? [{ community_id: otherCommunityId, user_id: userId, github_login: "preview-admin", role: "organizator" }] : [],
+    event_jurors: [],
     projects,
     project_members: [
       { ...member, project_id: projects[0].id, project: { team_name: projects[0].team_name } },
@@ -98,10 +113,11 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
+    role = ["yonetici", "head-admin", "yabanci"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
     hunters = [];
     votes = sealedVotes();
     awards = sealedAwards();
-    return response.end(JSON.stringify({ mode }));
+    return response.end(JSON.stringify({ mode, role }));
   }
   if (url.pathname === "/fixture/session") {
     const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -231,7 +247,7 @@ const prod = process.env.MUHUR_PREVIEW_PROD === "1";
 const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), prod ? "start" : "dev", "-p", "3100"], {
   windowsHide: true, stdio: "inherit", env: { ...process.env, NODE_ENV: prod ? "production" : "development", MUHUR_TEST_PREVIEW: "1",
     NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54330", NEXT_PUBLIC_SUPABASE_ANON_KEY: "fixture-key",
-    SUPABASE_SERVICE_ROLE_KEY: "fixture-key", ADMIN_GITHUB_IDS: "424242", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
+    SUPABASE_SERVICE_ROLE_KEY: "fixture-key", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
     GITHUB_TOKEN: "", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", CRON_SECRET: "fixture-cron",
   },
 });

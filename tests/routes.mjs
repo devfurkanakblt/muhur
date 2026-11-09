@@ -35,6 +35,26 @@ const csv = await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=cs
 assert.equal(csv.status, 200);
 assert.ok((await csv.text()).includes("Örnek Ekip"));
 console.log("PASS: Yönetici CSV teslim listesi indirebiliyor.");
+// Çoklu topluluk: yetki etkinlik kapsamındadır; başka topluluğun organizatörü bu etkinliği göremez.
+const auth = { headers: { Cookie: `${session.name}=${session.value}` }, redirect: "manual" };
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed&rol=yabanci");
+assert.equal((await fetch("http://127.0.0.1:3100/yonetim", auth)).status, 404, "Başka topluluğun organizatörü yönetim sayfasını açabiliyor.");
+assert.equal((await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=csv", auth)).status, 403, "Başka topluluğun organizatörü jüri paketini indirebiliyor.");
+assert.equal((await fetch("http://127.0.0.1:3100/api/arsiv/30000000-0000-0000-0000-000000000002", auth)).status, 403, "Başka topluluğun organizatörü başka ekibin arşivine erişebiliyor.");
+assert.notEqual((await fetch("http://127.0.0.1:3100/api/arsiv/30000000-0000-0000-0000-000000000001", auth)).status, 403, "Ekip üyesi kendi arşivine erişemiyor.");
+assert.ok(!(await (await fetch("http://127.0.0.1:3100/", auth)).text()).includes('href="/yonetim"'), "Yetkisiz kullanıcıya Yönetim bağlantısı görünüyor.");
+console.log("PASS: Başka topluluğun organizatörü yönetim, jüri paketi ve başka ekibin arşivine erişemiyor.");
+// Yalnızca head admin: inceler ama yönetemez (salt okunur; kilit, ödül, duyuru formları yok).
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed&rol=head-admin");
+const readOnly = await fetch("http://127.0.0.1:3100/yonetim", auth);
+assert.equal(readOnly.status, 200);
+const readOnlyHtml = await readOnly.text();
+assert.ok(readOnlyHtml.includes("Salt okunur: bu etkinliği yönetme yetkin yok ya da etkinlik askıda."), "Head admin için salt okunur satırı yok.");
+for (const hidden of ["Ödülü kaldır", "name=\"announcement\"", "name=\"slug\""]) assert.ok(!readOnlyHtml.includes(hidden), `Head admin yönetim formu görüyor: ${hidden}`);
+assert.ok(readOnlyHtml.includes("Jüri paketi") && readOnlyHtml.includes("Kişisel veri silme"), "Head admin inceleme ve anonimleştirme bölümlerini görmüyor.");
+assert.equal((await fetch("http://127.0.0.1:3100/api/juri/ornek-etkinlik?format=csv", auth)).status, 200);
+console.log("PASS: Head admin yönetim sayfasını salt okur, jüri paketini indirebilir.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed");
 // Telegram duyurusunun görseli: herkese açık kazanan kartı PNG; bilinmeyen kazanan 404.
 const card = await fetch("http://127.0.0.1:3100/api/kazanan/a1");
 assert.equal(card.status, 200);

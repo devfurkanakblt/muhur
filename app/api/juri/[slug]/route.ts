@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { getEventBySlug, getViewer } from "@/lib/data";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 import { hashArchive } from "@/lib/delivery-core";
 import { csvTable, zipEntries } from "@/lib/zip";
 import { selectAll } from "@/lib/paginate";
@@ -11,13 +13,15 @@ export const maxDuration = 300;
  * ?paket=eksiksiz (varsayılan): tüm kayıtların mühürlü arşivi olmalı; biri eksikse paket verilmez.
  * ?paket=gecerli: yalnızca mühürlü teslimler pakete girer; dışarıda kalanlar nedenleriyle manifest/CSV'de listelenir.
  * ?format=csv: tüm kayıtların durumu.
+ * Yetki etkinlik kapsamındadır: topluluk rolü, head admin ya da (kilitten sonra) etkinliğin jürisi.
  */
 export async function GET(request: Request, ctx: { params: Promise<{ slug: string }> }) {
   const viewer = await getViewer();
-  if (!viewer?.isAdmin) return Response.json({ error: "Yetkisiz" }, { status: 403 });
+  if (!viewer) return Response.json({ error: "Yetkisiz" }, { status: 403 });
   const { slug } = await ctx.params;
   const event = await getEventBySlug(slug);
   if (!event) return Response.json({ error: "Etkinlik bulunamadı" }, { status: 404 });
+  if (!can(await getEventAccess(viewer, event), "juri-paketi")) return Response.json({ error: "Yetkisiz" }, { status: 403 });
   if (!event.locked) return Response.json({ error: "Jüri paketi teslim kilitlendikten sonra indirilebilir." }, { status: 409 });
   const params = new URL(request.url).searchParams;
   const mode = params.get("paket") === "gecerli" ? "gecerli" : "eksiksiz";

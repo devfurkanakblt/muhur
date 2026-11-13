@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { exhibitPath, getAdminSession, getEventById, getOwnProject, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { exhibitPath, getAdminSession, getEventById, getOwnProject, getViewer, getGithubViewer, type EventState, type Viewer } from "@/lib/data";
 import { eventPath, eventUrl } from "@/lib/event-routes";
 import { requireEventAction } from "@/lib/access";
 import { ASKIDA_MESAJI, YARISAMAZ_MESAJI, YETKISIZ_MESAJI, type EventAction } from "@/lib/authz";
@@ -17,6 +17,8 @@ import { safeDemoUrl } from "@/lib/delivery-policy";
 import { normalizeLogo, type NormalizedLogo } from "@/lib/logo-image";
 import { notifyEvent, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
+import { httpsLink } from "@/lib/community-input";
+import { safeAuthNext } from "@/lib/auth-redirect";
 import { claimOnce, releaseOnce, requestKey } from "@/lib/once";
 import { isMysteryAnswer, mysteryOpen } from "@/lib/mystery";
 import { announceAward, announcePeoplesChoice } from "@/lib/winners";
@@ -67,13 +69,16 @@ function revalidateEvent(event: EventState) {
 // ---------------------------------------------------------------------------- auth
 
 export async function signIn(formData: FormData) {
-  const next = String(formData.get("next") ?? "/panel");
+  const next = safeAuthNext(formData.get("next"));
+  const provider = formData.get("provider") ?? "github";
+  if (provider !== "github" && provider !== "linkedin_oidc") redirect("/?hata=giris");
+  if (provider === "linkedin_oidc" && !/^\/katil\/[A-Za-z0-9_-]{43}$/.test(next)) redirect("/?hata=giris");
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "github",
+    provider,
     options: {
-      redirectTo: `${env.siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
-      scopes: "read:user read:org",
+      redirectTo: `${env.siteUrl}/auth/callback${formData.has("next") ? `?next=${encodeURIComponent(next)}` : ""}`,
+      scopes: provider === "github" ? "read:user read:org" : "openid profile email",
     },
   });
   if (error || !data.url) redirect("/?hata=giris");
@@ -128,7 +133,7 @@ async function removeLogo(path: string | null | undefined) {
 // ---------------------------------------------------------------------------- proje
 
 export async function createProject(_: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
@@ -195,7 +200,7 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
 }
 
 export async function updateProject(_: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
@@ -237,7 +242,7 @@ export async function updateProject(_: FormState, formData: FormData): Promise<F
 }
 
 export async function withdrawProject(_: FormState, formData: FormData): Promise<FormState> {
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) redirect("/");
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
@@ -266,7 +271,7 @@ export async function withdrawProject(_: FormState, formData: FormData): Promise
 
 /** Panelden "Yeniden kontrol et": eserin repo sağlığını hemen yeniler. */
 export async function recheckHealth(eventId: string) {
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return;
   const event = await loadEvent(eventId);
   if (typeof event === "string") return;
@@ -279,7 +284,7 @@ export async function recheckHealth(eventId: string) {
 
 export async function submitVersion(eventId: string, previous: FormState): Promise<FormState> {
   void previous;
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
   const event = await loadEvent(eventId);
   if (typeof event === "string") return { error: event };
@@ -333,7 +338,7 @@ function submissionMessage(r: SubmissionResult) {
 export async function transferOwner(_: FormState, formData: FormData): Promise<FormState> {
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   const project = await ownedProject(event);
   if (!viewer || !project) return { error: "Bu işlem yalnızca kurucu tarafından, teslim açıkken yapılabilir." };
   const target = String(formData.get("target") ?? "");
@@ -353,7 +358,7 @@ export async function transferOwner(_: FormState, formData: FormData): Promise<F
 
 export async function joinProject(_: FormState, formData: FormData): Promise<FormState> {
   const code = String(formData.get("code") ?? "");
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return { error: "Önce GitHub ile giriş yap." };
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
@@ -373,7 +378,7 @@ export async function joinProject(_: FormState, formData: FormData): Promise<For
 }
 
 export async function leaveProject(eventId: string) {
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) redirect("/");
   const event = await loadEvent(eventId);
   if (typeof event === "string") redirect("/");
@@ -386,7 +391,7 @@ export async function leaveProject(eventId: string) {
 
 /** Görüntüleyenin bu etkinlikte kurucusu olduğu proje; teslim kapalıysa yok sayılır. */
 async function ownedProject(event: EventState) {
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return null;
   if (event.locked) return null;
   const project = await getOwnProject(viewer.id, event.id);
@@ -398,7 +403,7 @@ export async function removeMember(formData: FormData) {
   const userId = String(formData.get("userId") ?? "");
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return;
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   const project = await ownedProject(event);
   if (!viewer || !project) return;
   // Kuruculuk, çıkarma anında DB'de yeniden denetlenir.
@@ -410,7 +415,7 @@ export async function removeMember(formData: FormData) {
 export async function renewInvite(eventId: string) {
   const event = await loadEvent(eventId);
   if (typeof event === "string") return;
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   const project = await ownedProject(event);
   if (!viewer || !project) return;
   // Art arda gelen yenileme istekleri, az önce paylaşılan yeni bağlantıyı da geçersiz kılmasın.
@@ -430,7 +435,7 @@ export async function renewInvite(eventId: string) {
  */
 export async function vote(_: FormState, formData: FormData): Promise<FormState> {
   const projectId = String(formData.get("projectId") ?? "");
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return { error: "Oy vermek için GitHub ile giriş yap." };
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
@@ -456,7 +461,7 @@ export async function huntMystery(_: FormState, formData: FormData): Promise<For
   if (typeof event === "string") return { error: event };
   if (!mysteryOpen(event)) return { error: "Gizem yalnızca hackathon saatlerinde açık." };
   if (!isMysteryAnswer(answer)) return { error: "Hmm… olmadı. 🤔" };
-  const viewer = await getViewer();
+  const viewer = await getGithubViewer();
   if (!viewer) return { notice: "Doğru! Rozeti almak için önce GitHub ile giriş yap, sonra tekrar yaz." };
   const { error } = await createAdminClient().rpc("claim_mystery", { p_event: event.id, p_user: viewer.id, p_login: viewer.login });
   if (error) {
@@ -661,9 +666,12 @@ export async function createEvent(_: FormState, formData: FormData): Promise<For
   if (!starts || !deadline || starts >= deadline) return { error: "Başlangıç, son teslimden önce olmalı." };
   if (deadline.getTime() <= Date.now()) return { error: "Son teslim gelecekte olmalı." };
   const db = createAdminClient();
-  const { data: created, error } = await db.rpc("admin_create_event", {
+  let applicationUrl, rulesUrl, privacyUrl;
+  try { applicationUrl = httpsLink(formData.get("application_url")); rulesUrl = httpsLink(formData.get("rules_url")); privacyUrl = httpsLink(formData.get("privacy_url")); }
+  catch { return { error: "Etkinlik bağlantıları geçerli HTTPS adresleri olmalı." }; }
+  const { data: created, error } = await db.rpc("admin_create_community_event", {
     p_community: community, p_title: title, p_slug: slug, p_starts: starts.toISOString(), p_deadline: deadline.toISOString(),
-    p_actor: admin.id, p_login: admin.login,
+    p_actor: admin.id, p_login: admin.login, p_application_url: applicationUrl, p_rules_url: rulesUrl, p_privacy_url: privacyUrl,
   });
   if (error || !created) {
     // Eş istek (çift tıklama, ikinci sekme) ilkinden sonra slug çakışmasıyla reddedilir; aynı toplulukta aynı

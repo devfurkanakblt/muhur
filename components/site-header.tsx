@@ -8,6 +8,7 @@ import { eventPath } from "@/lib/event-routes";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
 import { hasMascotNaming } from "@/lib/mascot-naming";
+import { env } from "@/lib/env";
 import { signOut } from "@/app/actions";
 import { ActionForm, ActionButton } from "@/components/action-form";
 
@@ -19,7 +20,8 @@ const navLink = "inline-flex min-h-11 items-center text-ink-2 hover:text-ink";
  */
 export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; event?: EventState }) {
   // "Yönetim" bağlantısı etkinliği inceleyebilenlere (topluluk rolü, head admin) görünür.
-  const canInspect = event ? can(await getEventAccess(viewer, event), "incele") : false;
+  const access = event ? await getEventAccess(viewer, event) : null;
+  const canInspect = can(access, "incele");
   // Platform başlığında "Yönetim" yalnızca merkezde gösterecek bir şeyi olana görünür (diğerleri için merkez 404).
   const hub = !event && viewer ? (await getManagementScope(viewer)).open : false;
   return (
@@ -50,6 +52,7 @@ export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; eve
             <Link href={eventPath(event.slug, "belge")} className={navLink}>
               Katılım belgesi
             </Link>
+            {(access?.juror || canInspect) && <Link href={eventPath(event.slug) + "/juri"} className={navLink}>Jüri alanı</Link>}
             {canInspect && (
               <Link href={eventPath(event.slug, "yonetim")} className="text-ink-2 hover:text-ink">
                 Yönetim
@@ -73,6 +76,7 @@ export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; eve
           </nav>
         ) : (
           <nav aria-label="Ana gezinme" className="flex flex-wrap items-center gap-3 text-[0.9375rem] sm:gap-5">
+            {env.communityApplicationsEnabled && <Link href="/topluluk/basvur" className={navLink}>Topluluğunu kaydet</Link>}
             <Link href="/sergiler" className={navLink}>
               Sergiler
             </Link>

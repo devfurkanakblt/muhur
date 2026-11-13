@@ -1,6 +1,7 @@
 import { execFileSync, execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import assert from "node:assert/strict";
+import { testCommunityRaces } from "../tests/community-races.mjs";
 import { existsSync, mkdirSync, readdirSync, openSync, closeSync } from "node:fs";
 import { resolve, join } from "node:path";
 
@@ -43,7 +44,7 @@ try {
   CREATE SCHEMA storage;
   CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
   `, database);
-  for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql", "0008_activity.sql", "0009_mascot_naming.sql", "0010_mascot_name_edit.sql", "0011_bayat_teslim_hatasi.sql", "0012_topluluklar.sql", "0013_etkinlik_olustur.sql", "0014_guncel_etkinlik_kaldir.sql"]) {
+  for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql", "0008_activity.sql", "0009_mascot_naming.sql", "0010_mascot_name_edit.sql", "0011_bayat_teslim_hatasi.sql", "0012_topluluklar.sql", "0013_etkinlik_olustur.sql", "0014_guncel_etkinlik_kaldir.sql", "0015_basvuru_ve_sozlesme_temeli.sql", "0016_davetler_ve_brevo_kuyrugu.sql"]) {
     run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("supabase/migrations", file)]);
   }
   console.log("Migration dosyaları gerçek PostgreSQL üzerinde uygulandı.");
@@ -55,6 +56,7 @@ try {
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-mascot.sql")]);
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-tenancy.sql")]);
   run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-events.sql")]);
+  run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("tests/database-community-applications.sql")]);
   console.log("Veritabanı kural testleri geçti.");
   const eventId = "20000000-0000-0000-0000-000000000001";
   const userId = "20000000-0000-0000-0000-000000000002";
@@ -131,6 +133,7 @@ try {
   const total = psql(`SELECT count(*) FROM votes WHERE event_id='${voteEvent}';`, database);
   assert.match(total, /^\s*1\s*$/m);
   console.log("PASS: Sonuçlandırma bekleyen oyu bekledi; toplam kapanıştan sonra değişmedi.");
+  await testCommunityRaces({ psql, asyncPsql, database });
 } catch (error) {
   console.error(error.stderr?.toString() || error.message);
   process.exitCode = 1;

@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 import sharp from "sharp";
+import { createHash } from "node:crypto";
 
 const now = Date.now();
 const stamp = n => new Date(now + n).toISOString();
@@ -20,6 +21,9 @@ const secondProjectId = "30000000-0000-0000-0000-000000000004";
 // "yabanci": başka (henüz onay bekleyen) bir topluluğun organizatörü (bu etkinlikte yetkisi yok, yönetim merkezi de boş);
 // "komsu": başka (onaylı) bir topluluğun organizatörü; merkezde yalnızca kendi topluluğunu görür.
 let role = "yonetici";
+const policyDocs = ["platform","data_processing"].map((kind,i)=>({id:`50000000-0000-0000-0000-00000000000${i+1}`,kind,version:"test-1",content:"Yalnız yerel test belgesi. Hukuki metin değildir.",content_sha256:"a".repeat(64),status:"published"}));
+const contact = {university:"Örnek Üniversite",city:"İzmir",link:null,contact_name:"Örnek Sorumlu",contact_email:"private-applicant@example.test",contact_phone:"+905551234567",created_at:stamp(-86400000),reviewed_at:null,review_reason:null,suspended_reason:null};
+const hashToken = token => createHash("sha256").update(token).digest("hex");
 // Denetim kayıtları (log_admin RPC) bellekte tutulur; /fixture/audit okur. ?denetim=hata ile yazma başarısız olur.
 let audits = [];
 let auditFails = false;
@@ -55,9 +59,10 @@ const mascotVotes = [
   { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000012", proposal_id: mascotProposals[1].id },
 ];
 // Başka topluluk: "komsu" rolünde onaylı, diğer rollerde onay bekliyor (etkinliği yok).
-const otherCommunity = () => ({ id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", city: null, status: multiEvent || role === "komsu" ? "onaylandi" : "beklemede", telegram_enabled: false });
+const otherCommunity = () => ({ ...contact, applicant_id: role === "basvuran" ? userId : "00000000-0000-0000-0000-000000000099", id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", city: null, status: multiEvent || role === "komsu" ? "onaylandi" : "beklemede", telegram_enabled: false });
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
+function fixtureUser() { return role === "linkedin" ? {...user,app_metadata:{provider:"linkedin_oidc"},user_metadata:{name:"LinkedIn Jürisi"},identities:[{provider:"linkedin_oidc",id:"linkedin-fixture",identity_data:{sub:"linkedin-fixture",name:"LinkedIn Jürisi"}}]} : user; }
 function records(table) {
   const locked = mode !== "open";
   const projects = Array.from({ length: 3 }, (_, i) => ({
@@ -83,16 +88,21 @@ function records(table) {
       community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
       community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     communities: [
-      { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", city: "İzmir", status: "onaylandi", telegram_enabled: false },
+      { ...contact, applicant_id: "00000000-0000-0000-0000-000000000098", id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", city: "İzmir", status: "onaylandi", telegram_enabled: false },
       otherCommunity(),
+      {...contact,id:"20000000-0000-0000-0000-000000000003",slug:"reddedilen-topluluk",name:"Önceki Başvuru",status:"reddedildi",applicant_id:userId,review_reason:"Topluluk bağlantını ve kurum bilgilerini tamamlamalısın."},
     ],
-    platform_roles: ["yabanci", "komsu", "sahip", "juri"].includes(role) ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
+    platform_roles: ["yabanci", "komsu", "sahip", "juri", "linkedin", "basvuran", "organizator"].includes(role) ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
     // Üyelik satırı topluluğuyla birlikte döner (getManagedCommunities gömülü seçimi).
-    community_members: role === "yonetici" || role === "sahip"
-      ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: "owner", community: { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi" } }]
+    community_members: role === "yonetici" || role === "sahip" || role === "organizator"
+      ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: role === "organizator" ? "organizator" : "owner", community: { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi" } }]
       : role === "yabanci" || role === "komsu"
         ? [{ community_id: otherCommunityId, user_id: userId, github_login: "preview-admin", role: "organizator", community: (({ id, slug, name, status }) => ({ id, slug, name, status }))(otherCommunity()) }] : [],
-    event_jurors: role === "juri" ? [{ event_id: eventId, user_id: userId }] : [],
+    event_jurors: ["juri","linkedin"].includes(role) ? [{ event_id: eventId, user_id: userId, login: role === "linkedin" ? "LinkedIn Jürisi" : "preview-admin",provider:role === "linkedin" ? "linkedin" : "github" }] : [],
+    policy_documents:policyDocs,
+    policy_requirements:policyDocs.map(document=>({kind:document.kind,document})),
+    role_invites:["a","b","c","d"].map((char,i)=>({id:`60000000-0000-0000-0000-00000000000${i+1}`,token_hash:hashToken(char.repeat(43)),kind:i===3?"organizator":"juri",community_id:i===3?communityId:null,event_id:i===3?null:eventId,recipient_email:"invite-private@example.test",created_at:stamp(-1000),expires_at:stamp(i===2?-1000:86400000),revoked_at:i===1?stamp(-500):null,accepted_at:null})),
+    mail_outbox:[{id:"70000000-0000-0000-0000-000000000001",community_id:communityId,kind:"application_approved",recipient_email:contact.contact_email,state:"uncertain",delivery_state:"unknown",last_error:"Brevo gönderimi doğrulanamadı; sağlayıcı kaydını kontrol et.",created_at:stamp(-1000)}],
     projects,
     project_members: [
       { ...member, project_id: projects[0].id, project: { team_name: projects[0].team_name } },
@@ -137,7 +147,7 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
-    role = ["yonetici", "head-admin", "sahip", "juri", "yabanci", "komsu"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
+    role = ["yonetici", "head-admin", "sahip", "juri", "yabanci", "komsu", "linkedin", "basvuran", "organizator"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
     suspended = url.searchParams.get("askida") === "1";
     multiEvent = url.searchParams.get("coklu") === "1";
     auditFails = url.searchParams.get("denetim") === "hata";
@@ -170,7 +180,7 @@ const server = createServer(async (request, response) => {
     response.setHeader("Content-Type", logo.type);
     return response.end(logo.bytes);
   }
-  if (url.pathname === "/auth/v1/user") return response.end(JSON.stringify(user));
+  if (url.pathname === "/auth/v1/user") return response.end(JSON.stringify(fixtureUser()));
   // Yemek/oyun duyurusu yerelde bellekte tutulur; sayfa yenilenince maskot değişimi görülebilir.
   if (url.pathname === "/rest/v1/rpc/admin_update_event") {
     const body = JSON.parse(await new Promise(done => { let b = ""; request.on("data", c => b += c); request.on("end", () => done(b)); }) || "{}");
@@ -287,6 +297,7 @@ const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"),
   windowsHide: true, stdio: "inherit", env: { ...process.env, NODE_ENV: prod ? "production" : "development", MUHUR_TEST_PREVIEW: "1",
     NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54330", NEXT_PUBLIC_SUPABASE_ANON_KEY: "fixture-key",
     SUPABASE_SERVICE_ROLE_KEY: "fixture-key", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
+    COMMUNITY_APPLICATIONS_ENABLED: "true", MAIL_PAYLOAD_KEY: Buffer.alloc(32,17).toString("base64"), BREVO_API_KEY:"", BREVO_FROM_EMAIL:"", BREVO_WEBHOOK_SECRET:"fixture-webhook",
     GITHUB_TOKEN: "", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", CRON_SECRET: "fixture-cron",
   },
 });

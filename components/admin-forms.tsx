@@ -239,7 +239,7 @@ export function NewEventForm({ communities }: { communities: { id: string; name:
           <label htmlFor="slug" className={label}>
             Adres kısaltması
           </label>
-          <input id="slug" name="slug" required pattern="[a-z0-9-]{3,40}" placeholder="2027-bahar" className={`${input} font-mono`} />
+          <input id="slug" name="slug" required pattern={"[a-z0-9\\-]{3,40}"} placeholder="2027-bahar" className={`${input} font-mono`} />
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -256,6 +256,12 @@ export function NewEventForm({ communities }: { communities: { id: string; name:
           <input id="new-deadline" name="deadline" type="datetime-local" required className={`${input} font-mono tnum`} />
         </div>
       </div>
+      <fieldset disabled={pending} className="grid gap-4"><legend className="mb-4 font-medium">Etkinlik bağlantıları</legend>
+        <label className="grid gap-2">Başvuru formu (isteğe bağlı)<input name="application_url" type="url" maxLength={2048} placeholder="https://" className={input} /></label>
+        <label className="grid gap-2">Kurallar bağlantısı<input name="rules_url" type="url" maxLength={2048} placeholder="https://" className={input} /></label>
+        <label className="grid gap-2">Aydınlatma metni bağlantısı<input name="privacy_url" type="url" maxLength={2048} placeholder="https://" className={input} /></label>
+        <p className="text-sm text-ink-3">Yeni toplulukların etkinliklerinde kurallar ve aydınlatma bağlantıları zorunlu.</p>
+      </fieldset>
       <div className="flex flex-wrap items-center gap-4">
         <SubmitButton variant="ink" busy={pending} pending="Açılıyor…">
           Yeni etkinliği aç

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getEventById, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { getEventById, getGithubViewer, type EventState, type Viewer } from "@/lib/data";
 import { eventPath } from "@/lib/event-routes";
 import { getEventAccess } from "@/lib/access";
 import { ASKIDA_MESAJI, can, denialMessage } from "@/lib/authz";
@@ -51,7 +51,7 @@ function readName(form: FormData): string | null {
 }
 
 export async function suggestMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  const [viewer, event] = await Promise.all([getGithubViewer(), loadEvent(form)]);
   if (!event) return { error: EVENT_MISSING };
   if (!viewer) return { error: "Öneri için GitHub ile giriş yap." };
   const name = readName(form);
@@ -70,7 +70,7 @@ export async function suggestMascotName(_previous: NamingActionState, form: Form
 }
 
 export async function editMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  const [viewer, event] = await Promise.all([getGithubViewer(), loadEvent(form)]);
   if (!event) return { error: EVENT_MISSING };
   if (!viewer) return { error: "Düzenlemek için GitHub ile giriş yap." };
   const name = readName(form);
@@ -84,7 +84,7 @@ export async function editMascotName(_previous: NamingActionState, form: FormDat
 }
 
 export async function voteMascotName(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  const [viewer, event] = await Promise.all([getGithubViewer(), loadEvent(form)]);
   if (!event) return { error: EVENT_MISSING };
   if (!viewer) return { error: "Oy vermek için GitHub ile giriş yap." };
   const proposalId = String(form.get("proposalId") ?? "");
@@ -98,7 +98,7 @@ export async function voteMascotName(_previous: NamingActionState, form: FormDat
 }
 
 export async function setMascotPhase(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  const [viewer, event] = await Promise.all([getGithubViewer(), loadEvent(form)]);
   if (!event) return { error: EVENT_MISSING };
   const denied = await manageError(viewer, event);
   if (denied) return { error: denied };
@@ -121,7 +121,7 @@ export async function setMascotPhase(_previous: NamingActionState, form: FormDat
 }
 
 export async function setMascotProposalVisibility(_previous: NamingActionState, form: FormData): Promise<NamingActionState> {
-  const [viewer, event] = await Promise.all([getViewer(), loadEvent(form)]);
+  const [viewer, event] = await Promise.all([getGithubViewer(), loadEvent(form)]);
   if (!event) return { error: EVENT_MISSING };
   const denied = await manageError(viewer, event);
   if (denied) return { error: denied };

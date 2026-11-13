@@ -60,6 +60,11 @@ export default async function ManagementHub() {
 
         {(create || headAdmin) && <SessionNotice session={session} now={now} actions={actions} next="/yonetim" />}
 
+        <nav aria-label="Topluluk yönetimi" className="flex flex-wrap gap-6">
+          <Link className="underline underline-offset-4" href="/topluluk">Topluluklarım</Link>
+          {headAdmin && <Link className="underline underline-offset-4" href="/yonetim/topluluklar">Topluluk başvurularını incele</Link>}
+        </nav>
+
         <Section
           title="Etkinlikler"
           note={headAdmin

@@ -1,3 +1,4 @@
+import { JuryManagement } from "@/components/jury-management";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
@@ -360,6 +361,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
             </table>
           </div>
         </section>
+        <JuryManagement event={event} canManage={manage} />
       </main>
     </>
   );

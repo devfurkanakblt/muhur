@@ -74,6 +74,11 @@ export default async function PanelPage({ params: route, searchParams }: PagePro
     ? <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} className="mb-10" />
     : null;
 
+  if (viewer && !viewer.githubId) return <Shell viewer={viewer} event={event} notice={notice}>
+    <PageTitle note="Bu hesap LinkedIn ile giriş yapmış. Proje kaydı ve kod teslimi için GitHub ile giriş yapmalısın.">Katılımcı girişi GitHub ile.</PageTitle>
+    <SignInButton next={eventPath(event.slug, "panel")} label="GitHub ile giriş yap" />
+  </Shell>;
+
   if (!viewer) {
     return (
       <Shell viewer={null} event={event} notice={notice}>

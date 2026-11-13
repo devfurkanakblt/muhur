@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { ADMIN_REAUTH_MS, githubIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
+import { ADMIN_REAUTH_MS, verifiedIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
 import { selectAll } from "@/lib/paginate";
 import { notFound } from "next/navigation";
 import { isListed } from "@/lib/event-routes";
@@ -26,6 +26,9 @@ type EventRow = {
   activity_kind: "yemek" | "oyun" | null;
   activity_title: string | null;
   activity_at: string | null;
+  application_url?: string | null;
+  rules_url?: string | null;
+  privacy_url?: string | null;
   community_id: string | null;
   suspended_at: string | null;
   suspended_reason: string | null;
@@ -55,6 +58,9 @@ export type EventState = {
   voting: EventRow["voting"];
   activity: Activity | null;
   /** Etkinliği düzenleyen topluluk (Plan 1'de eski etkinlikler için null olabilir). */
+  applicationUrl?: string | null;
+  rulesUrl?: string | null;
+  privacyUrl?: string | null;
   communityId: string | null;
   communityName: string | null;
   communitySlug: string | null;
@@ -89,6 +95,9 @@ function toState(row: EventRow): EventState {
     announcementAt: row.announcement_at,
     voting: row.voting,
     activity: row.activity_kind && row.activity_title && row.activity_at ? { kind: row.activity_kind, title: row.activity_title, at: row.activity_at } : null,
+    applicationUrl: row.application_url ?? null,
+    rulesUrl: row.rules_url ?? null,
+    privacyUrl: row.privacy_url ?? null,
     communityId: row.community_id ?? null,
     communityName: row.community?.name ?? null,
     communitySlug: row.community?.slug ?? null,
@@ -188,7 +197,8 @@ export const getManagementScope = cache(async (viewer: Viewer): Promise<Manageme
 export type Viewer = {
   id: string;
   /** Sabit sayısal GitHub kullanıcı kimliği (yetki ve repo sahipliği buna bağlı). */
-  githubId: string;
+  githubId: string | null;
+  provider: "github" | "linkedin";
   login: string;
   avatarUrl: string | null;
   /** Platform yöneticisi (DB `platform_roles`); ADMIN_GITHUB_IDS artık yetki vermez. */
@@ -201,19 +211,26 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   const user = data.user;
   if (!user) return null;
   // user_metadata kullanıcı tarafından değiştirilebilir; kimlik ve yetki yalnızca GitHub identity kaydından okunur.
-  const github = githubIdentity(user);
-  if (!github) return null;
+  const identity = verifiedIdentity(user);
+  if (!identity) return null;
   const { data: role, error } = await createAdminClient()
     .from("platform_roles").select("role").eq("user_id", user.id).eq("role", "head_admin").maybeSingle();
   if (error) readFailed("Platform rolü", error);
   return {
     id: user.id,
-    githubId: github.githubId,
-    login: github.login,
-    avatarUrl: github.avatarUrl,
+    githubId: identity.githubId,
+    provider: identity.provider,
+    login: identity.login,
+    avatarUrl: identity.avatarUrl,
     isHeadAdmin: !!role,
   };
 });
+
+/** Katılımcı işlemleri GitHub kimliği gerektirir; LinkedIn-only jüri bu yoldan geçmez. */
+export async function getGithubViewer(): Promise<(Viewer & { githubId: string }) | null> {
+  const viewer = await getViewer();
+  return viewer?.githubId ? { ...viewer, githubId: viewer.githubId } : null;
+}
 
 export type AdminSession = { signedInAt: number | null; freshUntil: number | null; fresh: boolean };
 

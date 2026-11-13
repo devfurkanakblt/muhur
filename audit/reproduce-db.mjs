@@ -41,8 +41,10 @@ try {
   const eventId="20000000-0000-0000-0000-000000000001";
   const ownerId="20000000-0000-0000-0000-000000000002";
   const voterId="20000000-0000-0000-0000-000000000003";
-  psql(`UPDATE events SET is_current=false WHERE is_current;
-    INSERT INTO events(id,slug,title,starts_at,deadline,is_current) VALUES('${eventId}','race-test','Race Test',clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 hour',true);
+  // 0001–0004 şemasında kayıt yalnızca tohum etkinliğine (2026-guz) açıktır; tohum satırı yarış etkinliğine çevrilir.
+  psql(`ALTER TABLE events DISABLE TRIGGER USER;
+    UPDATE events SET id='${eventId}',slug='race-test',title='Race Test',starts_at=clock_timestamp()-interval '1 hour',deadline=clock_timestamp()+interval '1 hour' WHERE slug='2026-guz';
+    ALTER TABLE events ENABLE TRIGGER USER;
     INSERT INTO auth.users(id) VALUES('${ownerId}'),('${voterId}');`);
   const projectId=psql(`SELECT id FROM register_project('${eventId}','${ownerId}','owner',null,'Race Proje','Race Ekip','Vote close race test.',987,'owner/race','https://github.com/owner/race','main');`).split(/\r?\n/).map(x=>x.trim()).find(x=>/^[a-f0-9-]{36}$/.test(x));
   assert.ok(projectId);

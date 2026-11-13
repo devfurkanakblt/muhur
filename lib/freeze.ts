@@ -245,7 +245,7 @@ export async function tick() {
   };
   const withinBudget = () => Date.now() - started < HELPER_BUDGET_MS;
   try {
-    const { data: rows, error } = await db.from("events").select(`${EVENT_COLUMNS}, is_current, community:communities(telegram_enabled)`);
+    const { data: rows, error } = await db.from("events").select(`${EVENT_COLUMNS}, community:communities(telegram_enabled)`);
     if (error) throw new Error(error.message);
     const events = (rows ?? []).map(withTelegram);
 
@@ -256,11 +256,21 @@ export async function tick() {
     processed = [...processed, ...((await step("mühür kuyruğu", () => drainDeliveryJobs(SEAL_DRAIN_MS))) ?? [])];
     details.jobs = { processed: processed.length, failed: processed.filter((r) => !r.ok).length };
 
-    const open = events.find((ev) => ev.is_current && !ev.locked_at && Date.now() < new Date(ev.deadline).getTime());
-    if (open && withinBudget() && (await step("kira", () => tryLease("yardimci", 50)))) {
-      details.health = await step("sağlık", () => checkHealthDue(open));
-      if (withinBudget()) details.snapshots = await step("ara mühür", () => takeSnapshots(open));
-      if (withinBudget()) await step("hatırlatma", () => sendReminders(open));
+    // Kilitsiz ve süresi dolmamış her etkinlik; son teslimi en yakın olan bütçeden önce pay alır.
+    // Her adım kendi hatasını yakalar: bir etkinliğin hatası diğerlerini durdurmaz.
+    const open = events
+      .filter((ev) => !ev.locked_at && Date.now() < new Date(ev.deadline).getTime())
+      .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+    if (open.length && withinBudget() && (await step("kira", () => tryLease("yardimci", 50)))) {
+      const byEvent: Record<string, { health?: unknown; snapshots?: unknown }> = {};
+      details.open = byEvent;
+      for (const ev of open) {
+        if (!withinBudget()) break;
+        const out: { health?: unknown; snapshots?: unknown } = (byEvent[ev.slug] = {});
+        out.health = await step(`sağlık ${ev.slug}`, () => checkHealthDue(ev));
+        if (withinBudget()) out.snapshots = await step(`ara mühür ${ev.slug}`, () => takeSnapshots(ev));
+        if (withinBudget()) await step(`hatırlatma ${ev.slug}`, () => sendReminders(ev));
+      }
     }
     if (withinBudget() && (await step("kira", () => tryLease("depo-temizligi", 6 * 3600)))) {
       details.sweep = await step("depo temizliği", () => sweepStorage());

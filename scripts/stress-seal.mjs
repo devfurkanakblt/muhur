@@ -356,7 +356,10 @@ async function main() {
     END $$;
     CREATE SCHEMA auth; CREATE TABLE auth.users(id uuid PRIMARY KEY DEFAULT gen_random_uuid());
     CREATE SCHEMA storage; CREATE TABLE storage.buckets(id text PRIMARY KEY, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);`, database);
-    for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql"]) {
+    // 0003 (pg_cron) yerelde yoktur; scripts/test-db.mjs ile aynı liste. 0012+ topluluk ve askı sarmalayıcılarını da sınar.
+    for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql",
+      "0008_activity.sql", "0009_mascot_naming.sql", "0010_mascot_name_edit.sql", "0011_bayat_teslim_hatasi.sql", "0012_topluluklar.sql",
+      "0013_etkinlik_olustur.sql", "0014_guncel_etkinlik_kaldir.sql"]) {
       await psql(await readFile(resolve("supabase/migrations", file), "utf8"), database);
     }
     pool = new pg.Pool({ host: "127.0.0.1", port: Number(port), user: "postgres", database, max: CFG.pool });
@@ -367,9 +370,8 @@ async function main() {
 
     // ---- 1. Hazırlık: eşzamanlı kayıt, ekip katılımı, ilk teslimler
     eventId = randomUUID();
-    await pool.query(`update events set is_current=false where is_current;
-      insert into events(id,slug,title,starts_at,deadline,is_current)
-      values('${eventId}','stres','Stres Testi',clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 day',true)`);
+    await pool.query(`insert into events(id,slug,title,starts_at,deadline,community_id)
+      values('${eventId}','stres','Stres Testi',clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 day',(select id from communities where slug='deu-csai'))`);
     const teams = planTeams();
     const userCount = teams.length * 3;
     const users = Array.from({ length: userCount }, () => randomUUID());

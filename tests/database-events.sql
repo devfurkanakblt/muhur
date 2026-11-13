@@ -1,4 +1,4 @@
--- 0013 etkinlik oluşturma ve is_current'tan bağımsız katılım. scripts/test-db.mjs'nin ayrı veritabanında çalışır, sonunda geri alınır.
+-- 0013 etkinlik oluşturma, aynı anda açık etkinliklere katılım ve 0014 sonrası şema. scripts/test-db.mjs'nin ayrı veritabanında çalışır, sonunda geri alınır.
 begin;
 create function pg_temp.assert_true(ok boolean, label text) returns void language plpgsql as $$
 begin if ok is distinct from true then raise exception 'FAIL: %', label; end if; raise notice 'PASS: %', label; end $$;
@@ -19,7 +19,6 @@ insert into auth.users(id) values
   ('70000000-0000-0000-0000-000000000001'), ('70000000-0000-0000-0000-000000000002'),
   ('70000000-0000-0000-0000-000000000003'), ('70000000-0000-0000-0000-000000000004'),
   ('70000000-0000-0000-0000-000000000005');
-update public.events set is_current = false where is_current;
 insert into public.communities(slug, name, status) values ('test-b', 'Test B Topluluğu', 'onaylandi');
 insert into public.community_members(community_id, user_id, github_login, role) values
   ((select id from communities where slug = 'deu-csai'), '70000000-0000-0000-0000-000000000001', 'deu-sahip', 'owner'),
@@ -36,19 +35,18 @@ select
     clock_timestamp() - interval '1 hour', clock_timestamp() + interval '2 hours',
     '70000000-0000-0000-0000-000000000001', 'deu-sahip') as b;
 select pg_temp.assert_true((select a is not null and b is not null and a <> b from t_ev), 'Sahip aynı toplulukta iki etkinlik oluşturur');
-select pg_temp.assert_true((select count(*) = 2 and bool_and(not is_current) and bool_and(locked_at is null) and bool_and(community_id = (select id from communities where slug = 'deu-csai'))
-  from events where id in (select a from t_ev union select b from t_ev)), 'İki etkinlik kilitsiz, güncel değil ve topluluğa bağlı');
+select pg_temp.assert_true((select count(*) = 2 and bool_and(locked_at is null) and bool_and(community_id = (select id from communities where slug = 'deu-csai'))
+  from events where id in (select a from t_ev union select b from t_ev)), 'İki etkinlik kilitsiz ve topluluğa bağlı');
 select pg_temp.assert_true((select count(*) = 2 from admin_audit where action = 'event_created' and event_id in (select a from t_ev union select b from t_ev)), 'Her oluşturma denetim kaydı yazar');
 select pg_temp.assert_true((select after->>'slug' = 'etkinlik-bir' and after ? 'community' from admin_audit where action = 'event_created' and event_id = (select a from t_ev)), 'Denetim kaydı etkinlik bilgisini taşır');
 
--- Katılım güncel etkinliğe bağlı değil ----------------------------------------------------------
-select pg_temp.assert_true((select not is_current from events where id = (select b from t_ev)), 'İkinci etkinlik güncel değil');
+-- İkinci açık etkinliğe katılım -----------------------------------------------------------------
 create temp table t_proj as
 select * from public.register_project((select b from t_ev), '70000000-0000-0000-0000-000000000003', 'katilimci', null,
-  'Proje Bir', 'Ekip Bir', 'Güncel olmayan etkinliğe kayıt.', 7001, 'k/r', 'https://github.com/k/r', 'main', null, null);
-select pg_temp.assert_true((select event_id = (select b from t_ev) from t_proj), 'Güncel olmayan etkinliğe kayıt, projeye o etkinliğin kimliğini verir');
+  'Proje Bir', 'Ekip Bir', 'İkinci etkinliğe kayıt.', 7001, 'k/r', 'https://github.com/k/r', 'main', null, null);
+select pg_temp.assert_true((select event_id = (select b from t_ev) from t_proj), 'İkinci etkinliğe kayıt, projeye o etkinliğin kimliğini verir');
 select pg_temp.assert_true((select public.join_project_by_code((select invite_code from projects where id = (select id from t_proj)),
-  '70000000-0000-0000-0000-000000000004', 'ikinci', null)) = (select id from t_proj), 'Davet koduyla güncel olmayan etkinlikte ekibe katılınır');
+  '70000000-0000-0000-0000-000000000004', 'ikinci', null)) = (select id from t_proj), 'Davet koduyla ikinci etkinlikte ekibe katılınır');
 select pg_temp.assert_true((select count(*) = 2 from project_members where project_id = (select id from t_proj)), 'Ekip iki üyeli');
 
 -- Yetki -----------------------------------------------------------------------------------------
@@ -90,4 +88,14 @@ select pg_temp.assert_true(has_function_privilege('service_role', 'public.admin_
 select pg_temp.assert_true(not has_function_privilege('service_role', 'public.register_project_v0(uuid,uuid,text,text,text,text,text,bigint,text,text,text,text,text)', 'execute'), 'service_role register_project_v0 çalıştıramaz');
 select pg_temp.assert_true(not has_function_privilege('service_role', 'public.join_project_by_code_v0(text,uuid,text,text)', 'execute'), 'service_role join_project_by_code_v0 çalıştıramaz');
 select pg_temp.assert_true(not has_function_privilege('authenticated', 'public.register_project_v0(uuid,uuid,text,text,text,text,text,bigint,text,text,text,text,text)', 'execute'), 'authenticated register_project_v0 çalıştıramaz');
+
+-- 0014 sonrası şema -----------------------------------------------------------------------------
+select pg_temp.assert_true((select count(*) = 0 from information_schema.columns
+  where table_schema = 'public' and table_name = 'events' and column_name = 'is_current'), 'events.is_current kaldırıldı');
+select pg_temp.assert_true((select count(*) = 0 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname in ('switch_event', 'admin_switch_event', 'admin_switch_event_v0')), 'switch_event ailesi kaldırıldı');
+select pg_temp.assert_true((select is_nullable = 'NO' from information_schema.columns
+  where table_schema = 'public' and table_name = 'events' and column_name = 'community_id'), 'events.community_id NOT NULL');
+select pg_temp.expect_error($c$ insert into events(slug, title, starts_at, deadline) values ('topluluksuz', 'Topluluksuz', clock_timestamp(), clock_timestamp() + interval '1 day') $c$,
+  'community_id', 'Topluluksuz etkinlik eklenemez');
 rollback;

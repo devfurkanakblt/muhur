@@ -6,9 +6,8 @@ create function pg_temp.fails(sql text, pattern text) returns boolean language p
 begin execute sql; return false; exception when others then return sqlerrm like pattern; end $$;
 
 insert into auth.users(id) values ('70000000-0000-0000-0000-000000000001'), ('70000000-0000-0000-0000-000000000002');
-update public.events set is_current = false where is_current;
-insert into public.events(id, slug, title, starts_at, deadline, is_current)
-values ('71000000-0000-0000-0000-000000000001', 'gizem', 'Gizem', clock_timestamp() + interval '1 hour', clock_timestamp() + interval '25 hours', true);
+insert into public.events(id, slug, title, starts_at, deadline, community_id)
+values ('71000000-0000-0000-0000-000000000001', 'gizem', 'Gizem', clock_timestamp() + interval '1 hour', clock_timestamp() + interval '25 hours', (select id from communities where slug = 'deu-csai'));
 
 select pg_temp.assert_true(pg_temp.fails(
   $q$select public.claim_mystery('71000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', 'avci')$q$,

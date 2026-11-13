@@ -13,9 +13,8 @@ begin
   raise exception 'FAIL: %, işlem reddedilmeliydi', label;
 end $$;
 
-update events set is_current = false where is_current;
-insert into events(id, slug, title, starts_at, deadline, locked_at, is_current)
-values ('73000000-0000-0000-0000-000000000001', 'activity-test', 'Mola Testi', now() - interval '2 hour', now() - interval '1 hour', now() - interval '1 hour', true);
+insert into events(id, slug, title, starts_at, deadline, locked_at, community_id)
+values ('73000000-0000-0000-0000-000000000001', 'activity-test', 'Mola Testi', now() - interval '2 hour', now() - interval '1 hour', now() - interval '1 hour', (select id from communities where slug = 'deu-csai'));
 -- 0012: yönetim RPC'leri etkinliğin topluluğundaki organizatöre açık.
 insert into auth.users(id) values ('73000000-0000-0000-0000-000000000009');
 update events set community_id = (select id from communities where slug = 'deu-csai') where id = '73000000-0000-0000-0000-000000000001';

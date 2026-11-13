@@ -13,9 +13,9 @@
 **Tech Stack:** Next.js 16 App Router. `params` bir Promise'tir; yazmadan önce `node_modules/next/dist/docs/` içindeki dynamic routes, redirect, notFound ve route handlers rehberlerini oku. `PageProps` tipleri için `npx next typegen`. Supabase Postgres; `node --test`, `npm run test:db`, `npm run test:routes`.
 
 **Spec:** `docs/superpowers/specs/2026-11-09-coklu-topluluk-design.md`; uygulama sırasının 3. adımı, "Adresler" ile "Ana sayfa ve marka" bölümleri. Plan 1 (`…-1-veri-ve-yetki.md`) tamamlandı ve canlıda. Sonraki planlar:
-- Plan 3: başvuru, davetler, LinkedIn ve e-posta. "Topluluğunu kaydet" düğmesi o planla gelir.
-- Plan 4: sözleşmeler.
-- Plan 5: marka, platform alt bilgisi ve 30 gün saklama.
+- [Plan 3: başvuru, davetler, LinkedIn ve Brevo](2026-11-13-coklu-topluluk-3-basvuru-davet-ve-brevo.md). "Topluluğunu kaydet" düğmesi o planla gelir; genel açılış ortak yayın koşullarına bağlıdır.
+- [Plan 4: sözleşme sürümleri ve onay](2026-11-13-coklu-topluluk-4-sozlesme-surumleri-ve-onay.md).
+- [Plan 5: marka, özellikler ve 30 gün saklama](2026-11-13-coklu-topluluk-5-marka-ozellikler-ve-saklama.md).
 
 ## Tamamlanma kaydı · 13 Kasım 2026
 

@@ -202,3 +202,22 @@ assert.equal(card.headers.get("content-type"), "image/png");
 assert.deepEqual([...new Uint8Array(await card.arrayBuffer()).slice(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
 assert.equal((await fetch("http://127.0.0.1:3100/api/kazanan/yok")).status, 404);
 console.log("PASS: Kazanan kartı PNG olarak üretiliyor; bilinmeyen kazanan 404.");
+
+// Aynı anda açık iki etkinlik: panel ve davet her zaman kendi etkinliğinin projesini okur.
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&coklu=1&rol=sahip");
+const multiHome = await htmlOf("/");
+assert.ok(multiHome.includes('href="/e/ornek-etkinlik"') && multiHome.includes('href="/e/ikinci-etkinlik"'));
+for (const [slug, ownName, otherName] of [
+  ["ornek-etkinlik", "Örnek · Akıllı Kampüs", "İkinci Etkinlik Projesi"],
+  ["ikinci-etkinlik", "İkinci Etkinlik Projesi", "Örnek · Akıllı Kampüs"],
+]) {
+  const panel = await htmlOf(`/e/${slug}/panel`, hubAuth);
+  assert.ok(panel.includes(ownName) && !panel.includes(otherName), `${slug}: panel başka etkinliğin projesini gösteriyor.`);
+}
+const secondInvite = await htmlOf("/davet/second-invite");
+assert.ok(secondInvite.includes("İkinci Ekip") && secondInvite.includes("seni ekibe çağırıyor."));
+assert.equal((await fetch("http://127.0.0.1:3100/e/ikinci-etkinlik/yonetim", hubAuth)).status, 404);
+assert.equal((await fetch("http://127.0.0.1:3100/e/ikinci-etkinlik/maskot", hubAuth)).status, 404);
+assert.equal((await fetch("http://127.0.0.1:3100/api/maskot/durum?e=ikinci-etkinlik")).status, 404);
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+console.log("PASS: İki açık etkinliğin panelleri ve davetleri ayrıdır; başka topluluğun yönetimi ve maskotu kapalıdır.");

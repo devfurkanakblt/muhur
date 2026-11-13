@@ -8,21 +8,34 @@ Hackathon ekipleri public GitHub repolarını içe aktarır. İlk kod arşivi ka
 
 | Adres | Ne var |
 |---|---|
-| `/` | Güncel etkinlik: saate göre değişen selam ve maskot, geri sayım (başlamadan önce başlangıca), vitrin; sonuçlar açıklanınca vitrinin başında kazananlar (jüri ödülleri ve halkın seçimi) |
-| `/maskot` | Maskota isim önerme, halk oylaması ve canlı sonuçlar; organizatör aşama ve öneri görünürlüğü kontrolü |
-| `/panel` | Ekip paneli: kayıt, teslim sürümü güncelleme, hazırlık listesi, zaman çizelgesi, demo, davet, kuruculuk devri, silme onayı, rozet ve makbuz |
+| `/` | Platform ana sayfası: onaylı ve askıda olmayan toplulukların aktif etkinlikleri ve geçmiş sergileri |
+| `/e/<etkinlik>` | Etkinliğin vitrini, geri sayımı ve kazananları |
+| `/e/<etkinlik>/maskot` | Maskota isim önerme, halk oylaması ve canlı sonuçlar; organizatör aşama ve öneri görünürlüğü kontrolü |
+| `/e/<etkinlik>/panel` | Ekip paneli: kayıt, teslim sürümü güncelleme, hazırlık listesi, zaman çizelgesi, demo, davet, kuruculuk devri, silme onayı, rozet ve makbuz |
 | `/sergi/<etkinlik>/<no>` | Eser sayfası (paylaşım kartı ile), oy düğmesi, mühür kaydı |
 | `/sergi/<etkinlik>/<no>/makbuz` | Yazdırılabilir mühür makbuzu (kilitten sonra) |
 | `/sergi/<etkinlik>` · `/sergiler` | Geçmiş sergiler |
 | `/dogrula` | Mühürlü ZIP'in SHA-256'sı (tarayıcıda hesaplanır) ya da commit koduyla doğrulama |
-| `/sahne` | Projektör için tam ekran sahne modu; kilitten sonra açıklanan her ödül birkaç saniye içinde tören gösterisiyle (logo, eser, ekip, üyeler) açılır |
-| `/yonetim` | Admin: zamanlama, duyuru, kilit, oylama, yeni etkinlik, iş kuyruğu, cron takibi, toplu jüri paketi, CSV, jüri ödülleri |
+| `/e/<etkinlik>/sahne` | Projektör için tam ekran sahne modu; kilitten sonra açıklanan her ödül birkaç saniye içinde tören gösterisiyle (logo, eser, ekip, üyeler) açılır |
+| `/yonetim` | Yönetim merkezi: yetkili olunan etkinlikler, topluluk seçerek yeni etkinlik; head admin için kişisel veri silme ve işçi kayıtları |
+| `/e/<etkinlik>/yonetim` | Etkinliğe özel zamanlama, duyuru, kilit, oylama, iş kuyruğu, jüri paketi ve ödüller |
+| `/e/<etkinlik>/belge` | Etkinliğe özel katılım belgesi |
 | `/gizlilik` | KVKK aydınlatma metni |
 | `/api/rozet/<etkinlik>/<no>` | README rozeti (SVG) |
 | `/api/juri/<etkinlik>` | Admin için toplu ZIP; `?format=csv` ile teslim listesi |
 | `/api/qr` | Sahne için site QR kodu (SVG) |
 | `/api/kazanan/[id]` | Telegram duyurusundaki kazanan kartı (1200×630 PNG): jüri ödülü kimliği ya da `halk-<proje>` |
-| `/api/durum` | Oturuma göre değişim sürümü; canlı durum ve sunucu saati |
+| `/api/durum?e=<etkinlik>` | Etkinliğe ve oturuma göre değişim sürümü; canlı durum ve sunucu saati |
+
+`/panel`, `/sahne`, `/belge` ve `/maskot` eski bağlantıları sorgu parametrelerini koruyarak 307 ile uygun etkinliğe yönlenir. Davet bağlantıları etkinliği davetin projesinden bulur. Bilinmeyen etkinlik adresleri 404 döner.
+
+## Çoklu etkinlik geçişi (Plan 2)
+
+- `0013_etkinlik_olustur.sql` uygulama yayınından **önce** uygulanır; mevcut uygulamayla uyumludur.
+- Yeni uygulama yayınlanıp doğrulandıktan **sonra** `0014_guncel_etkinlik_kaldir.sql` uygulanır. Bu migration eski güncel-etkinlik sütununu ve geçiş fonksiyonlarını kaldırır; bütün etkinliklerin topluluğa bağlı olmasını zorunlu kılar.
+- İşçi her açık etkinliğin sağlık, ara mühür ve hatırlatma adımlarını süre bütçesi içinde işler. Bir etkinliğin hatası diğerlerini durdurmaz; işçi ayrıntıları etkinlik adresine göre gruplanır.
+- Yerel doğrulama: `npm run check`, `npm run build`, `npm run test:db`; `npm run preview:test` açıkken sırayla `npm run test:routes`, `npm run test:browser`, `npm run test:event-isolation`. Testler aynı fikstür durumunu değiştirdiği için paralel çalıştırılmaz.
+- `test:event-isolation`, başka topluluğun etkinlik kimliğiyle gönderilen yönetim ve maskot formlarının sunucuda reddedildiğini sınar.
 
 ## Kilit nasıl çalışır
 

@@ -17,6 +17,19 @@
 - Plan 4: sözleşmeler.
 - Plan 5: marka, platform alt bilgisi ve 30 gün saklama.
 
+## Tamamlanma kaydı · 13 Kasım 2026
+
+**Geliştirme ve yerel doğrulama tamamlandı.** Task 1–5 önceki commitlerde mevcuttu; Task 6, `3f17ee1` commitinde tamamlandı. Henüz birleştirilmiş veya canlıya uygulanmış sayılmaz; yayın adımları belgenin sonunda ayrı tutulur.
+
+- [x] Task 1–5: veri modeli, etkinliğe göre eylemler/adresler, ana sayfa, yönetim merkezi ve eski bağlantılar.
+- [x] Task 6: bütün açık etkinlikler için işçi; `0014`; SQL, eşzamanlılık ve stres testi düzeneği güncellemeleri.
+- [x] Ek düzeltme: maskotun beş sunucu eyleminde de topluluk kontrolü; formdaki gizli kimlik değiştirilerek diğer toplulukta yazma yapılamaz.
+- [x] Ek kapsam: iki açık etkinliğin ayrı panelleri/davetleri; değiştirilmiş etkinlik kimliğiyle yönetim ve maskot formu gönderimleri; işçinin bir etkinlikteki hatadan sonra diğerine devam etmesi.
+
+**Son doğrulamalar:** `npm run check` (91/91 birim testi, lint, TypeScript), üretim derlemesi, `test:db` (0014 dahil bütün migration ve gerçek eşzamanlılık testleri), `test:routes`, `test:browser` (13 masaüstü/mobil görünüm; yatay taşma yok), `test:event-isolation` geçti. Ana sayfanın 1366px ve 390px görüntüleri `test-artifacts/home-desktop.png` ve `home-mobile.png` içinde; görsel olarak incelendi. Beş ekip/10 saniyelik kısa stres testinde değişmez ihlali yok; bu küçük koşum kapasite ölçümü değildir.
+
+Aşağıdaki tamamlandı işaretleri mevcut kaynak ve doğrulamalara dayanır. Uygulama öncesi kırmızı-test adımları geçmişe ait olduğundan tekrar oluşturulmadı; bunlar tamamlanma listesi dışında açıklama olarak bırakıldı.
+
 ## Global Constraints
 
 - **Yayın sırası:** `0013` canlıya merge'den önce uygulanır ve eski kod onunla çalışmaya devam eder. `0014` merge sonrası Vercel yayını bittikten sonra uygulanır. Bu daldaki kod `is_current` sütununu ve `switch_event`/`admin_switch_event` fonksiyonlarını **hiç okumaz ve çağırmaz**.
@@ -97,7 +110,7 @@
   7. Yeni id'yi döndürür.
 - İzinler: `revoke all … from public, anon, authenticated`; `grant execute … to service_role`.
 
-- [ ] **Step 1:** `tests/database-events.sql` testlerini yaz. `pg_temp.assert_true` / `expect_error` yardımcılarını `tests/database-tenancy.sql` başlığından kopyala. Kimlikler: kullanıcı `7000…01–04`, topluluk B `slug='test-b'` onaylı. Testler:
+- [x] **Step 1:** `tests/database-events.sql` testlerini yaz. `pg_temp.assert_true` / `expect_error` yardımcılarını `tests/database-tenancy.sql` başlığından kopyala. Kimlikler: kullanıcı `7000…01–04`, topluluk B `slug='test-b'` onaylı. Testler:
   - DEÜ sahibi (`7000…01`) `admin_create_event` ile **iki** etkinlik oluşturur. İkisi de kilitsizdir ve aynı anda var olur.
   - `7000…03`, `is_current = false` olan ikinci etkinliğe `register_project` ile kaydolur. Proje o etkinliğin `event_id`'sini taşır.
   - `7000…04` o projenin davet koduyla `join_project_by_code` yapar ve başarılı olur.
@@ -108,10 +121,10 @@
   - Geçmiş son teslim: hata.
   - Her başarılı oluşturmada `admin_audit` içinde `action = 'event_created'` satırı vardır.
   - `has_function_privilege('authenticated', 'public.admin_create_event(uuid,text,text,timestamptz,timestamptz,uuid,text)', 'execute')` false; `register_project_v0` için `service_role` da false.
-- [ ] **Step 2:** `POSTGRES_BIN="C:/Users/User/pgsql17/pgsql/bin" npm run test:db` çalıştır. Beklenen: yeni dosyada FAIL (fonksiyon yok).
-- [ ] **Step 3:** `0013_etkinlik_olustur.sql` dosyasını yaz (`begin; … commit;`).
-- [ ] **Step 4:** `npm run test:db` çalıştır. Beklenen: bütün SQL dosyaları PASS, eskiler dahil.
-- [ ] **Step 5:** Commit: `0013: topluluk etkinliği oluşturma; katılım güncel etkinliğe bağlı değil`.
+- **Geçmişteki kırmızı-test adımı (bu tur tekrarlanmadı):** **Step 2:** `POSTGRES_BIN="C:/Users/User/pgsql17/pgsql/bin" npm run test:db` çalıştır. Beklenen: yeni dosyada FAIL (fonksiyon yok).
+- [x] **Step 3:** `0013_etkinlik_olustur.sql` dosyasını yaz (`begin; … commit;`).
+- [x] **Step 4:** `npm run test:db` çalıştır. Beklenen: bütün SQL dosyaları PASS, eskiler dahil.
+- [x] **Step 5:** Commit: `0013: topluluk etkinliği oluşturma; katılım güncel etkinliğe bağlı değil`.
 
 ---
 
@@ -140,7 +153,7 @@
   - `getManagedCommunities(userId: string): Promise<{ id: string; slug: string; name: string; status: string; role: "owner" | "organizator" }[]>`
   - `getEvent()` ve `isCurrent` bu task'ta **kalır**; Task 5 kaldırır.
 
-- [ ] **Step 1:** `tests/event-routes.test.mjs` testlerini yaz (`node:test`; içe aktarma `tests/register.mjs` yükleyicisiyle `@/lib/event-routes`). Testler:
+- [x] **Step 1:** `tests/event-routes.test.mjs` testlerini yaz (`node:test`; içe aktarma `tests/register.mjs` yükleyicisiyle `@/lib/event-routes`). Testler:
   - `eventPath("ekozeka")` → `"/e/ekozeka"`.
   - `eventPath("ekozeka","panel")` → `"/e/ekozeka/panel"`.
   - `splitHomeEvents` örneği; `now = Date.parse("2026-11-09T12:00:00Z")`:
@@ -154,10 +167,10 @@
   - Yalnızca geçmiş etkinlik varsa en yeni mühürlü olanı döndürür.
   - Açık ve geçmiş birlikteyse açık olanı döndürür.
   - Askıdaki etkinliği hiç seçmez.
-- [ ] **Step 2:** `npm test` çalıştır. Beklenen: `event-routes` FAIL (modül yok).
-- [ ] **Step 3:** `lib/event-routes.ts` ve `lib/data.ts` eklemelerini yap.
-- [ ] **Step 4:** `npm run check` çalıştır. Beklenen: test, lint ve tsc PASS.
-- [ ] **Step 5:** Commit: `Etkinlik adres yardımcıları ve liste okumaları`.
+- **Geçmişteki kırmızı-test adımı (bu tur tekrarlanmadı):** **Step 2:** `npm test` çalıştır. Beklenen: `event-routes` FAIL (modül yok).
+- [x] **Step 3:** `lib/event-routes.ts` ve `lib/data.ts` eklemelerini yap.
+- [x] **Step 4:** `npm run check` çalıştır. Beklenen: test, lint ve tsc PASS.
+- [x] **Step 5:** Commit: `Etkinlik adres yardımcıları ve liste okumaları`.
 
 ---
 
@@ -185,11 +198,11 @@
   - `app/maskot/actions.ts` içindeki beş eylem de `event` gizli alanını okur.
 - Bu task'tan sonra `app/actions.ts` ve `app/maskot/actions.ts` içinde `getEvent(` geçmez.
 
-- [ ] **Step 1:** Eylemleri değiştir. Her eylemde `loadEvent` sonucu string ise `{ error }` döndür. Ardından var olan yetki ya da katılımcı akışı **aynı `event` nesnesiyle** sürer.
-- [ ] **Step 2:** Bileşenlere gizli alanı ya da `bind`'ı ekle; sayfalar `event.id`'yi geçirsin. Mevcut "yeni etkinlik" formu bu task'ta gizli `community = event.communityId` alanını taşır. Topluluk seçimli form Task 5'te merkeze taşınır.
-- [ ] **Step 3:** `npm run check` ve `npm run build` çalıştır. Beklenen: PASS.
-- [ ] **Step 4:** Önizlemeyi ve rota testlerini çalıştır: `npm run preview:test` arka planda (fixture :54330, uygulama :3100 — betiğin kendi talimatına bak), ardından `npm run test:routes`. Beklenen: mevcut bütün durumlar PASS; adresler henüz değişmedi.
-- [ ] **Step 5:** Commit: `Sunucu eylemleri etkinliği formdan alır; yetki etkinlik başına`.
+- [x] **Step 1:** Eylemleri değiştir. Her eylemde `loadEvent` sonucu string ise `{ error }` döndür. Ardından var olan yetki ya da katılımcı akışı **aynı `event` nesnesiyle** sürer.
+- [x] **Step 2:** Bileşenlere gizli alanı ya da `bind`'ı ekle; sayfalar `event.id`'yi geçirsin. Mevcut "yeni etkinlik" formu bu task'ta gizli `community = event.communityId` alanını taşır. Topluluk seçimli form Task 5'te merkeze taşınır.
+- [x] **Step 3:** `npm run check` ve `npm run build` çalıştır. Beklenen: PASS.
+- [x] **Step 4:** Önizlemeyi ve rota testlerini çalıştır: `npm run preview:test` arka planda (fixture :54330, uygulama :3100 — betiğin kendi talimatına bak), ardından `npm run test:routes`. Beklenen: mevcut bütün durumlar PASS; adresler henüz değişmedi.
+- [x] **Step 5:** Commit: `Sunucu eylemleri etkinliği formdan alır; yetki etkinlik başına`.
 
 ---
 
@@ -225,16 +238,16 @@
   - `/e/<slug>/yonetim`: incele yetkisi yoksa `notFound()` (bugünkü `/yonetim` davranışı).
   - `/e/<slug>/maskot`: topluluk `deu-csai` değilse `notFound()`.
 
-- [ ] **Step 1:** `tests/routes.mjs` içindeki `/`, `/panel`, `/yonetim`, `/sahne` durumlarını `/e/ornek-etkinlik`, `/e/ornek-etkinlik/panel`, `/e/ornek-etkinlik/yonetim`, `/e/ornek-etkinlik/sahne` yap; askı ve rol testlerini de aynı biçimde güncelle. Şu yeni durumları ekle:
+- [x] **Step 1:** `tests/routes.mjs` içindeki `/`, `/panel`, `/yonetim`, `/sahne` durumlarını `/e/ornek-etkinlik`, `/e/ornek-etkinlik/panel`, `/e/ornek-etkinlik/yonetim`, `/e/ornek-etkinlik/sahne` yap; askı ve rol testlerini de aynı biçimde güncelle. Şu yeni durumları ekle:
   - `/e/yok` → 404
   - `/e/yok/panel` → 404
   - `/api/durum?e=yok` → 404
   - `/api/durum?e=ornek-etkinlik` → 200 ve `version` alanı var
   - `/e/ornek-etkinlik` HTML'i fixture topluluk adını içerir
-- [ ] **Step 2:** `npm run test:routes` çalıştır. Beklenen: yeni adresler FAIL.
-- [ ] **Step 3:** Sayfaları taşı ve parametrelendir; header, durum ve yoklama uç noktalarını güncelle; fixture'ı genişlet.
-- [ ] **Step 4:** `npm run check`, `npm run build`, `npm run test:routes` ve `npm run test:browser` çalıştır. Browser testindeki adresler de `/e/…` olur. Beklenen: PASS.
-- [ ] **Step 5:** Commit: `Etkinlik yüzeyleri /e/<slug> altında`.
+- **Geçmişteki kırmızı-test adımı (bu tur tekrarlanmadı):** **Step 2:** `npm run test:routes` çalıştır. Beklenen: yeni adresler FAIL.
+- [x] **Step 3:** Sayfaları taşı ve parametrelendir; header, durum ve yoklama uç noktalarını güncelle; fixture'ı genişlet.
+- [x] **Step 4:** `npm run check`, `npm run build`, `npm run test:routes` ve `npm run test:browser` çalıştır. Browser testindeki adresler de `/e/…` olur. Beklenen: PASS.
+- [x] **Step 5:** Commit: `Etkinlik yüzeyleri /e/<slug> altında`.
 
 ---
 
@@ -271,16 +284,16 @@
   - `SignInButton` varsayılan `next` değeri `/panel`dir; yönlendirme bunu karşılar.
   - Bu task'tan sonra `grep -rn "getEvent()\|is_current\|isCurrent" app lib components` boş döner.
 
-- [ ] **Step 1:** `tests/routes.mjs`'e ekle:
+- [x] **Step 1:** `tests/routes.mjs`'e ekle:
   - `/` fixture etkinliğinin adını ve "Süre dolar, mühür vurulur." metnini içerir. Fixture'da etkinlik askıdayken (`?askida=1`) ad listede yoktur.
   - `fetch("/panel", { redirect: "manual" })` 307 döner ve `location` `/e/ornek-etkinlik/panel` olur; `/sahne` ve `/belge` için de aynısı.
   - `/yonetim` anonimde 404, yabancı rolde 404, yönetici rolde 200. Sayfa `/e/ornek-etkinlik/yonetim` bağlantısını ve "Yeni etkinlik" formunu içerir.
   - `/davet/<fixture kodu>` 200 döner.
   - `/sergi/ornek-etkinlik/1` 200 döner.
-- [ ] **Step 2:** `npm run test:routes` çalıştır. Beklenen: yeni durumlar FAIL.
-- [ ] **Step 3:** Sayfaları, yönlendirmeleri ve listeyi yaz; kalan `getEvent` çağrılarını kaldır; fixture'ı genişlet (topluluk listesi, `community_members` sorgusu, davet kodu sorgusu).
-- [ ] **Step 4:** `npm run check`, `npm run build`, `npm run test:routes` ve `npm run test:browser` çalıştır. Beklenen: PASS. Ana sayfanın ekran görüntüsü masaüstü ve 390px genişlikte `test-artifacts/` altına alınır; yatay kaydırma olmamalı.
-- [ ] **Step 5:** Commit: `Platform ana sayfası, yönetim merkezi ve eski adres yönlendirmeleri`.
+- **Geçmişteki kırmızı-test adımı (bu tur tekrarlanmadı):** **Step 2:** `npm run test:routes` çalıştır. Beklenen: yeni durumlar FAIL.
+- [x] **Step 3:** Sayfaları, yönlendirmeleri ve listeyi yaz; kalan `getEvent` çağrılarını kaldır; fixture'ı genişlet (topluluk listesi, `community_members` sorgusu, davet kodu sorgusu).
+- [x] **Step 4:** `npm run check`, `npm run build`, `npm run test:routes` ve `npm run test:browser` çalıştır. Beklenen: PASS. Ana sayfanın ekran görüntüsü masaüstü ve 390px genişlikte `test-artifacts/` altına alınır; yatay kaydırma olmamalı.
+- [x] **Step 5:** Commit: `Platform ana sayfası, yönetim merkezi ve eski adres yönlendirmeleri`.
 
 ---
 
@@ -303,16 +316,18 @@
   - `alter table public.events alter column community_id set not null`. Önce `do $$ … if exists(select 1 from events where community_id is null) then raise exception …` denetimi yapılır.
 - **Testler:** bütün `tests/*.sql` ve betiklerdeki `update events set is_current…` satırları kaldırılır; etkinlik eklemeleri `community_id` verir (`(select id from communities where slug='deu-csai')`). `tests/database.sql` ve `tests/database-tenancy.sql` içindeki `switch_event` / `admin_switch_event` testleri `admin_create_event` testine dönüşür ya da silinir; kapsam Task 1'de. 0014 sonrası için yeni test: `select count(*) from information_schema.columns where table_name='events' and column_name='is_current'` 0 döner.
 
-- [ ] **Step 1:** `0014`'ü ve test güncellemelerini yaz; `scripts/test-db.mjs` listesine `0014`'ü ekle.
-- [ ] **Step 2:** `POSTGRES_BIN="C:/Users/User/pgsql17/pgsql/bin" npm run test:db` çalıştır. Beklenen: PASS.
-- [ ] **Step 3:** `tick()`'i değiştir.
-- [ ] **Step 4:** `npm run check`, `npm run build` ve `npm run test:routes` çalıştır. Beklenen: PASS. Ayrıca `grep -rn "is_current\|switch_event" app lib components scripts tests audit` yalnızca `0002–0014` migration dosyalarında eşleşir.
-- [ ] **Step 5:** Commit: `İşçi bütün açık etkinlikleri işler; 0014 güncel etkinlik kavramını kaldırır`.
+- [x] **Step 1:** `0014`'ü ve test güncellemelerini yaz; `scripts/test-db.mjs` listesine `0014`'ü ekle.
+- [x] **Step 2:** `POSTGRES_BIN="C:/Users/User/pgsql17/pgsql/bin" npm run test:db` çalıştır. Beklenen: PASS.
+- [x] **Step 3:** `tick()`'i değiştir.
+- [x] **Step 4:** `npm run check`, `npm run build` ve `npm run test:routes` çalıştır. Beklenen: PASS. Ayrıca `grep -rn "is_current\|switch_event" app lib components scripts tests audit` yalnızca `0002–0014` migration dosyalarında eşleşir.
+- [x] **Step 5:** Commit: `İşçi bütün açık etkinlikleri işler; 0014 güncel etkinlik kavramını kaldırır`.
 
 ---
 
-### Yayın (kontrolör, kullanıcı onayıyla)
+### Yayın (bekliyor; kontrolör, kullanıcı onayıyla)
 
 1. Canlı DB durumunu kontrol et (`list_migrations`). Kullanıcı onayıyla `0013`'ü uygula. Eski kod çalışmaya devam eder.
 2. Dalı push'la ve PR aç; kullanıcı merge eder ve Vercel yayınlar.
 3. Yayın doğrulandıktan sonra, kullanıcı onayıyla `0014`'ü uygula. Ardından `get_advisors` ile güvenlik denetimini çalıştır.
+
+Bu oturumda canlı migration, merge veya Vercel yayını yapılmadı. `0013` eski uygulamayla uyumlu olarak yayından önce, `0014` ise yeni uygulamanın yayını doğrulandıktan sonra uygulanmalıdır.

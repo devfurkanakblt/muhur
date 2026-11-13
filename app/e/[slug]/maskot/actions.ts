@@ -6,7 +6,7 @@ import { eventPath } from "@/lib/event-routes";
 import { getEventAccess } from "@/lib/access";
 import { ASKIDA_MESAJI, can, denialMessage } from "@/lib/authz";
 import { createAdminClient } from "@/lib/supabase/server";
-import type { NamingPhase } from "@/lib/mascot-naming";
+import { hasMascotNaming, type NamingPhase } from "@/lib/mascot-naming";
 
 export type NamingActionState = { ok?: boolean; error?: string } | undefined;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,7 +29,8 @@ function message(error: { message: string }): string {
  */
 async function loadEvent(form: FormData): Promise<EventState | null> {
   const id = String(form.get("event") ?? "").trim();
-  return UUID.test(id) ? getEventById(id) : null;
+  const event = UUID.test(id) ? await getEventById(id) : null;
+  return event && hasMascotNaming(event) ? event : null;
 }
 
 const EVENT_MISSING = "Etkinlik bulunamadı.";

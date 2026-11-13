@@ -11,6 +11,9 @@ const eventId = "10000000-0000-0000-0000-000000000001";
 const communityId = "20000000-0000-0000-0000-000000000001";
 const otherCommunityId = "20000000-0000-0000-0000-000000000002";
 let mode = "open";
+let multiEvent = false;
+const secondEventId = "10000000-0000-0000-0000-000000000002";
+const secondProjectId = "30000000-0000-0000-0000-000000000004";
 // Yetki rolleri DB'den okunur (platform_roles, community_members). ?rol= ile fikstür kullanıcısının rolü seçilir:
 // "yonetici" (varsayılan): head admin + etkinliğin topluluğunun sahibi; "head-admin": yalnızca head admin;
 // "sahip": yalnızca etkinliğin topluluğunun sahibi (head admin değil); "juri": yalnızca etkinliğin jürisi;
@@ -52,7 +55,7 @@ const mascotVotes = [
   { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000012", proposal_id: mascotProposals[1].id },
 ];
 // Başka topluluk: "komsu" rolünde onaylı, diğer rollerde onay bekliyor (etkinliği yok).
-const otherCommunity = () => ({ id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", city: null, status: role === "komsu" ? "onaylandi" : "beklemede", telegram_enabled: false });
+const otherCommunity = () => ({ id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", city: null, status: multiEvent || role === "komsu" ? "onaylandi" : "beklemede", telegram_enabled: false });
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
 function records(table) {
@@ -109,6 +112,14 @@ function records(table) {
     mascot_name_proposals: mascotProposals,
     mascot_name_votes: mode === "voting" || mode === "sealed" ? mascotVotes : [],
   };
+  // İkinci açık etkinlik başka topluluğa aittir. Aynı katılımcı iki etkinlikte farklı ekiptedir.
+  if (multiEvent) {
+    tables.events.push({ ...tables.events[0], id: secondEventId, slug: "ikinci-etkinlik", title: "İkinci Hackathon · Yerel Test",
+      community_id: otherCommunityId, community: otherCommunity(), announcement: "İkinci etkinlik duyurusu", suspended_at: null, suspended_reason: null });
+    tables.projects.push({ ...projects[0], id: secondProjectId, event_id: secondEventId, name: "İkinci Etkinlik Projesi",
+      team_name: "İkinci Ekip", invite_code: "second-invite" });
+    tables.project_members.push({ ...member, event_id: secondEventId, project_id: secondProjectId, project: { team_name: "İkinci Ekip" } });
+  }
   return tables[table] ?? [];
 }
 const server = createServer(async (request, response) => {
@@ -128,6 +139,7 @@ const server = createServer(async (request, response) => {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
     role = ["yonetici", "head-admin", "sahip", "juri", "yabanci", "komsu"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
     suspended = url.searchParams.get("askida") === "1";
+    multiEvent = url.searchParams.get("coklu") === "1";
     auditFails = url.searchParams.get("denetim") === "hata";
     audits = [];
     hunters = [];

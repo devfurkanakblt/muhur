@@ -13,6 +13,7 @@
     "test:db": "node scripts/test-db.mjs",
     "preview:test": "node tests/preview.mjs",
     "test:browser": "node tests/browser.mjs",
+    "test:event-isolation": "node tests/event-isolation-browser.mjs",
     "test:live-browser": "node tests/live-browser.mjs",
     "test:routes": "node tests/routes.mjs",
     "test:stress": "node --import ./tests/register.mjs scripts/stress-seal.mjs"

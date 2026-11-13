@@ -1,6 +1,6 @@
 # Çoklu topluluk · Plan 3–5 uygulama sırası
 
-13 Kasım 2026 · Ayrıntılı uygulama planları hazır; bu belgeler henüz uygulanmadı.
+13 Kasım 2026 · Plan 3 kodu yerelde uygulandı/doğrulandı; Plan 4–5 ayrıntılı plan olarak bekliyor. Canlı yayın yapılmadı.
 
 ## Planlar
 
@@ -43,10 +43,15 @@ Bu sıra geliştirmeyi parça parça ilerletir; eksik sözleşme veya saklama da
 | 0020 | Saklama manifesti/ledger ve okuyucu altyapısı | Silme kapalı |
 | 0021 | Süreli silme için aktivasyon kapısı | Okuyucu yayını ve açık aktivasyon onayından sonra; migration tek başına dosya silmez |
 
-Bunlar henüz oluşturulmuş migration dosyaları değildir. Gerçek numaralar uygulama anında çakışma açısından kontrol edilir. Geriye uyumsuz grant/enforcement geçişi eski uygulama yayındayken yapılmaz; yeni aktivasyon migration'ı gerekirse sonraki öneri numaraları birlikte güncellenir.
+0015 ve 0016 Plan 3 kapsamında oluşturuldu ve izole PostgreSQL üzerinde doğrulandı; 0017–0021 henüz öneridir. Gerçek numaralar uygulama anında çakışma açısından kontrol edilir. Geriye uyumsuz grant/enforcement geçişi eski uygulama yayındayken yapılmaz; yeni aktivasyon migration'ı gerekirse sonraki öneri numaraları birlikte güncellenir.
 
 ## Test ve teslim yaklaşımı
 
 Her task dosyaları, SQL/TypeScript arayüzleri, checkbox'lı adımlar ve commit sınırı içerir. İzole SQL testleri; iki bağlantılı kayıt/rol/onay yarışları; sahte Brevo ile hata/tekrar; rota ve gerçek form testleri; 390px/masaüstü görsel kontrol; Storage/DB sınırında kesinti testleri birlikte kullanılır. Yalnızca UI butonunun gizlenmesi yetki veya özellik denetimi sayılmaz.
 
-Yayın notları ve tamamlanma kayıtları gerçek sonuçla doldurulur; şu an hiçbir task tamamlandı işaretlenmez. Uzak kod aktarımı, gerçek alıcıya e-posta ve canlı arşiv silme bu belgelerin yazılmasıyla yapılmış/izin verilmiş sayılmaz.
+Plan 3 uygulama kaydı ve test kanıtları ilgili plan dosyasında tamamlandı; canlı servis/yayın provası açık kalır. Plan 4–5 task'ları henüz tamamlanmadı. Uzak kod aktarımı, gerçek alıcıya e-posta ve canlı arşiv silme bu belgelerin yazılmasıyla yapılmış/izin verilmiş sayılmaz.
+
+
+## Güncel yerel durum
+
+`feat/topluluk-basvuru`: plan belgeleri `f27573a`, uygulama/testler `cbde216`. Plan 3'ün 101 test, üretim derlemesi, SQL/rol yarışları, HTTP ve tarayıcı kontrolleri geçti. Genel başvuru kapalı. Gerçek Supabase migration geçmişi, Plan 2 yayını ve Brevo/LinkedIn dış servis provası canlı yayın önkoşulu olarak durur. Bu tur uzak depoya gönderim veya canlı veri yazımı yapılmadı.

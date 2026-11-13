@@ -173,3 +173,8 @@ Bu bölüm tarihli tasarımın sonraki planlama kaydıdır; yukarıdaki eski ba�
 - [Ortak uygulama sırası, bağımlılıklar ve migration haritası](../plans/2026-11-13-coklu-topluluk-3-5-uygulama-sirasi.md)
 
 Ortak sözleşme kayıt temeli başvuru sırasında gerekli olduğundan Plan 3'te kurulur; sürüm yenileme ve bütün yönetim yollarındaki zorunlu denetim Plan 4'te tamamlanır. Genel topluluk açılışı üç planın yayın girdileri de tamamlanana kadar kapalıdır. Dosyalar ayrıntılı uygulama önerileridir; bu turda uygulama kodu veya canlı sistem değiştirilmedi.
+
+
+## 13 Kasım 2026 · Plan 3 uygulama kaydı
+
+Plan 3 `feat/topluluk-basvuru` dalında `cbde216` ile yerelde uygulandı: başvuru/onay, davet ve sahiplik, LinkedIn jüri, Brevo outbox/işçi/webhook, ortak belge/onay temeli ve etkinlik belge bağlantıları. 101 test, üretim derlemesi, gerçek PostgreSQL ve tarayıcı kontrolleri geçti. Genel başvurular Plan 4–5 tamamlanana kadar kapalı. Plan 4–5 ve canlı Brevo/LinkedIn provası henüz tamamlanmış sayılmaz; ayrıntılar Plan 3'ün uygulama kaydında.

@@ -9,3 +9,5 @@
 /.preview-app.pid
 /.env.local
 /video
+/.vscode
+/ben-kimim

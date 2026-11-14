@@ -3,7 +3,7 @@ import { AbsoluteFill, Img, staticFile, useCurrentFrame } from "remotion";
 import { ease, glass, lin, pop, shake } from "../anim";
 import { Qr } from "../components/qr";
 import { Browser, Btn, Bubble, Cursor, FadeUp, Field, Kicker, Scene, Sfx, Words } from "../components/ui";
-import { config } from "../config";
+import { config, minuteBefore } from "../config";
 import { Mascot } from "../mascot/Mascot";
 import { C, F } from "../theme";
 
@@ -383,7 +383,9 @@ export const S16Teslim: React.FC<{ dur: number }> = ({ dur }) => {
 
 export const S17SonSaniye: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
+  // S18'in saatiyle aynı dakika: bitişten (config.event.end) bir önceki dakikanın son 10 saniyesi.
   const sec = Math.min(50 + Math.floor(frame / 30), 57);
+  const [hh, mm] = minuteBefore(config.event.end.time).split(":");
   const pulse = (frame % 30) / 30;
   return (
     <Scene dur={dur}>
@@ -392,7 +394,7 @@ export const S17SonSaniye: React.FC<{ dur: number }> = ({ dur }) => {
         <Words text="Son saniyeyi bekleme!" at={8} size={110} dot={false} accent={["bekleme!"]} accentColor={C.blush} />
       </div>
       <div style={{ position: "absolute", left: 110, top: 430, fontFamily: F.display, fontWeight: 600, fontSize: 250, letterSpacing: "-0.03em", color: C.ink, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-        19<span style={{ color: C.indigo }}>:</span>59<span style={{ color: C.indigo }}>:</span>
+        {hh}<span style={{ color: C.indigo }}>:</span>{mm}<span style={{ color: C.indigo }}>:</span>
         <span style={{ color: C.indigo, display: "inline-block", transform: `scale(${1 + (1 - pulse) * 0.06})` }}>{sec}</span>
       </div>
       {new Array(8).fill(0).map((_, i) => (
@@ -429,7 +431,8 @@ export const S18Muhur: React.FC<{ dur: number }> = ({ dur }) => {
   const sh = shake(frame, hit, 12, 16);
   const stamp = frame < hit ? 0 : lin(frame, [hit, hit + 7], [0, 1]);
   const sec = Math.min(57 + Math.floor(frame / 30), 60);
-  const clock = sec >= 60 ? "20:00:00" : `19:59:${sec}`;
+  const end = config.event.end.time;
+  const clock = sec >= 60 ? `${end}:00` : `${minuteBefore(end)}:${sec}`;
   const lines = [
     { k: "commit", v: "a41c9e2" },
     { k: "zip", v: "orman-gozu-a41c9e2.zip" },
@@ -532,7 +535,7 @@ export const S19Sonrasi: React.FC<{ dur: number }> = ({ dur }) => {
           {[
             ["Eser", "No. 001"],
             ["Commit", "a41c9e2"],
-            ["Mühür", "7 Kas 20:00"],
+            ["Mühür", `${config.event.end.day} ${config.event.month.slice(0, 3)} ${config.event.end.time}`],
             ["SHA-256", EGG_SHORT],
           ].map(([k, v]) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", borderTop: "2px solid #d3d9e2", paddingTop: 10, fontSize: 24 }}>

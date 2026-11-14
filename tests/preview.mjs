@@ -213,7 +213,8 @@ const server = createServer(async (request, response) => {
 await new Promise(resolve => server.listen(54330, "127.0.0.1", resolve));
 // MUHUR_PREVIEW_PROD=1: önce aynı ortamla `next build`, sonra `next start` (üretim CSP'si ve derlemesi).
 const prod = process.env.MUHUR_PREVIEW_PROD === "1";
-const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), prod ? "start" : "dev", "-p", "3100"], {
+const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"), prod ? "start" : "dev",
+  ...(!prod && process.env.MUHUR_PREVIEW_WEBPACK === "1" ? ["--webpack"] : []), "-p", "3100"], {
   windowsHide: true, stdio: "inherit", env: { ...process.env, NODE_ENV: prod ? "production" : "development", MUHUR_TEST_PREVIEW: "1",
     NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54330", NEXT_PUBLIC_SUPABASE_ANON_KEY: "fixture-key",
     SUPABASE_SERVICE_ROLE_KEY: "fixture-key", ADMIN_GITHUB_IDS: "424242", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",

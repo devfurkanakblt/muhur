@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { ease, lin, pop } from "../anim";
 import { Bubble, FadeUp, Kicker, Scene, Sfx, Words } from "../components/ui";
-import { config } from "../config";
+import { config, eventDates } from "../config";
 import { Mascot } from "../mascot/Mascot";
 import { C, F } from "../theme";
 
@@ -98,14 +98,14 @@ export const S01Merhaba: React.FC<{ dur: number }> = ({ dur }) => {
 
 /* S2 · Başlık */
 
-const Leaf: React.FC<{ size: number }> = ({ size }) => (
+export const Leaf: React.FC<{ size: number }> = ({ size }) => (
   <svg viewBox="0 0 120 120" width={size} height={size}>
     <path d="M20 100 Q14 30 96 18 Q104 92 34 102 Z" fill={C.leaf} stroke={C.mInk} strokeWidth={7} strokeLinejoin="round" />
     <path d="M30 92 Q52 64 84 34" stroke={C.mInk} strokeWidth={6} fill="none" strokeLinecap="round" />
   </svg>
 );
 
-const Chip: React.FC<{ size: number }> = ({ size }) => (
+export const Chip: React.FC<{ size: number }> = ({ size }) => (
   <svg viewBox="0 0 120 120" width={size} height={size}>
     <g stroke={C.mViolet} strokeWidth={7} strokeLinecap="round">
       {[38, 60, 82].map((v) => (
@@ -156,7 +156,7 @@ export const S02Baslik: React.FC<{ dur: number }> = ({ dur }) => {
         </Kicker>
       </div>
       <FadeUp at={80} style={{ position: "absolute", top: 760, width: 1920, textAlign: "center", fontFamily: F.mono, fontSize: 34, color: C.ink2 }}>
-        {config.event.dates}
+        {eventDates}
         <div style={{ marginTop: 14, color: C.ink }}>{config.event.place}</div>
       </FadeUp>
     </Scene>

@@ -49,6 +49,9 @@ next-env.d.ts
 # editor / agent local state
 .claude/settings.local.json
 /.impeccable/review/
+/.superpowers/brainstorm/.last-port
+/.superpowers/brainstorm/.last-token
+/.superpowers/brainstorm/*/state/
 
 # supabase cli
 /supabase/.temp/

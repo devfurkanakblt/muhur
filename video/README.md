@@ -11,6 +11,7 @@ cd video
 npm install
 npm run studio   # tarayıcıda önizleme; her sahne "Sahneler" klasöründe ayrıca açılır
 npm run render   # out/ekozeka-acilis.mp4
+npm run render:reels  # out/ekozeka-reels.mp4 + out/ekozeka-reels-kapak.png (Instagram, 9:16)
 npm run stills   # stills/ altına kontrol kareleri
 npm run sfx      # ses efektlerini yeniden sentezler (Python, numpy, scipy)
 ```
@@ -25,11 +26,16 @@ Hepsi `src/config.ts` içinde. Değiştirip `npm run render`:
 |---|---|
 | `mascotName` | Ad kesinleşince S1'de "Adım ___!" der. `null` iken "Adım mı? …Henüz yok." |
 | `program` | Saat ve etkinlik listesi. Dolunca S9 program sahnesi videoya girer. |
-| `sponsors` | `public/sponsorlar/` altındaki logo dosya adları. Dolunca S22'de görünür. |
+| `logos` | `public/logolar/` altındaki şeffaf PNG logolar ve yükseklikleri. S22 ve Reels'in son sahnesinde (R6) görünür. |
 | `music` | `public/muzik/` altındaki parça. Başta ve sonda yumuşak geçişle çalar. |
-| `telegramUrl`, `siteUrl`, `event` | QR kodlar ve tarih/yer satırı bunlardan üretilir. |
+| `event` | Ad, ay, `start`/`end` (gün, gün adı, saat) ve yer. Tarih satırı, Reels takvim kartları ve S18'deki saat/makbuz bunlardan üretilir. |
+| `telegramUrl`, `siteUrl` | QR kodlar bunlardan üretilir. |
 
 Sahne süreleri `src/Video.tsx` içindeki `SCENES` listesinde (kare cinsinden).
+
+## Instagram Reels
+
+`EkoZekaReels` kompozisyonu: 1080×1920, ~31 sn, kayıt duyurusu (sahneler `src/reels/`, süreler `REELS` listesinde). Müzik gömülü değil, yalnızca efektler var; müziği Instagram'da ekle. Yazılar Instagram arayüzünün örttüğü üst ~250 px ve alt ~450 px bandın dışında tutulur. Kapak için `out/ekozeka-reels-kapak.png` kullanılabilir (Kapak → Film rulosundan ekle). Render `--color-space bt709` ile yapılır; Instagram standart `yuv420p` bekler.
 
 ## Notlar
 

@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Açılış videosu: kendi bağımlılıkları ve tsconfig'i olan ayrı Remotion projesi.
     "video/**",
+    // Ben kimim? oyunu: ayrı Next.js sitesi, kendi bağımlılıkları ve tsconfig'i var.
+    "ben-kimim/**",
   ]),
 ]);
 

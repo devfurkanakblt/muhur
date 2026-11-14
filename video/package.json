@@ -5,6 +5,7 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "render": "remotion render src/index.ts EkoZekaAcilis out/ekozeka-acilis.mp4 --codec h264 --crf 16",
+    "render:reels": "remotion render src/index.ts EkoZekaReels out/ekozeka-reels.mp4 --codec h264 --crf 16 --color-space bt709 && remotion still src/index.ts EkoZekaReels out/ekozeka-reels-kapak.png --frame 300",
     "stills": "node scripts/stills.mjs",
     "sfx": "python scripts/sfx.py public/sfx",
     "typecheck": "tsc --noEmit"

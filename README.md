@@ -8,21 +8,34 @@ Hackathon ekipleri public GitHub repolarını içe aktarır. İlk kod arşivi ka
 
 | Adres | Ne var |
 |---|---|
-| `/` | Güncel etkinlik: saate göre değişen selam ve maskot, geri sayım (başlamadan önce başlangıca), vitrin; sonuçlar açıklanınca vitrinin başında kazananlar (jüri ödülleri ve halkın seçimi) |
-| `/maskot` | Maskota isim önerme, halk oylaması ve canlı sonuçlar; organizatör aşama ve öneri görünürlüğü kontrolü |
-| `/panel` | Ekip paneli: kayıt, teslim sürümü güncelleme, hazırlık listesi, zaman çizelgesi, demo, davet, kuruculuk devri, silme onayı, rozet ve makbuz |
+| `/` | Platform ana sayfası: onaylı ve askıda olmayan toplulukların aktif etkinlikleri ve geçmiş sergileri |
+| `/e/<etkinlik>` | Etkinliğin vitrini, geri sayımı ve kazananları |
+| `/e/<etkinlik>/maskot` | Maskota isim önerme, halk oylaması ve canlı sonuçlar; organizatör aşama ve öneri görünürlüğü kontrolü |
+| `/e/<etkinlik>/panel` | Ekip paneli: kayıt, teslim sürümü güncelleme, hazırlık listesi, zaman çizelgesi, demo, davet, kuruculuk devri, silme onayı, rozet ve makbuz |
 | `/sergi/<etkinlik>/<no>` | Eser sayfası (paylaşım kartı ile), oy düğmesi, mühür kaydı |
 | `/sergi/<etkinlik>/<no>/makbuz` | Yazdırılabilir mühür makbuzu (kilitten sonra) |
 | `/sergi/<etkinlik>` · `/sergiler` | Geçmiş sergiler |
 | `/dogrula` | Mühürlü ZIP'in SHA-256'sı (tarayıcıda hesaplanır) ya da commit koduyla doğrulama |
-| `/sahne` | Projektör için tam ekran sahne modu; kilitten sonra açıklanan her ödül birkaç saniye içinde tören gösterisiyle (logo, eser, ekip, üyeler) açılır |
-| `/yonetim` | Admin: zamanlama, duyuru, kilit, oylama, yeni etkinlik, iş kuyruğu, cron takibi, toplu jüri paketi, CSV, jüri ödülleri |
+| `/e/<etkinlik>/sahne` | Projektör için tam ekran sahne modu; kilitten sonra açıklanan her ödül birkaç saniye içinde tören gösterisiyle (logo, eser, ekip, üyeler) açılır |
+| `/yonetim` | Yönetim merkezi: yetkili olunan etkinlikler, topluluk seçerek yeni etkinlik; head admin için kişisel veri silme ve işçi kayıtları |
+| `/e/<etkinlik>/yonetim` | Etkinliğe özel zamanlama, duyuru, kilit, oylama, iş kuyruğu, jüri paketi ve ödüller |
+| `/e/<etkinlik>/belge` | Etkinliğe özel katılım belgesi |
 | `/gizlilik` | KVKK aydınlatma metni |
 | `/api/rozet/<etkinlik>/<no>` | README rozeti (SVG) |
 | `/api/juri/<etkinlik>` | Admin için toplu ZIP; `?format=csv` ile teslim listesi |
 | `/api/qr` | Sahne için site QR kodu (SVG) |
 | `/api/kazanan/[id]` | Telegram duyurusundaki kazanan kartı (1200×630 PNG): jüri ödülü kimliği ya da `halk-<proje>` |
-| `/api/durum` | Oturuma göre değişim sürümü; canlı durum ve sunucu saati |
+| `/api/durum?e=<etkinlik>` | Etkinliğe ve oturuma göre değişim sürümü; canlı durum ve sunucu saati |
+
+`/panel`, `/sahne`, `/belge` ve `/maskot` eski bağlantıları sorgu parametrelerini koruyarak 307 ile uygun etkinliğe yönlenir. Davet bağlantıları etkinliği davetin projesinden bulur. Bilinmeyen etkinlik adresleri 404 döner.
+
+## Çoklu etkinlik geçişi (Plan 2)
+
+- `0013_etkinlik_olustur.sql` uygulama yayınından **önce** uygulanır; mevcut uygulamayla uyumludur.
+- Yeni uygulama yayınlanıp doğrulandıktan **sonra** `0014_guncel_etkinlik_kaldir.sql` uygulanır. Bu migration eski güncel-etkinlik sütununu ve geçiş fonksiyonlarını kaldırır; bütün etkinliklerin topluluğa bağlı olmasını zorunlu kılar.
+- İşçi her açık etkinliğin sağlık, ara mühür ve hatırlatma adımlarını süre bütçesi içinde işler. Bir etkinliğin hatası diğerlerini durdurmaz; işçi ayrıntıları etkinlik adresine göre gruplanır.
+- Yerel doğrulama: `npm run check`, `npm run build`, `npm run test:db`; `npm run preview:test` açıkken sırayla `npm run test:routes`, `npm run test:browser`, `npm run test:event-isolation`. Testler aynı fikstür durumunu değiştirdiği için paralel çalıştırılmaz.
+- `test:event-isolation`, başka topluluğun etkinlik kimliğiyle gönderilen yönetim ve maskot formlarının sunucuda reddedildiğini sınar.
 
 ## Kilit nasıl çalışır
 
@@ -107,3 +120,18 @@ npm run dev
 `npm run test:stress -- --teams 50 --storm 120`: son dakika stres testi. Yerel PostgreSQL'de gerçek migration'lar ve uygulamanın arşiv doğrulama kodu ile ekipler son saniyelerde teslim sürümünü günceller; GitHub ve depo gecikme/hata enjekte edilen sahte servislerdir (`--faults` çarpanı). Süre dolar, mühür vurulur; ardından süre sonrası kabul, mühür hash'i, çift işleme, bozuk/kayıp arşiv ve her ekibin son istediği sürümün mühürlenip mühürlenmediği bağımsız doğrulanır. Rapor `test-artifacts/stress/` altına yazılır. `psql` gerektirmez; `POSTGRES_BIN` ile PostgreSQL ikili dosyaları gösterilebilir.
 
 `npm run test:routes`: önizleme açıkken kayıt/kabul/mühür/hata ekranları, yönetim yetkisi ve CSV indirmeyi HTTP üzerinden kontrol eder. Chrome kontrolü işletim sistemi sandbox/GPU kısıtları olan ortamlarda çalışmayabilir; HTTP kontrolü görsel doğrulamanın yerine geçtiği iddia edilmez.
+
+
+## Plan 3 · başvuru, davet ve Brevo kurulumu
+
+Yerel geliştirme dalı `feat/topluluk-basvuru`. Önceki Plan 2 değişiklikleri ve 0014 şeması önkoşuldur. Sıra: 0015 ve 0016 migration → uygulama dağıtımı → kimlik ve e-posta provası. Migration'lar mevcut mühürlü teslimleri değiştirmez. Genel başvurular `COMMUNITY_APPLICATIONS_ENABLED=false` kalır; Plan 4–5 ve gerçek yayın provası bitmeden açılmaz. Başvuru ekranı iki güncel, yayımlanmış `platform` / `data_processing` belgesi ister. Depoda örnek hukuki metin yayımlanmaz; test belgeleri yalnız ayrı test veritabanındadır.
+
+Supabase Auth'ta `linkedin_oidc` sağlayıcısını etkinleştir; LinkedIn uygulamasında OpenID Connect ürünü ve Supabase'in verdiği callback adresini tanımla. Supabase site URL/redirect allowlist gerçek uygulama kökünü kapsamalı. LinkedIn yalnız etkinlik jürisi davetinde kullanılır. Yarışmacı ve organizatör için doğrulanmış GitHub kimliği gerekir. Aynı doğrulanmış e-postalı sağlayıcıların hesap bağlamasını gerçek test hesaplarıyla prova et; uygulama e-posta eşitliğinden rol üretmez.
+
+Brevo hesabında gönderici/alan adını doğrula; `.env.example` içindeki sunucu değişkenlerini güvenli ortamda doldur. `MAIL_PAYLOAD_KEY` için `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` ile anahtar üret, secret yöneticisinde sakla ve yeniden dağıtımlarda koru. Anahtarı kaybetmek mevcut davet e-postalarının çözülememesine yol açar; bu durumda yeni davet oluşturulur. Anahtar veya tokenları loglara ya da Git'e yazma.
+
+Brevo transactional webhook adresi `<site>/api/webhooks/brevo`, doğrulama `Authorization: Bearer <BREVO_WEBHOOK_SECRET>`. Request/sent/delivered ve bounce/blocked/error olaylarını seç; opened/clicked izleme bu kapsamda kullanılmaz. Gönderim sağlayıcı tarafından kabul edildiğinde `accepted`, alıcı teslim olayı geldiğinde ayrıca `delivered` görünür. 429 sınırlı tekrar edilir; timeout/5xx ve kayıp lease `uncertain` olur, otomatik yeniden gönderilmez. Yetkili kişi Brevo kaydını kontrol ederek uygulama e-postasını yeniden sıraya alabilir; davetler için yeni bağlantı oluşturulur.
+
+Vault'a `muhur_site_url` ve `muhur_cron_secret` (uygulamadaki `CRON_SECRET`) ekledikten sonra bağımsız `supabase/cron/plan3_mail.sql` zamanlayıcısını kur. `/api/cron/mail` teslim işçisinden bağımsızdır, en fazla üç işi ve yaklaşık 10 saniyelik bütçeyi kullanır. Brevo ayarları eksikse gönderim başlamaz. Canlı prova yalnız izinli test alıcısıyla yapılır. Geri almak için `muhur-mail` cron'unu kaldır, genel başvuruları kapalı tut; additive tabloları ve kabul kanıtlarını silme.
+
+Plan 3 kontrolleri: `npm run check`, `npm run test:db` (0016'ya kadar tüm uygulama migration'ları ve iki bağlantılı rol/mail yarışları), `npm run test:community` (yerel önizleme açıkken rota, gerçek form, masaüstü/mobil görüntüler). Önizleme Brevo'ya göndermez ve canlı hesap kullanmaz. Canlı OIDC hesabı, gönderici doğrulaması ve gerçek teslim provası yerel testlerle tamamlanmış sayılmaz.

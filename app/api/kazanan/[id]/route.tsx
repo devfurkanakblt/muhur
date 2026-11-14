@@ -2,7 +2,9 @@ import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import sharp from "sharp";
-import { getEvent } from "@/lib/data";
+import { getEventById } from "@/lib/data";
+import { createAdminClient } from "@/lib/supabase/server";
+import { PEOPLES_CHOICE_PREFIX } from "@/lib/winner-model";
 import { exhibitNo } from "@/lib/format";
 import { getWinners } from "@/lib/winners";
 
@@ -24,12 +26,28 @@ async function logoData(url: string | null) {
   }
 }
 
-/** Kazanan kartı: Telegram duyurusunun görseli. Yalnızca güncel etkinliğin herkese açık kazanan bilgisi. */
+/** Kazananın etkinliği kaydın kendisinden okunur: jüri ödülünde ödül satırı, halkın seçiminde eser. */
+async function winnerEventId(id: string): Promise<string | null> {
+  const db = createAdminClient();
+  const people = id.startsWith(PEOPLES_CHOICE_PREFIX);
+  const { data, error } = people
+    ? await db.from("projects").select("event_id").eq("id", id.slice(PEOPLES_CHOICE_PREFIX.length)).maybeSingle()
+    : await db.from("awards").select("event_id").eq("id", id).maybeSingle();
+  // Biçimi bozuk kimlik (uuid değil) "kazanan yok" sayılır.
+  if (error) {
+    if (error.code === "22P02") return null;
+    throw new Error(`Kazanan okunamadı: ${error.message}`);
+  }
+  return (data?.event_id as string | undefined) ?? null;
+}
+
+/** Kazanan kartı: Telegram duyurusunun görseli. Yalnızca etkinliğin herkese açık kazanan bilgisi. */
 export async function GET(_: Request, ctx: RouteContext<"/api/kazanan/[id]">) {
   const { id } = await ctx.params;
-  const event = await getEvent();
-  const winner = (await getWinners(event)).find((w) => w.id === id);
-  if (!winner) return new Response("Kazanan bulunamadı.", { status: 404 });
+  const eventId = await winnerEventId(id);
+  const event = eventId ? await getEventById(eventId) : null;
+  const winner = event ? (await getWinners(event)).find((w) => w.id === id) : undefined;
+  if (!event || !winner) return new Response("Kazanan bulunamadı.", { status: 404 });
   const [regular, semibold, mascot, logo] = await Promise.all([
     readFile(join(process.cwd(), "assets/schibsted-grotesk-400.woff")),
     readFile(join(process.cwd(), "assets/schibsted-grotesk-600.woff")),

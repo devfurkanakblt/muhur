@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { exhibitPath, getAwards, getExhibits, getVotes, logoUrl, type EventState, type Exhibit } from "@/lib/data";
 import { env } from "@/lib/env";
+import { eventUrl } from "@/lib/event-routes";
 import { notifyEvent, tg } from "@/lib/notify";
 import { PEOPLES_CHOICE, peoplesChoiceId, winnerAnnouncement, type Winner } from "@/lib/winner-model";
 
@@ -71,6 +72,6 @@ export async function announcePeoplesChoice(event: EventState) {
   } catch (e) {
     console.error("[kazanan] halkın seçimi okunamadı:", e instanceof Error ? e.message : e);
   }
-  if (!winners.length) return notifyEvent(event, [`🏆 ${tg.b("Halkın seçimi sonuçlandı.")}`, tg.link(env.siteUrl, "Sonuçlara bak")], "kazanan");
+  if (!winners.length) return notifyEvent(event, [`🏆 ${tg.b("Halkın seçimi sonuçlandı.")}`, tg.link(eventUrl(env.siteUrl, event.slug), "Sonuçlara bak")], "kazanan");
   return notifyEvent(event, winnerAnnouncement(winners, env.siteUrl), "kazanan", winners.length === 1 ? { photo: winnerCardUrl(winners[0].id) } : {});
 }

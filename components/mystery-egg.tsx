@@ -9,8 +9,9 @@ import { useProtectedForm } from "@/components/protected-form";
 /**
  * Gizem avcısı: açılış videosundaki gizli mesajı çözen Ctrl/Cmd+Shift+S'ye basar ve cümleyi yazar.
  * Cevap sunucuda denetlenir; bu bileşen cevabı bilmez. Ctrl+S esprisi (SaveEgg) Shift'siz basışı alır.
+ * Gizem etkinlik başınadır: rozet, sayfası açık olan etkinliğe yazılır.
  */
-export function MysteryEgg() {
+export function MysteryEgg({ eventId }: { eventId: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [state, action, pending] = useActionState(huntMystery, undefined);
@@ -43,6 +44,7 @@ export function MysteryEgg() {
         <p role="status" className="mt-4 text-ink-2">{state?.status}</p>
       ) : (
         <form {...protectedForm} data-live-safe className="mt-5 grid gap-3" aria-busy={pending}>
+          <input type="hidden" name="event" value={eventId} />
           <label htmlFor="mystery-answer">Gizli cümleyi yaz.</label>
           <input
             ref={input}

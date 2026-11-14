@@ -30,12 +30,14 @@ export function SubmitButton({
   );
 }
 
-export function SignInButton({ next = "/panel", label = "GitHub ile içe aktar" }: { next?: string; label?: string }) {
+/** Açık next korunur; yoksa callback topluluk/başvuru durumuna göre dönüş seçer. */
+export function SignInButton({ next, label = "GitHub ile içe aktar", provider = "github" }: { next?: string; label?: string; provider?: "github" | "linkedin_oidc" }) {
   return (
     <ActionForm action={signIn}>
-      <input type="hidden" name="next" value={next} />
-      <ActionButton pending="GitHub'a yönlendiriliyor…" className={buttonStyles.primary}>
-        <GithubLogoIcon size={18} weight="fill" />{label}
+      {next && <input type="hidden" name="next" value={next} />}
+      <input type="hidden" name="provider" value={provider} />
+      <ActionButton pending="Girişe yönlendiriliyor…" className={buttonStyles.primary}>
+        {provider === "github" && <GithubLogoIcon size={18} weight="fill" />}{label}
       </ActionButton>
     </ActionForm>
   );

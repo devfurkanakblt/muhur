@@ -18,9 +18,8 @@ insert into auth.users(id) values
   ('71000000-0000-0000-0000-000000000002'),
   ('71000000-0000-0000-0000-000000000003'),
   ('71000000-0000-0000-0000-000000000004');
-update events set is_current = false where is_current;
-insert into events(id, slug, title, starts_at, deadline, is_current)
-values ('72000000-0000-0000-0000-000000000001', 'mascot-test', 'Maskot Testi', now() - interval '1 hour', now() + interval '1 hour', true);
+insert into events(id, slug, title, starts_at, deadline, community_id)
+values ('72000000-0000-0000-0000-000000000001', 'mascot-test', 'Maskot Testi', now() - interval '1 hour', now() + interval '1 hour', (select id from communities where slug = 'deu-csai'));
 select pg_temp.assert_true((select phase = 'oneriler' from mascot_naming_rounds where event_id = '72000000-0000-0000-0000-000000000001'), 'Yeni etkinliğe öneri turu açılır');
 
 select id from register_project('72000000-0000-0000-0000-000000000001', '71000000-0000-0000-0000-000000000001',

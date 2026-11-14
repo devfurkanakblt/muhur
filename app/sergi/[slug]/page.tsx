@@ -8,6 +8,7 @@ import { formatDay } from "@/lib/format";
 import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
+import { eventPath } from "@/lib/event-routes";
 
 export async function generateMetadata({ params }: PageProps<"/sergi/[slug]">) {
   const { slug } = await params;
@@ -15,13 +16,13 @@ export async function generateMetadata({ params }: PageProps<"/sergi/[slug]">) {
   return { title: event?.title ?? "Sergi bulunamadı" };
 }
 
-/** Geçmiş sergiler: kapanmış vitrin, mühürler ve halkın seçimi sonucu. Güncel etkinlik ana sayfadadır. */
+/** Geçmiş sergiler: kapanmış vitrin, mühürler ve halkın seçimi sonucu. Kilidi vurulmamış etkinlik kendi vitrinindedir. */
 export default async function PastExhibition({ params }: PageProps<"/sergi/[slug]">) {
   await connection();
   const { slug } = await params;
   const event = await getEventBySlug(slug);
   if (!event) notFound();
-  if (event.isCurrent) redirect("/");
+  if (event.lockedAt == null) redirect(eventPath(event.slug));
   const viewer = await getViewer();
   const { items, voting, winners } = await buildVitrine(event, viewer);
   const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
@@ -37,7 +38,7 @@ export default async function PastExhibition({ params }: PageProps<"/sergi/[slug
           </p>
           <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} className="mt-8" />
         </div>
-        <Vitrine items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} live={false} />
+        <Vitrine eventId={event.id} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} live={false} />
       </main>
     </>
   );

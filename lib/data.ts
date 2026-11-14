@@ -2,8 +2,10 @@ import "server-only";
 import { cache } from "react";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { ADMIN_REAUTH_MS, githubIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
+import { ADMIN_REAUTH_MS, verifiedIdentity, isFreshSignIn, sessionSignedInAt } from "@/lib/identity";
 import { selectAll } from "@/lib/paginate";
+import { notFound } from "next/navigation";
+import { isListed } from "@/lib/event-routes";
 
 /** Okuma hatası "kayıt yok" gibi gösterilmez; sayfa hata ekranına düşer. */
 function readFailed(what: string, error: { message: string }): never {
@@ -18,21 +20,23 @@ type EventRow = {
   starts_at: string;
   deadline: string;
   locked_at: string | null;
-  is_current: boolean;
   announcement: string | null;
   announcement_at: string | null;
   voting: "kapali" | "acik" | "sonuclandi";
   activity_kind: "yemek" | "oyun" | null;
   activity_title: string | null;
   activity_at: string | null;
+  application_url?: string | null;
+  rules_url?: string | null;
+  privacy_url?: string | null;
   community_id: string | null;
   suspended_at: string | null;
   suspended_reason: string | null;
-  community: { name: string; status: string; telegram_enabled: boolean } | null;
+  community: { name: string; slug: string; city: string | null; status: string; telegram_enabled: boolean } | null;
 };
 
 /** Etkinlik satırı, bağlı olduğu toplulukla birlikte okunur. */
-const EVENT_SELECT = "*, community:communities(name,status,telegram_enabled)";
+const EVENT_SELECT = "*, community:communities(name,slug,city,status,telegram_enabled)";
 
 /** Yöneticinin duyurduğu yemek ya da mini oyun; bitirilene kadar sürer. */
 export type Activity = { kind: "yemek" | "oyun"; title: string; at: string };
@@ -44,7 +48,6 @@ export type EventState = {
   startsAt: string;
   deadline: string;
   lockedAt: string | null;
-  isCurrent: boolean;
   /** Etkinlik başladı mı (başlangıç saatine göre). */
   started: boolean;
   locked: boolean;
@@ -55,8 +58,13 @@ export type EventState = {
   voting: EventRow["voting"];
   activity: Activity | null;
   /** Etkinliği düzenleyen topluluk (Plan 1'de eski etkinlikler için null olabilir). */
+  applicationUrl?: string | null;
+  rulesUrl?: string | null;
+  privacyUrl?: string | null;
   communityId: string | null;
   communityName: string | null;
+  communitySlug: string | null;
+  communityCity: string | null;
   /** Topluluk durumu: beklemede | onaylandi | reddedildi | askida. */
   communityStatus: string | null;
   /** Telegram bildirimleri yalnızca topluluğu izinliyse gider. */
@@ -80,7 +88,6 @@ function toState(row: EventRow): EventState {
     startsAt: row.starts_at,
     deadline: row.deadline,
     lockedAt: row.locked_at,
-    isCurrent: row.is_current,
     started: now >= new Date(row.starts_at).getTime(),
     locked: lockedAt !== null || now >= deadline,
     sealTime: new Date(seal).toISOString(),
@@ -88,8 +95,13 @@ function toState(row: EventRow): EventState {
     announcementAt: row.announcement_at,
     voting: row.voting,
     activity: row.activity_kind && row.activity_title && row.activity_at ? { kind: row.activity_kind, title: row.activity_title, at: row.activity_at } : null,
+    applicationUrl: row.application_url ?? null,
+    rulesUrl: row.rules_url ?? null,
+    privacyUrl: row.privacy_url ?? null,
     communityId: row.community_id ?? null,
     communityName: row.community?.name ?? null,
+    communitySlug: row.community?.slug ?? null,
+    communityCity: row.community?.city ?? null,
     communityStatus: row.community?.status ?? null,
     telegram: row.community?.telegram_enabled === true,
     suspended: row.suspended_at != null,
@@ -98,19 +110,21 @@ function toState(row: EventRow): EventState {
   };
 }
 
-/** Güncel etkinlik. Ana sayfa, panel ve yönetim her zaman bunu kullanır. */
-export const getEvent = cache(async (): Promise<EventState> => {
-  const db = createAdminClient();
-  const { data, error } = await db.from("events").select(EVENT_SELECT).eq("is_current", true).single();
-  if (error || !data) throw new Error("Güncel etkinlik bulunamadı.");
-  return toState(data as EventRow);
-});
+/** İsteğin sunucu anı: bir istek boyunca aynı kalır; sayfa bileşenleri saf kalır. */
+export const getRequestNow = cache((): number => Date.now());
 
 export const getEventBySlug = cache(async (slug: string): Promise<EventState | null> => {
   const db = createAdminClient();
   const { data, error } = await db.from("events").select(EVENT_SELECT).eq("slug", slug).maybeSingle();
   if (error) readFailed("Etkinlik", error);
   return data ? toState(data as EventRow) : null;
+});
+
+/** Slug'a göre etkinlik; yoksa 404. */
+export const requireEventBySlug = cache(async (slug: string): Promise<EventState> => {
+  const event = await getEventBySlug(slug);
+  if (!event) notFound();
+  return event;
 });
 
 /** Etkinlik kimliğiyle; yetki denetimi için kaydın bağlı olduğu etkinliği okumakta kullanılır. */
@@ -128,10 +142,63 @@ export const getEvents = cache(async (): Promise<EventState[]> => {
   return (data ?? []).map((r) => toState(r as EventRow));
 });
 
+/** Ana sayfada listelenebilen etkinlikler (topluluğu onaylı, askıda değil). */
+export const getListedEvents = cache(async (): Promise<EventState[]> => {
+  return (await getEvents()).filter(isListed);
+});
+
+/** Kullanıcının ekip üyesi olduğu etkinlikler. */
+export const getViewerEvents = cache(async (userId: string): Promise<EventState[]> => {
+  const db = createAdminClient();
+  const { data, error } = await db.from("project_members").select("event_id").eq("user_id", userId);
+  if (error) readFailed("Ekip üyelikleri", error);
+  const ids = new Set((data ?? []).map((r) => r.event_id as string));
+  if (ids.size === 0) return [];
+  return (await getEvents()).filter((e) => ids.has(e.id));
+});
+
+export type ManagedCommunity = { id: string; slug: string; name: string; status: string; role: "owner" | "organizator" };
+
+/** Kullanıcının sahibi ya da organizatörü olduğu topluluklar. */
+export const getManagedCommunities = cache(async (userId: string): Promise<ManagedCommunity[]> => {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("community_members")
+    .select("role, community:communities(id,slug,name,status)")
+    .eq("user_id", userId);
+  if (error) readFailed("Topluluk üyelikleri", error);
+  type Row = { role: "owner" | "organizator"; community: { id: string; slug: string; name: string; status: string } | null };
+  return ((data ?? []) as unknown as Row[])
+    .filter((r) => r.community)
+    .map((r) => ({ ...r.community!, role: r.role }))
+    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+});
+
+export type ManagementScope = {
+  /** Sahibi ya da organizatörü olunan topluluklar. */
+  communities: ManagedCommunity[];
+  /** Yeni etkinlik açılabilen (onaylı) topluluklar. */
+  creatable: ManagedCommunity[];
+  /** Yönetilebilen ya da incelenebilen etkinlikler: head admin için hepsi, diğerleri için topluluklarınınkiler. */
+  events: EventState[];
+  /** Yönetim merkezinde gösterilecek bir şey var mı; yoksa merkez 404 döner ve başlıkta bağlantı görünmez. */
+  open: boolean;
+};
+
+/** Yönetim merkezinin kapsamı. Yetki `getEventAccess` ile aynıdır: topluluk rolü (durumdan bağımsız) inceler, head admin hepsini inceler. */
+export const getManagementScope = cache(async (viewer: Viewer): Promise<ManagementScope> => {
+  const [communities, all] = await Promise.all([getManagedCommunities(viewer.id), getEvents()]);
+  const ids = new Set(communities.map((c) => c.id));
+  const events = viewer.isHeadAdmin ? all : all.filter((e) => e.communityId != null && ids.has(e.communityId));
+  const creatable = communities.filter((c) => c.status === "onaylandi");
+  return { communities, creatable, events, open: viewer.isHeadAdmin || events.length > 0 || creatable.length > 0 };
+});
+
 export type Viewer = {
   id: string;
   /** Sabit sayısal GitHub kullanıcı kimliği (yetki ve repo sahipliği buna bağlı). */
-  githubId: string;
+  githubId: string | null;
+  provider: "github" | "linkedin";
   login: string;
   avatarUrl: string | null;
   /** Platform yöneticisi (DB `platform_roles`); ADMIN_GITHUB_IDS artık yetki vermez. */
@@ -144,19 +211,26 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   const user = data.user;
   if (!user) return null;
   // user_metadata kullanıcı tarafından değiştirilebilir; kimlik ve yetki yalnızca GitHub identity kaydından okunur.
-  const github = githubIdentity(user);
-  if (!github) return null;
+  const identity = verifiedIdentity(user);
+  if (!identity) return null;
   const { data: role, error } = await createAdminClient()
     .from("platform_roles").select("role").eq("user_id", user.id).eq("role", "head_admin").maybeSingle();
   if (error) readFailed("Platform rolü", error);
   return {
     id: user.id,
-    githubId: github.githubId,
-    login: github.login,
-    avatarUrl: github.avatarUrl,
+    githubId: identity.githubId,
+    provider: identity.provider,
+    login: identity.login,
+    avatarUrl: identity.avatarUrl,
     isHeadAdmin: !!role,
   };
 });
+
+/** Katılımcı işlemleri GitHub kimliği gerektirir; LinkedIn-only jüri bu yoldan geçmez. */
+export async function getGithubViewer(): Promise<(Viewer & { githubId: string }) | null> {
+  const viewer = await getViewer();
+  return viewer?.githubId ? { ...viewer, githubId: viewer.githubId } : null;
+}
 
 export type AdminSession = { signedInAt: number | null; freshUntil: number | null; fresh: boolean };
 
@@ -245,7 +319,7 @@ export type OwnProject = Exhibit & {
   members: Member[];
 };
 
-/** Kullanıcının güncel etkinlikteki eseri. */
+/** Kullanıcının bu etkinlikteki eseri. */
 export const getOwnProject = cache(async (userId: string, eventId: string): Promise<OwnProject | null> => {
   const db = createAdminClient();
   const { data: membership, error: memberError } = await db

@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SignInButton } from "@/components/buttons";
 import { ExhibitLabel } from "@/components/exhibit-label";
 import { JoinForm } from "@/components/join-form";
-import { getEvent, getOwnProject, getViewer, logoUrl } from "@/lib/data";
+import { getEventById, getOwnProject, getViewer, logoUrl } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/server";
 import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
@@ -16,21 +16,26 @@ export default async function InvitePage({ params }: PageProps<"/davet/[code]">)
   await connection();
   const { code } = await params;
   const db = createAdminClient();
-  const [viewer, event] = await Promise.all([getViewer(), getEvent()]);
-  const { data: project } = await db
-    .from("projects")
-    .select("exhibit_no, name, team_name, summary, logo_path, repo_full_name, repo_url, frozen_sha, freeze_error, archive_sha256, accepted_sha")
-    .eq("invite_code", code)
-    .eq("event_id", event.id)
-    .maybeSingle();
+  // Davet kodu tekildir; etkinlik kodun projesinden okunur. Geçersiz kod 404.
+  const [viewer, { data: project, error }] = await Promise.all([
+    getViewer(),
+    db
+      .from("projects")
+      .select("event_id, exhibit_no, name, team_name, summary, logo_path, repo_full_name, repo_url, frozen_sha, freeze_error, archive_sha256, accepted_sha")
+      .eq("invite_code", code)
+      .maybeSingle(),
+  ]);
+  if (error) throw new Error("Davet okunamadı. Lütfen biraz sonra tekrar dene.");
   if (!project) notFound();
+  const event = await getEventById(project.event_id);
+  if (!event) notFound();
   const own = viewer ? await getOwnProject(viewer.id, event.id) : null;
 
   let body: React.ReactNode;
   if (event.locked) body = <p className="text-ink-2">Teslim süresi doldu; ekipler artık değiştirilemez.</p>;
   else if (!viewer) body = <SignInButton next={`/davet/${code}`} label="GitHub ile giriş yap ve katıl" />;
   else if (own) body = <p className="text-ink-2">Zaten bir projenin ekibindesin. Bu ekibe katılmak için önce oradan ayrılmalısın.</p>;
-  else body = <JoinForm code={code} suspended={event.suspended} />;
+  else body = <JoinForm eventId={event.id} code={code} suspended={event.suspended} />;
   const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
 
   return (

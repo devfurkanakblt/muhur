@@ -1,10 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import { eventUrl } from "@/lib/event-routes";
 import { notifyEvent, tg } from "@/lib/notify";
 
 /** Bir etkinlik/pencere için tek bildirim; başarısız gönderim daha sonra yeniden denenir. */
-export async function sendReminders(ev: { id: string; title: string; deadline: string; locked_at: string | null; telegram: boolean }) {
+export async function sendReminders(ev: { id: string; slug: string; title: string; deadline: string; locked_at: string | null; telegram: boolean }) {
   if (!ev.telegram || !env.telegramBotToken || !env.telegramChatId || ev.locked_at) return;
   const left = +new Date(ev.deadline) - Date.now();
   if (left <= 0 || left > 60 * 60_000) return;
@@ -27,7 +28,7 @@ export async function sendReminders(ev: { id: string; title: string; deadline: s
     `⏳ ${tg.b(`${ev.title} · son ${Math.ceil(left / 60_000)} dakika`)}`,
     "Son push'tan sonra panelde teslim sürümünü güncelle. Arşivin süre dolmadan kabul edilmiş olmalı.",
     ...(teams ? [`Kontrol bekleyen ekipler: ${tg.text(teams)}${needsAttention.length > 15 ? ` ve ${needsAttention.length - 15} ekip daha` : ""}`] : []),
-    tg.link(`${env.siteUrl}/panel`, "Teslimini kontrol et"),
+    tg.link(eventUrl(env.siteUrl, ev.slug, "panel"), "Teslimini kontrol et"),
   ], "son-dakika");
   if (sent) await db.from("event_reminders").update({ sent_at: new Date().toISOString() })
     .eq("event_id", ev.id).eq("window_minutes", windowMinutes).eq("lease_until", lease);

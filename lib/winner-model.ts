@@ -23,7 +23,9 @@ export type Winner = {
 
 export const PEOPLES_CHOICE = "Halkın seçimi";
 
-export const peoplesChoiceId = (projectId: string) => `halk-${projectId}`;
+export const PEOPLES_CHOICE_PREFIX = "halk-";
+
+export const peoplesChoiceId = (projectId: string) => `${PEOPLES_CHOICE_PREFIX}${projectId}`;
 
 /** Telegram duyurusu. Halkın seçiminde berabere kalan eserler aynı mesajda sıralanır. */
 export function winnerAnnouncement(winners: Winner[], siteUrl: string): string[] {

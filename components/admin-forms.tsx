@@ -11,6 +11,11 @@ const input =
   "h-12 w-full rounded-[2px] border border-rule-strong bg-plinth px-3 text-[0.9375rem] placeholder:text-ink-3 focus:border-ink focus:outline-none";
 const label = "text-[0.9375rem] font-medium";
 
+/** Eylemin etkinliği; sunucu yetkiyi bu etkinlik için yeniden denetler. */
+function EventField({ id }: { id: string }) {
+  return <input type="hidden" name="event" value={id} />;
+}
+
 export function RetryJobButton({ id }: { id: string }) {
   const [state, action, pending] = useActionState(retryDeliveryJob, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
@@ -21,10 +26,11 @@ export function RetryJobButton({ id }: { id: string }) {
   </form>;
 }
 
-export function AwardForm({ projects }: { projects: { id: string; name: string; team_name: string }[] }) {
+export function AwardForm({ eventId, projects }: { eventId: string; projects: { id: string; name: string; team_name: string }[] }) {
   const [state, action, pending] = useActionState(addAward, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   return <form {...protectedForm} className="grid gap-3">
+    <EventField id={eventId} />
     <label htmlFor="award-project" className={label}>Ödül alacak mühürlü eser</label>
     <select id="award-project" name="projectId" required className={input} defaultValue="">
       <option value="">Eser seç</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name} · {p.team_name}</option>)}
@@ -62,7 +68,7 @@ export function SuspendForm({ eventId, suspended }: { eventId: string; suspended
   const [state, action, pending] = useActionState(suspended ? unsuspendEvent : suspendEvent, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   return <form {...protectedForm} className="grid max-w-[560px] gap-3">
-    <input type="hidden" name="eventId" value={eventId} />
+    <EventField id={eventId} />
     <label htmlFor="aski-gerekce" className={label}>{suspended ? "Askıyı kaldırma gerekçesi" : "Askı gerekçesi"}</label>
     <textarea id="aski-gerekce" name="gerekce" required minLength={3} maxLength={500} rows={2}
       placeholder={suspended ? "Ör. İnceleme tamamlandı, ihlal bulunmadı." : "Ör. Kural ihlali bildirimi inceleniyor."} className={`${input} h-auto py-3`} />
@@ -85,11 +91,12 @@ function Status({ state, ok }: { state: FormState; ok: string }) {
   );
 }
 
-export function ScheduleForm({ starts, deadline }: { starts: string; deadline: string }) {
+export function ScheduleForm({ eventId, starts, deadline }: { eventId: string; starts: string; deadline: string }) {
   const [state, action, pending] = useActionState<FormState, FormData>(setSchedule, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   return (
     <form {...protectedForm} className="grid gap-4">
+      <EventField id={eventId} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
           <label htmlFor="starts" className={label}>
@@ -116,12 +123,13 @@ export function ScheduleForm({ starts, deadline }: { starts: string; deadline: s
   );
 }
 
-export function AnnouncementForm({ current }: { current: string | null }) {
+export function AnnouncementForm({ eventId, current }: { eventId: string; current: string | null }) {
   const [state, action, pending] = useActionState<FormState, FormData>(setAnnouncement, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   const [text, setText] = useState(current ?? "");
   return (
     <form {...protectedForm} onReset={() => setText(current ?? "")} className="grid gap-3">
+      <EventField id={eventId} />
       <div className="flex items-baseline justify-between">
         <label htmlFor="announcement" className={label}>
           Tüm sayfaların üstünde görünür
@@ -149,7 +157,7 @@ export function AnnouncementForm({ current }: { current: string | null }) {
 }
 
 /** Yemek ve mini oyun saatleri sabit değil; duyurulduğu an başlar, "Bitir" ile biter. */
-export function ActivityForm({ current, since }: { current: Activity | null; since: string | null }) {
+export function ActivityForm({ eventId, current, since }: { eventId: string; current: Activity | null; since: string | null }) {
   const [state, action, pending] = useActionState<FormState, FormData>(setActivity, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   const [endState, endAction, ending] = useActionState<FormState, FormData>(setActivity, undefined);
@@ -158,6 +166,7 @@ export function ActivityForm({ current, since }: { current: Activity | null; sin
     <div className="grid gap-6">
       {current && (
         <form {...endForm} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-l-2 border-indigo pl-4">
+          <EventField id={eventId} />
           <input type="hidden" name="kind" value="bitir" />
           <p className="text-[0.9375rem]">
             <span className="text-ink-3">{current.kind === "yemek" ? "Yemek saati" : "Etkinlik"} · başlangıç {since}</span>
@@ -168,6 +177,7 @@ export function ActivityForm({ current, since }: { current: Activity | null; sin
         </form>
       )}
       <form {...protectedForm} className="grid gap-3">
+        <EventField id={eventId} />
         <label htmlFor="activity-title" className={label}>
           {current ? "Yerine yenisini duyur" : "Ne başlıyor?"}
         </label>
@@ -192,11 +202,32 @@ export function ActivityForm({ current, since }: { current: Activity | null; sin
   );
 }
 
-export function NewEventForm() {
+/** Yeni etkinlik verilen toplulukta açılır; yetkiyi sunucuda RPC denetler. */
+/** Yeni etkinlik: onaylı topluluklardan biri seçilir; yetki sunucuda `admin_create_event` ile yeniden denetlenir. */
+export function NewEventForm({ communities }: { communities: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(createEvent, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   return (
     <form {...protectedForm} className="grid gap-4">
+      {communities.length === 1 ? (
+        <p className="text-[0.9375rem] text-ink-2">
+          <input type="hidden" name="community" value={communities[0].id} />
+          Topluluk: <span className="font-medium text-ink">{communities[0].name}</span>
+        </p>
+      ) : (
+        <div className="grid gap-2">
+          <label htmlFor="new-community" className={label}>
+            Topluluk
+          </label>
+          <select id="new-community" name="community" required defaultValue={communities[0]?.id} className={input}>
+            {communities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
         <div className="grid gap-2">
           <label htmlFor="title" className={label}>
@@ -208,7 +239,7 @@ export function NewEventForm() {
           <label htmlFor="slug" className={label}>
             Adres kısaltması
           </label>
-          <input id="slug" name="slug" required pattern="[a-z0-9-]{3,40}" placeholder="2027-bahar" className={`${input} font-mono`} />
+          <input id="slug" name="slug" required pattern={"[a-z0-9\\-]{3,40}"} placeholder="2027-bahar" className={`${input} font-mono`} />
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -225,12 +256,18 @@ export function NewEventForm() {
           <input id="new-deadline" name="deadline" type="datetime-local" required className={`${input} font-mono tnum`} />
         </div>
       </div>
+      <fieldset disabled={pending} className="grid gap-4"><legend className="mb-4 font-medium">Etkinlik bağlantıları</legend>
+        <label className="grid gap-2">Başvuru formu (isteğe bağlı)<input name="application_url" type="url" maxLength={2048} placeholder="https://" className={input} /></label>
+        <label className="grid gap-2">Kurallar bağlantısı<input name="rules_url" type="url" maxLength={2048} placeholder="https://" className={input} /></label>
+        <label className="grid gap-2">Aydınlatma metni bağlantısı<input name="privacy_url" type="url" maxLength={2048} placeholder="https://" className={input} /></label>
+        <p className="text-sm text-ink-3">Yeni toplulukların etkinliklerinde kurallar ve aydınlatma bağlantıları zorunlu.</p>
+      </fieldset>
       <div className="flex flex-wrap items-center gap-4">
         <SubmitButton variant="ink" busy={pending} pending="Açılıyor…">
           Yeni etkinliği aç
         </SubmitButton>
         <button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button>
-        <Status state={state} ok="Yeni etkinlik açıldı; bu sergi geçmiş sergilere taşındı." />
+        <Status state={state} ok="Yeni etkinlik açıldı; bu etkinlik olduğu gibi sürüyor." />
       </div>
     </form>
   );

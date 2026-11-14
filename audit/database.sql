@@ -6,9 +6,12 @@ begin
   raise notice 'OBSERVED: %', label;
 end $$;
 insert into auth.users(id) select ('00000000-0000-0000-0000-' || lpad(n::text,12,'0'))::uuid from generate_series(1,5) n;
-update events set is_current=false where is_current;
-insert into events(id,slug,title,starts_at,deadline,is_current)
-values('10000000-0000-0000-0000-000000000001','audit-open','Audit Test',clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 hour',true);
+-- Denetim 0001–0004 şemasında çalışır; orada kayıt yalnızca 0002'nin tohum etkinliğine (2026-guz) açıktır.
+-- Tohum satırı açık bir denetim etkinliğine çevrilir; etkinlik koruma tetikleyicileri yalnızca bu kurulum için kapatılır.
+alter table events disable trigger user;
+update events set id='10000000-0000-0000-0000-000000000001', slug='audit-open', title='Audit Test',
+  starts_at=clock_timestamp()-interval '1 hour', deadline=clock_timestamp()+interval '1 hour' where slug='2026-guz';
+alter table events enable trigger user;
 create temp table fixture as select id from register_project(
   '10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','owner',null,
   'Audit Proje','Audit Ekip','Audit icin ornek proje.',123,'owner/repo','https://github.com/owner/repo','main',null,repeat('a',40));

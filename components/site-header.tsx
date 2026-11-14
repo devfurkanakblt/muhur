@@ -4,11 +4,15 @@ import { Wordmark } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Announcement } from "@/components/announcement";
 import { getEvent, type Viewer } from "@/lib/data";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 import { signOut } from "@/app/actions";
 import { ActionForm, ActionButton } from "@/components/action-form";
 
 export async function SiteHeader({ viewer }: { viewer: Viewer | null }) {
   const event = await getEvent();
+  // "Yönetim" bağlantısı etkinliği inceleyebilenlere (topluluk rolü, head admin) görünür.
+  const canInspect = can(await getEventAccess(viewer, event), "incele");
   return (
     <>
       {event.announcement && event.announcementAt && <Announcement text={event.announcement} stamp={event.announcementAt} />}
@@ -27,7 +31,10 @@ export async function SiteHeader({ viewer }: { viewer: Viewer | null }) {
           <Link href="/maskot" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">
             Maskota isim ver
           </Link>
-          {viewer?.isAdmin && (
+          <Link href="/belge" className="inline-flex min-h-11 items-center text-ink-2 hover:text-ink">
+            Katılım belgesi
+          </Link>
+          {canInspect && (
             <Link href="/yonetim" className="text-ink-2 hover:text-ink">
               Yönetim
             </Link>

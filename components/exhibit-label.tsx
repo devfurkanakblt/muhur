@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowUpRightIcon, LockSimpleIcon } from "@phosphor-icons/react/ssr";
 import type { Exhibit } from "@/lib/data";
 import { exhibitNo } from "@/lib/format";
+import { exhibitNote } from "@/lib/eggs";
 
 /** Tüm logolar aynı ölçekte, aynı kaide üzerinde durur. */
 export function Plinth({ src, alt, size = "md" }: { src: string | null; alt: string; size?: "md" | "lg" }) {
@@ -61,7 +62,7 @@ export function ExhibitLabel({
       {awards && <div className="col-start-2 mt-3">{awards}</div>}
       <p className="mt-3 line-clamp-4 text-[0.875rem] leading-relaxed text-ink-2">{exhibit.summary}</p>
       <div className="col-start-2 mt-4 flex flex-col items-start gap-1 font-mono text-[0.75rem]">
-        <span className="text-ink-3 tnum">{exhibitNo(exhibit.exhibit_no)}</span>
+        <span className="text-ink-3 tnum" title={exhibitNote(exhibit.exhibit_no)}>{exhibitNo(exhibit.exhibit_no)}</span>
         <a href={exhibit.repo_url} target="_blank" rel="noreferrer" className="break-all text-ink-2 hover:text-ink">
           {exhibit.repo_full_name}
           <ArrowUpRightIcon size={12} className="ml-1 inline align-[-1px]" />

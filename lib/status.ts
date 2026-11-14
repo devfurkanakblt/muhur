@@ -1,6 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getEvent, getOwnProject, getViewer } from "@/lib/data";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 import { createHash } from "node:crypto";
 
 export async function getLiveStatus() {
@@ -14,9 +16,11 @@ export async function getLiveStatus() {
   ]);
   if (error) throw new Error("Güncel durum okunamadı.");
   const { data: jobs } = project ? await db.from("delivery_jobs").select("id, state, attempts, error").eq("project_id", project.id).order("created_at", { ascending: false }).limit(10) : { data: null };
-  const adminState = viewer?.isAdmin ? await Promise.all([
-    db.from("worker_runs").select("id, finished_at, error, processed").order("started_at", { ascending: false }).limit(5),
-    db.from("delivery_jobs").select("id, state, attempts, error").order("created_at", { ascending: false }).limit(30),
+  const access = await getEventAccess(viewer, event);
+  // Zamanlayıcı kayıtları platform genelidir; sürüm özetine yalnızca head admin için girer.
+  const adminState = can(access, "incele") ? await Promise.all([
+    access?.headAdmin ? db.from("worker_runs").select("id, finished_at, error, processed").order("started_at", { ascending: false }).limit(5) : { data: null },
+    db.from("delivery_jobs").select("id, state, attempts, error").eq("event_id", event.id).order("created_at", { ascending: false }).limit(30),
   ]) : null;
   const version = createHash("sha256").update(JSON.stringify({
     event: [event.id, event.startsAt, event.deadline, event.locked, event.lockedAt, event.voting, event.announcementAt, event.activity?.at],

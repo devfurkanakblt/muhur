@@ -6,6 +6,9 @@ import { ExhibitLabel } from "@/components/exhibit-label";
 import { JoinForm } from "@/components/join-form";
 import { getEvent, getOwnProject, getViewer, logoUrl } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/server";
+import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
+import { getEventAccess } from "@/lib/access";
+import { can } from "@/lib/authz";
 
 export const metadata = { title: "Ekibe katıl" };
 
@@ -27,7 +30,8 @@ export default async function InvitePage({ params }: PageProps<"/davet/[code]">)
   if (event.locked) body = <p className="text-ink-2">Teslim süresi doldu; ekipler artık değiştirilemez.</p>;
   else if (!viewer) body = <SignInButton next={`/davet/${code}`} label="GitHub ile giriş yap ve katıl" />;
   else if (own) body = <p className="text-ink-2">Zaten bir projenin ekibindesin. Bu ekibe katılmak için önce oradan ayrılmalısın.</p>;
-  else body = <JoinForm code={code} />;
+  else body = <JoinForm code={code} suspended={event.suspended} />;
+  const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
 
   return (
     <>
@@ -41,6 +45,7 @@ export default async function InvitePage({ params }: PageProps<"/davet/[code]">)
           <p className="mt-3 mb-10 text-[1.0625rem] leading-relaxed text-ink-2">
             Katıldığında eserin bilgilerini mühür vurulana kadar sen de düzenleyebilirsin. Bir kişi yalnızca bir ekipte olabilir.
           </p>
+          <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} className="mb-8" />
           {body}
         </div>
       </main>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addAward, anonymizeUser, createEvent, retryDeliveryJob, setActivity, setAnnouncement, setSchedule, type FormState } from "@/app/actions";
+import { addAward, anonymizeUser, createEvent, retryDeliveryJob, setActivity, setAnnouncement, setSchedule, suspendEvent, unsuspendEvent, type FormState } from "@/app/actions";
 import type { Activity } from "@/lib/data";
 import { SubmitButton } from "@/components/buttons";
 import { buttonStyles } from "@/components/button-styles";
@@ -50,6 +50,28 @@ export function AnonymizeForm() {
     <div className="flex flex-wrap items-center gap-4">
       <SubmitButton variant="ghost" busy={pending} pending="Anonimleştiriliyor…">Anonimleştir</SubmitButton>
       <Status state={state} ok="Kişisel bilgiler kaldırıldı; işlem denetim kaydına yazıldı." />
+    </div>
+  </form>;
+}
+
+/**
+ * Platform askısı (yalnızca head admin). Yıkıcı işlem düz onayla yapılır: gerekçe ve onay kutusu zorunlu.
+ * Askıdayken aynı form askıyı kaldırır; gerekçe her iki yönde de denetim kaydına yazılır.
+ */
+export function SuspendForm({ eventId, suspended }: { eventId: string; suspended: boolean }) {
+  const [state, action, pending] = useActionState(suspended ? unsuspendEvent : suspendEvent, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  return <form {...protectedForm} className="grid max-w-[560px] gap-3">
+    <input type="hidden" name="eventId" value={eventId} />
+    <label htmlFor="aski-gerekce" className={label}>{suspended ? "Askıyı kaldırma gerekçesi" : "Askı gerekçesi"}</label>
+    <textarea id="aski-gerekce" name="gerekce" required minLength={3} maxLength={500} rows={2}
+      placeholder={suspended ? "Ör. İnceleme tamamlandı, ihlal bulunmadı." : "Ör. Kural ihlali bildirimi inceleniyor."} className={`${input} h-auto py-3`} />
+    <label className="flex items-start gap-2 text-[0.9375rem]"><input type="checkbox" required className="mt-1" /> {suspended
+      ? "Katılımcı yazmaları ve topluluk yönetimi yeniden açılacak."
+      : "Katılımcı yazmaları ve topluluk yönetimi hemen duracak; uyarı herkese görünecek. Kuyruktaki teslimler ve süre dolunca kilit sürer."}</label>
+    <div className="flex flex-wrap items-center gap-4">
+      <SubmitButton variant="ghost" busy={pending} pending={suspended ? "Askı kaldırılıyor…" : "Askıya alınıyor…"}>{suspended ? "Askıyı kaldır" : "Askıya al"}</SubmitButton>
+      <Status state={state} ok={suspended ? "Askı kaldırıldı; işlem denetim kaydına yazıldı." : "Etkinlik askıya alındı; işlem denetim kaydına yazıldı."} />
     </div>
   </form>;
 }

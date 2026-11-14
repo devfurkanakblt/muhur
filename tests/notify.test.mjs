@@ -1,6 +1,6 @@
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { notify } from "../lib/notify.ts";
+import { notify, notifyEvent } from "../lib/notify.ts";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -53,4 +53,12 @@ test("bot ayarlı değilse hiçbir istek yapılmaz; Telegram hatası akışı bo
   telegram();
   globalThis.fetch = async () => { throw new Error("ağ yok"); };
   assert.equal(await notify(["Duyuru"], "kazanan", { photo: "https://muhur.example/kart" }), false);
+});
+
+test("Telegram'ı kapalı topluluğun etkinliği ağa hiç çıkmaz; açık olanınki gider", async () => {
+  const calls = telegram();
+  assert.equal(await notifyEvent({ telegram: false }, ["x"]), false);
+  assert.equal(calls.length, 0);
+  assert.equal(await notifyEvent({ telegram: true }, ["x"]), true);
+  assert.deepEqual(calls.map((c) => c.method), ["sendMessage"]);
 });

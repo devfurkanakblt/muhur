@@ -61,7 +61,7 @@ export function DeliveryPanel({ project, event, jobs, timeline }: {
       <p className="mt-2 break-all text-[0.875rem] text-ink-2">Kontrol edilen son commit: <span className="font-mono">{project.repo_head_sha}</span></p>
       <p className="mt-1 text-[0.8125rem] text-ink-3">{project.health_checked_at ? `Repo kontrolü: ${formatDateTime(project.health_checked_at)}.${staleHealth ? " Bu kontrol eski; son push durumunu kesinleştirmez." : ""}` : "Repo kontrol zamanı bilinmiyor."}</p>
     </div>}
-    {!event.locked && <div className="mt-5"><SubmissionButton pendingJob={active?.state === "processing"} hasVersion={!!project.accepted_sha} /></div>}
+    {!event.locked && <div className="mt-5"><SubmissionButton pendingJob={active?.state === "processing"} hasVersion={!!project.accepted_sha} suspended={event.suspended} /></div>}
     {project.accepted_sha && <div className="mt-4 grid gap-2 text-[0.875rem]">
       <a href={`/api/arsiv/${project.id}?surum=kabul`} className="inline-flex min-h-11 items-center underline">Kabul edilmiş teslim arşivini indir</a>
       {project.accepted_archive_sha256 && <p className="break-all text-ink-2">Arşivin SHA-256 özeti: <span className="font-mono">{project.accepted_archive_sha256}</span></p>}

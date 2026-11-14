@@ -19,6 +19,11 @@ insert into auth.users(id) values
 update public.events set is_current = false where is_current;
 insert into public.events(id, slug, title, starts_at, deadline, is_current)
 values ('40000000-0000-0000-0000-000000000001', 'hardening', 'Sertleştirme', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', true);
+-- 0012: yönetim RPC'leri etkinliğin topluluğundaki organizatöre, anonimleştirme head admin'e açık.
+insert into auth.users(id) values ('30000000-0000-0000-0000-000000000005');
+update public.events set community_id = (select id from communities where slug = 'deu-csai') where id = '40000000-0000-0000-0000-000000000001';
+insert into public.community_members(community_id, user_id, github_login, role) select id, '30000000-0000-0000-0000-000000000005', 'admin', 'organizator' from communities where slug = 'deu-csai';
+insert into public.platform_roles(user_id, login, role) values ('30000000-0000-0000-0000-000000000005', 'admin', 'head_admin');
 
 create temp table h as select id from public.register_project(
   '40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001',
@@ -111,21 +116,21 @@ select pg_temp.expect_error(format('update submissions set archive_pruned_at = c
 select pg_temp.assert_true((select count(*) = 0 from public.prune_submission_archives((select id from h), 0)), 'Kilitten sonra budama RPC''si boş döner');
 
 -- A06/A07/A17 · oylama --------------------------------------------------------------------
-select public.admin_update_event('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000004', 'admin', 'voting', '{"voting":"acik"}');
+select public.admin_update_event('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000005', 'admin', 'voting', '{"voting":"acik"}');
 select pg_temp.expect_error(format('insert into votes(event_id,user_id,project_id,github_login) values(%L,%L,%L,''z'')', '40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000004', (select id from h2)), 'mühürlü', 'Mühürsüz esere oy verilemez');
 insert into votes(event_id,user_id,project_id,github_login) values('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000004', (select id from h), 'ziyaretci');
 select pg_temp.assert_true(public.vote_tallies('40000000-0000-0000-0000-000000000001') = '{}'::jsonb, 'Sonuçlanmadan toplamlar açılmaz');
-select public.admin_update_event('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000004', 'admin', 'voting', '{"voting":"sonuclandi"}');
+select public.admin_update_event('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000005', 'admin', 'voting', '{"voting":"sonuclandi"}');
 select pg_temp.assert_true((public.vote_tallies('40000000-0000-0000-0000-000000000001')->>(select id::text from h))::int = 1, 'Toplamlar DB''de sayıldı');
 select pg_temp.assert_true((select count(*) = 2 from admin_audit where event_id = '40000000-0000-0000-0000-000000000001' and action = 'voting'), 'Oylama değişiklikleri aktörle kaydedildi');
 select pg_temp.assert_true((select after->>'voting' = 'sonuclandi' and before->>'voting' = 'acik' from admin_audit where action = 'voting' order by occurred_at desc limit 1), 'Denetim kaydı önce/sonra değerini tutar');
 select pg_temp.expect_error('update admin_audit set actor_login = ''x''', 'değiştirilemez', 'Denetim kaydı değiştirilemez');
 select pg_temp.expect_error('delete from admin_audit', 'değiştirilemez', 'Denetim kaydı silinemez');
-select pg_temp.expect_error($c$ select public.admin_update_event('40000000-0000-0000-0000-000000000001', null, 'admin', 'x', '{"locked_at":null}') $c$, 'Geçersiz', 'Yönetim RPC''si yalnızca izinli alanları değiştirir');
+select pg_temp.expect_error($c$ select public.admin_update_event('40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000005', 'admin', 'x', '{"locked_at":null}') $c$, 'Geçersiz', 'Yönetim RPC''si yalnızca izinli alanları değiştirir');
 
 -- A19 · anonimleştirme: kilit sonrası yalnızca ad/avatar değişir, mühür korunur.
-select pg_temp.expect_error($c$ select public.anonymize_user('30000000-0000-0000-0000-000000000002', null, 'admin', '') $c$, 'gerekçe', 'Gerekçesiz anonimleştirme reddedildi');
-select pg_temp.assert_true(public.anonymize_user('30000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000004', 'admin', 'KVKK silme başvurusu') = 1, 'Kilitli etkinlikte üyelik anonimleştirildi');
+select pg_temp.expect_error($c$ select public.anonymize_user('30000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000005', 'admin', '') $c$, 'gerekçe', 'Gerekçesiz anonimleştirme reddedildi');
+select pg_temp.assert_true(public.anonymize_user('30000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000005', 'admin', 'KVKK silme başvurusu') = 1, 'Kilitli etkinlikte üyelik anonimleştirildi');
 select pg_temp.assert_true((select github_login like 'anonim-%' and avatar_url is null from project_members where user_id = '30000000-0000-0000-0000-000000000002'), 'Kullanıcı adı ve avatar kaldırıldı');
 select pg_temp.assert_true((select archive_sha256 is not null and frozen_sha = repeat('5', 40) from projects where id = (select id from h)), 'Mühür ve commit korunuyor');
 select pg_temp.expect_error(format('update project_members set role = ''owner'' where user_id = %L', '30000000-0000-0000-0000-000000000003'), 'LOCKED', 'Kilit sonrası anonimleştirme dışında ekip değişmez');

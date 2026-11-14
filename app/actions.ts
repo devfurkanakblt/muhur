@@ -6,13 +6,15 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import { exhibitPath, getAdminSession, getEvent, getOwnProject, getViewer } from "@/lib/data";
+import { exhibitPath, getAdminSession, getEvent, getEventById, getOwnProject, getViewer, type EventState, type Viewer } from "@/lib/data";
+import { requireEventAction } from "@/lib/access";
+import { ASKIDA_MESAJI, YARISAMAZ_MESAJI, YETKISIZ_MESAJI, type EventAction } from "@/lib/authz";
 import { canClaimRepo, getHeadSha, getRepo, getRepoById, GithubError, parseRepoInput } from "@/lib/github";
 import { checkHealth, freezeAll, getEventRow, lockNow, tick } from "@/lib/freeze";
 import { processProjectJobs, retrySeal } from "@/lib/delivery";
 import { safeDemoUrl } from "@/lib/delivery-policy";
 import { normalizeLogo, type NormalizedLogo } from "@/lib/logo-image";
-import { notify, tg } from "@/lib/notify";
+import { notifyEvent, tg } from "@/lib/notify";
 import { env } from "@/lib/env";
 import { claimOnce, releaseOnce, requestKey } from "@/lib/once";
 import { isMysteryAnswer, mysteryOpen } from "@/lib/mystery";
@@ -24,6 +26,10 @@ export type FormState = { error?: string; ok?: boolean; status?: string; notice?
 const LOCKED_MSG = "Teslim süresi doldu. Sistem kilitli, değişiklik kabul edilmiyor.";
 
 function dbError(message: string) {
+  // Yetki ve askı önekleri (0012_topluluklar): asıl zorlama DB'dedir, uygulama Türkçe mesaja çevirir.
+  if (message.includes("ASKIDA:")) return ASKIDA_MESAJI;
+  if (message.includes("YARISAMAZ:")) return YARISAMAZ_MESAJI;
+  if (message.includes("YETKI:")) return YETKISIZ_MESAJI;
   if (message.includes("VOTING:")) return message.split("VOTING:")[1].split("\n")[0].trim();
   if (message.includes("LOCKED")) return LOCKED_MSG;
   if (message.includes("MEMBER:")) return "Zaten bir projenin ekibindesin.";
@@ -152,7 +158,7 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
   after(async () => {
     await processProjectJobs(project.id);
     await checkHealth(project, await getEventRow(event.id));
-    await notify([
+    await notifyEvent(event, [
       `🖼 ${tg.b("Vitrine yeni eser")} · No. ${String(project.exhibit_no).padStart(3, "0")}`,
       `${tg.b(fields.name)} · ${tg.text(fields.team)}`,
       tg.link(`${env.siteUrl}${exhibitPath(event.slug, project.exhibit_no)}`, repo.full_name),
@@ -427,23 +433,28 @@ export async function huntMystery(_: FormState, formData: FormData): Promise<For
 
 // ---------------------------------------------------------------------------- yönetim
 
-async function requireAdmin() {
-  const viewer = await getViewer();
-  if (!viewer?.isAdmin) throw new Error("Yetkisiz");
-  return viewer;
-}
-
 const REAUTH_MSG = "Bu işlem için son 12 saat içinde GitHub ile giriş yapmış olmalısın. Yönetim sayfasının üstündeki “GitHub ile yeniden giriş yap” düğmesini kullan.";
 
 /**
- * Geri alınamaz ya da etkinliği doğrudan etkileyen yönetim işlemleri (kilit, zamanlama, oylama, yeni etkinlik,
+ * Etkinlik kapsamlı yetki: işlemi yapan, bu etkinliğin topluluğunda gerekli role sahip olmalı (bkz. lib/authz).
+ * Ret Türkçe mesaj (string) olarak döner ve forma yazılır; izin varsa işlemi yapan döner.
+ * `fresh`: geri alınamaz ya da etkinliği doğrudan etkileyen işlemler (kilit, zamanlama, oylama, yeni etkinlik,
  * anonimleştirme) yalnızca son 12 saatte açılmış bir oturumla yapılır. Çalınmış eski bir oturum bunları yapamaz (A21).
  */
-async function requireFreshAdmin(): Promise<{ admin: Awaited<ReturnType<typeof requireAdmin>>; error?: string }> {
-  const admin = await requireAdmin();
-  const session = await getAdminSession();
-  return session?.fresh ? { admin } : { admin, error: REAUTH_MSG };
+async function authorize(event: EventState, action: EventAction, fresh = false): Promise<Viewer | string> {
+  let admin: Viewer;
+  try {
+    admin = await requireEventAction(event, action);
+  } catch (e) {
+    return e instanceof Error ? e.message : YETKISIZ_MESAJI;
+  }
+  if (fresh && !(await getAdminSession())?.fresh) return REAUTH_MSG;
+  return admin;
 }
+
+/** Etkinliği yönetme (zaman, duyuru, kilit, oylama, ödül): askıdaki etkinlikte ya da başka toplulukta reddedilir. */
+const requireManager = (event: EventState) => authorize(event, "yonet");
+const requireFreshManager = (event: EventState) => authorize(event, "yonet", true);
 
 /** Etkinlik değişikliği ve aktörlü denetim kaydı aynı transaction içinde yazılır. */
 async function updateEvent(admin: { id: string; login: string }, eventId: string, action: string, changes: Record<string, unknown>) {
@@ -468,14 +479,14 @@ function trDate(value: FormDataEntryValue | null) {
 }
 
 export async function setSchedule(_: FormState, formData: FormData): Promise<FormState> {
-  const { admin, error: reauth } = await requireFreshAdmin();
-  if (reauth) return { error: reauth };
+  const event = await getEvent();
+  const admin = await requireFreshManager(event);
+  if (typeof admin === "string") return { error: admin };
   const starts = trDate(formData.get("starts"));
   const deadline = trDate(formData.get("deadline"));
   if (!starts || !deadline) return { error: "Geçerli tarihler gir." };
   if (starts >= deadline) return { error: "Başlangıç, son teslimden önce olmalı." };
   if (deadline.getTime() <= Date.now()) return { error: "Son teslim gelecekte olmalı. Hemen kilitlemek için aşağıdaki düğmeyi kullan." };
-  const event = await getEvent();
   const once = requestKey("takvim", event.id, starts.toISOString(), deadline.toISOString());
   if (!(await claimOnce(once, 30))) return { ok: true };
   const { error } = await updateEvent(admin, event.id, "schedule", { starts_at: starts.toISOString(), deadline: deadline.toISOString() });
@@ -488,10 +499,11 @@ export async function setSchedule(_: FormState, formData: FormData): Promise<For
 }
 
 export async function setAnnouncement(_: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
+  const event = await getEvent();
+  const admin = await requireManager(event);
+  if (typeof admin === "string") return { error: admin };
   const text = String(formData.get("announcement") ?? "").trim();
   if (text.length > 160) return { error: "Duyuru en fazla 160 karakter olabilir." };
-  const event = await getEvent();
   // Aynı duyuru iki sekmeden ya da iki yöneticiden gelirse Telegram'a bir kez gider.
   const once = requestKey("duyuru", event.id, text);
   if (!(await claimOnce(once, 60))) return { ok: true };
@@ -500,19 +512,20 @@ export async function setAnnouncement(_: FormState, formData: FormData): Promise
     await releaseOnce(once);
     return { error: dbError(error.message) };
   }
-  if (text) after(() => notify([`📣 ${tg.b("Duyuru")}`, tg.text(text)], "duyuru"));
+  if (text) after(() => notifyEvent(event, [`📣 ${tg.b("Duyuru")}`, tg.text(text)], "duyuru"));
   revalidatePath("/", "layout");
   return { ok: true };
 }
 
 /** Yemek ya da mini oyun duyurusu: maskot ve selam bitirilene kadar buna göre değişir. */
 export async function setActivity(_: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
+  const event = await getEvent();
+  const admin = await requireManager(event);
+  if (typeof admin === "string") return { error: admin };
   const kind = String(formData.get("kind") ?? "");
   const title = String(formData.get("title") ?? "").trim().replace(/\s+/g, " ");
   if (kind !== "yemek" && kind !== "oyun" && kind !== "bitir") return { error: "Geçersiz istek." };
   if (kind !== "bitir" && (title.length < 2 || title.length > 60)) return { error: "Ad 2 ile 60 karakter arasında olmalı." };
-  const event = await getEvent();
   const once = requestKey("an", event.id, kind, kind === "bitir" ? "" : title);
   if (!(await claimOnce(once, 30))) return { ok: true };
   const { error } = await updateEvent(admin, event.id, "activity", { activity: kind === "bitir" ? null : { kind, title } });
@@ -520,42 +533,48 @@ export async function setActivity(_: FormState, formData: FormData): Promise<For
     await releaseOnce(once);
     return { error: dbError(error.message) };
   }
-  if (kind !== "bitir") after(() => notify([`${kind === "yemek" ? "🍽️" : "🎲"} ${tg.b(title)}`, tg.text(kind === "yemek" ? "Yemek saati başladı." : "Etkinlik başladı.")], kind === "yemek" ? "pizza" : "duyuru"));
+  if (kind !== "bitir") after(() => notifyEvent(event, [`${kind === "yemek" ? "🍽️" : "🎲"} ${tg.b(title)}`, tg.text(kind === "yemek" ? "Yemek saati başladı." : "Etkinlik başladı.")], kind === "yemek" ? "pizza" : "duyuru"));
   revalidatePath("/", "layout");
   return { ok: true };
 }
 
 export async function lockNowAction(): Promise<{ error?: string }> {
-  const { admin, error } = await requireFreshAdmin();
-  if (error) return { error };
   const event = await getEvent();
-  await lockNow(event.id, admin);
+  const admin = await requireFreshManager(event);
+  if (typeof admin === "string") return { error: admin };
+  try {
+    await lockNow(event.id, admin);
+  } catch (e) {
+    return { error: dbError(e instanceof Error ? e.message : "") };
+  }
   after(() => freezeAll(event.id));
   revalidatePath("/", "layout");
   return {};
 }
 
-export async function retryFreeze(formData: FormData) {
-  const admin = await requireAdmin();
+export async function retryFreeze(formData: FormData): Promise<{ error: string } | void> {
   const id = String(formData.get("id") ?? "");
   const db = createAdminClient();
   const { data: row } = await db.from("projects").select("id, event_id").eq("id", id).maybeSingle();
-  if (row) {
-    const event = await getEventRow(row.event_id);
-    if ((event.locked_at || Date.now() >= +new Date(event.deadline)) && (await claimOnce(requestKey("muhur-yeniden", row.id), 30))) {
-      await auditAdmin(admin, "retry_seal", { eventId: row.event_id, projectId: row.id });
-      after(() => retrySeal(row.id, row.event_id));
-    }
+  if (!row) return { error: "Eser bulunamadı." };
+  // Yetki, eserin bağlı olduğu etkinlik için denetlenir; başka topluluğun eseri reddedilir.
+  const owner = await getEventById(row.event_id);
+  const admin = owner ? await authorize(owner, "isletim") : YETKISIZ_MESAJI;
+  if (typeof admin === "string") return { error: admin };
+  const event = await getEventRow(row.event_id);
+  if ((event.locked_at || Date.now() >= +new Date(event.deadline)) && (await claimOnce(requestKey("muhur-yeniden", row.id), 30))) {
+    await auditAdmin(admin, "retry_seal", { eventId: row.event_id, projectId: row.id });
+    after(() => retrySeal(row.id, row.event_id));
   }
   revalidatePath("/yonetim");
 }
 
 export async function setVoting(formData: FormData): Promise<{ error: string } | void> {
-  const { admin, error: reauth } = await requireFreshAdmin();
-  if (reauth) return { error: reauth };
+  const event = await getEvent();
+  const admin = await requireFreshManager(event);
+  if (typeof admin === "string") return { error: admin };
   const state = String(formData.get("state") ?? "");
   if (state !== "acik" && state !== "sonuclandi") return;
-  const event = await getEvent();
   // Durum zaten buysa ya da aynı istek az önce işlendiyse tekrar yazılmaz ve bildirim yinelenmez.
   if (event.voting === state) return;
   const once = requestKey("oylama", event.id, state);
@@ -566,7 +585,7 @@ export async function setVoting(formData: FormData): Promise<{ error: string } |
   else {
     after(() =>
       state === "acik"
-        ? notify([`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(env.siteUrl, "Oy ver")], "oy")
+        ? notifyEvent(event, [`🗳 ${tg.b("Halkın seçimi oylaması açıldı.")}`, tg.link(env.siteUrl, "Oy ver")], "oy")
         : announcePeoplesChoice(event),
     );
   }
@@ -574,9 +593,9 @@ export async function setVoting(formData: FormData): Promise<{ error: string } |
 }
 
 export async function createEvent(_: FormState, formData: FormData): Promise<FormState> {
-  const { admin, error: reauth } = await requireFreshAdmin();
-  if (reauth) return { error: reauth };
   const current = await getEvent();
+  const admin = await requireFreshManager(current);
+  if (typeof admin === "string") return { error: admin };
   if (!current.locked) return { error: "Yeni etkinlik, güncel etkinlik mühürlendikten sonra açılabilir." };
   const title = String(formData.get("title") ?? "").trim();
   const slug = String(formData.get("slug") ?? "").trim().toLowerCase();
@@ -601,8 +620,9 @@ export async function createEvent(_: FormState, formData: FormData): Promise<For
 }
 
 export async function addAward(_: FormState, formData: FormData): Promise<FormState> {
-  const admin = await requireAdmin();
   const event = await getEvent();
+  const admin = await requireManager(event);
+  if (typeof admin === "string") return { error: admin };
   if (!event.locked) return { error: "Ödüller teslim kilitlendikten sonra açıklanabilir." };
   const title = String(formData.get("title") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
@@ -629,9 +649,10 @@ export async function addAward(_: FormState, formData: FormData): Promise<FormSt
   return { ok: true };
 }
 
-export async function removeAward(formData: FormData) {
-  const admin = await requireAdmin();
+export async function removeAward(formData: FormData): Promise<{ error: string } | void> {
   const event = await getEvent();
+  const admin = await requireManager(event);
+  if (typeof admin === "string") return { error: admin };
   const { error } = await createAdminClient().rpc("admin_remove_award", {
     p_award: String(formData.get("id") ?? ""), p_event: event.id, p_actor: admin.id, p_login: admin.login,
   });
@@ -639,8 +660,9 @@ export async function removeAward(formData: FormData) {
   revalidatePath("/", "layout");
 }
 
-export async function runWorker() {
-  const admin = await requireAdmin();
+export async function runWorker(): Promise<{ error: string } | void> {
+  const admin = await authorize(await getEvent(), "isletim");
+  if (typeof admin === "string") return { error: admin };
   if (!(await claimOnce(requestKey("calistir"), 30))) return revalidatePath("/yonetim");
   await auditAdmin(admin, "run_worker");
   after(async () => { await tick(); });
@@ -649,11 +671,14 @@ export async function runWorker() {
 
 export async function retryDeliveryJob(previous: FormState, formData: FormData): Promise<FormState> {
   void previous;
-  const admin = await requireAdmin();
   const id = String(formData.get("jobId") ?? "");
   const db = createAdminClient();
-  const { data: job } = await db.from("delivery_jobs").select("project_id").eq("id", id).maybeSingle();
+  const { data: job } = await db.from("delivery_jobs").select("project_id, event_id").eq("id", id).maybeSingle();
   if (!job) return { error: "Teslim işi bulunamadı." };
+  // Yetki, işin bağlı olduğu etkinlik için denetlenir.
+  const owner = await getEventById(job.event_id);
+  const admin = owner ? await authorize(owner, "isletim") : YETKISIZ_MESAJI;
+  if (typeof admin === "string") return { error: admin };
   const { data, error } = await db.rpc("retry_delivery_job", { p_job: id });
   if (error) return { error: dbError(error.message) };
   if (data !== true) {
@@ -673,8 +698,9 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
  * Eser kaydı, teslim SHA'sı, arşiv hash'i ve zamanlar korunur. Arayüzü yönetim sayfasına ayrıca eklenecek.
  */
 export async function anonymizeUser(_: FormState, formData: FormData): Promise<FormState> {
-  const { admin, error: reauth } = await requireFreshAdmin();
-  if (reauth) return { error: reauth };
+  // Anonimleştirme platform işidir (yalnızca head admin; DB de denetler). Etkinlik, yetki girdisi içindir.
+  const admin = await authorize(await getEvent(), "anonimlestir", true);
+  if (typeof admin === "string") return { error: admin };
   const login = String(formData.get("login") ?? "").trim().replace(/^@/, "");
   const reason = String(formData.get("reason") ?? "").trim();
   if (!/^[A-Za-z0-9-]{1,39}$/.test(login)) return { error: "Geçerli bir GitHub kullanıcı adı yaz." };
@@ -703,4 +729,39 @@ export async function anonymizeUser(_: FormState, formData: FormData): Promise<F
   if (authError) return { error: "Kayıtlar anonimleştirildi ancak hesap kapatılamadı. Supabase panelinden kontrol et." };
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------- platform askısı
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Etkinliği askıya alma / askıyı kaldırma: yalnızca head admin, taze oturumla (A21), 3–500 karakter gerekçeyle.
+ * Etkinlik formdan gelir; sayfa açıkken güncel etkinlik değişse bile ekranda görülen etkinliğe uygulanır.
+ * DB yetkiyi, gerekçeyi ve durumu yeniden denetler; işlem aynı transaction'da denetim kaydına yazılır.
+ */
+async function platformSuspension(formData: FormData, rpc: "suspend_event" | "unsuspend_event"): Promise<FormState> {
+  const eventId = String(formData.get("eventId") ?? "");
+  const event = UUID_RE.test(eventId) ? await getEventById(eventId) : null;
+  if (!event) return { error: "Etkinlik bulunamadı." };
+  const admin = await authorize(event, "askiya-al", true);
+  if (typeof admin === "string") return { error: admin };
+  const reason = String(formData.get("gerekce") ?? "").trim();
+  if (reason.length < 3 || reason.length > 500) return { error: "Gerekçe 3 ile 500 karakter arasında olmalı." };
+  const { error } = await createAdminClient().rpc(rpc, { p_event: event.id, p_actor: admin.id, p_login: admin.login, p_reason: reason });
+  if (error) {
+    // Eş istek (iki sekme, çift tıklama) ilkinden sonra bu iki mesajla reddedilir; durum ekranda görünür.
+    for (const known of ["Etkinlik zaten askıda.", "Etkinlik askıda değil."]) if (error.message.includes(known)) return { error: known };
+    return { error: dbError(error.message) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function suspendEvent(_: FormState, formData: FormData): Promise<FormState> {
+  return platformSuspension(formData, "suspend_event");
+}
+
+export async function unsuspendEvent(_: FormState, formData: FormData): Promise<FormState> {
+  return platformSuspension(formData, "unsuspend_event");
 }

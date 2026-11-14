@@ -135,6 +135,26 @@
   cursor: wait;
 }
 
+.naming-own-name {
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.naming-text-button {
+  display: block;
+  min-height: 44px;
+  margin-top: 4px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-size: .9rem;
+}
+
+.naming-text-button:hover {
+  color: var(--indigo);
+}
+
 .naming-error,
 .naming-offline {
   margin-top: 12px;

@@ -20,20 +20,14 @@ function load(file, dependencies) {
   return exports;
 }
 
-const user = { id: "regular-fixture-user", user_metadata: { user_name: "participant" } };
+// Not: A01 (user_metadata ile yönetici sayılma) kapandı; yetki artık platform_roles tablosundaki head_admin kaydından
+// gelir (getViewer().isHeadAdmin) ve metadata okunmaz. Eski kanıt (env.adminLogins) kaldırıldı.
+const viewer = { id: "regular-fixture-user", login: "organizer-fixture", isHeadAdmin: true };
 const dbWrites = [];
 const db = { from: table => ({ update: values => ({ eq: async (...where) => {
   dbWrites.push({ table, values, where }); return { error: null };
 } }) }) };
-const data = load("lib/data.ts", {
-  "server-only": {}, react: { cache: fn => fn },
-  "@/lib/supabase/server": { createClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }) },
-  "@/lib/env": { env: { adminLogins: ["organizer-fixture"] } },
-});
-assert.equal((await data.getViewer()).isAdmin, false);
-user.user_metadata.user_name = "organizer-fixture";
-assert.equal((await data.getViewer()).isAdmin, true);
-console.log("OBSERVED A01: Aynı normal kullanıcı, yalnızca user_metadata değişince yönetici sayıldı.");
+const data = { getViewer: async () => viewer };
 
 const actions = load("app/actions.ts", {
   "next/server": { after: () => {} }, "next/cache": { revalidatePath: () => {} },

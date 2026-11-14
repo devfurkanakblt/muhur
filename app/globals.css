@@ -358,3 +358,25 @@ a {
     color: #000;
   }
 }
+
+/* Klavye sürprizleri (components/key-eggs.tsx): sayfaya vurulan mühür ve köşeden bakan maskot. */
+@keyframes egg-stamp {
+  0% { opacity: 0; transform: scale(1.5) rotate(-12deg); }
+  18% { opacity: 1; transform: scale(1) rotate(-6deg); }
+  75% { opacity: 1; transform: scale(1) rotate(-6deg); }
+  100% { opacity: 0; transform: scale(1) rotate(-6deg); }
+}
+@keyframes egg-peek {
+  0% { opacity: 0; transform: translateY(60%); }
+  10%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(60%); }
+}
+.egg-stamp { background: var(--wall); animation: egg-stamp 1800ms var(--ease-out) both; }
+.egg-peek { animation: egg-peek 4200ms var(--ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  .egg-stamp,
+  .egg-peek {
+    animation-name: winner-fade;
+    animation-duration: 300ms;
+  }
+}

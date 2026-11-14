@@ -8,7 +8,20 @@ const now = Date.now();
 const stamp = n => new Date(now + n).toISOString();
 const userId = "00000000-0000-0000-0000-000000000001";
 const eventId = "10000000-0000-0000-0000-000000000001";
+const communityId = "20000000-0000-0000-0000-000000000001";
+const otherCommunityId = "20000000-0000-0000-0000-000000000002";
 let mode = "open";
+// Yetki rolleri DB'den okunur (platform_roles, community_members). ?rol= ile fikstür kullanıcısının rolü seçilir:
+// "yonetici" (varsayılan): head admin + etkinliğin topluluğunun sahibi; "head-admin": yalnızca head admin;
+// "sahip": yalnızca etkinliğin topluluğunun sahibi (head admin değil); "juri": yalnızca etkinliğin jürisi;
+// "yabanci": başka bir topluluğun organizatörü (bu etkinlikte yetkisi yok).
+let role = "yonetici";
+// Denetim kayıtları (log_admin RPC) bellekte tutulur; /fixture/audit okur. ?denetim=hata ile yazma başarısız olur.
+let audits = [];
+let auditFails = false;
+// ?askida=1: güncel etkinlik platform tarafından askıya alınmış (gerekçesiyle) gösterilir.
+let suspended = false;
+const SUSPEND_REASON = "Örnek askı gerekçesi: kural ihlali incelemesi.";
 // Örnek logolar (512×512): biri PNG, biri WEBP; üçüncü eserin logosu yok. Depo adresinden sunulur.
 const logoSvg = shape => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">${shape}</svg>`);
 const logos = {
@@ -61,7 +74,16 @@ function records(table) {
   }));
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
-      is_current: true, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+      is_current: true, community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
+      community: { name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+    communities: [
+      { id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", status: "onaylandi", telegram_enabled: false },
+      { id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", status: "onaylandi", telegram_enabled: false },
+    ],
+    platform_roles: ["yabanci", "sahip", "juri"].includes(role) ? [] : [{ user_id: userId, login: "preview-admin", role: "head_admin" }],
+    community_members: role === "yonetici" || role === "sahip" ? [{ community_id: communityId, user_id: userId, github_login: "preview-admin", role: "owner" }]
+      : role === "yabanci" ? [{ community_id: otherCommunityId, user_id: userId, github_login: "preview-admin", role: "organizator" }] : [],
+    event_jurors: role === "juri" ? [{ event_id: eventId, user_id: userId }] : [],
     projects,
     project_members: [
       { ...member, project_id: projects[0].id, project: { team_name: projects[0].team_name } },
@@ -98,10 +120,25 @@ const server = createServer(async (request, response) => {
   }
   if (url.pathname === "/fixture/state") {
     mode = ["open", "sealed", "failed", "voting"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "open";
+    role = ["yonetici", "head-admin", "sahip", "juri", "yabanci"].includes(url.searchParams.get("rol")) ? url.searchParams.get("rol") : "yonetici";
+    suspended = url.searchParams.get("askida") === "1";
+    auditFails = url.searchParams.get("denetim") === "hata";
+    audits = [];
     hunters = [];
     votes = sealedVotes();
     awards = sealedAwards();
-    return response.end(JSON.stringify({ mode }));
+    return response.end(JSON.stringify({ mode, role, suspended }));
+  }
+  // Arşiv indirme bağlantısı: imzalı adres yerel sahte depoyu gösterir (içerik sunulmaz).
+  if (url.pathname.startsWith("/storage/v1/object/sign/archives/") && request.method === "POST") {
+    return response.end(JSON.stringify({ signedURL: `${url.pathname.slice("/storage/v1".length)}?token=fixture` }));
+  }
+  if (url.pathname === "/fixture/audit") return response.end(JSON.stringify(audits));
+  if (url.pathname === "/rest/v1/rpc/log_admin") {
+    const body = JSON.parse(await new Promise(done => { let b = ""; request.on("data", c => b += c); request.on("end", () => done(b)); }) || "{}");
+    if (auditFails) { response.statusCode = 500; return response.end(JSON.stringify({ message: "Denetim kaydı yazılamadı.", code: "XX000" })); }
+    audits.push(body);
+    return response.end("null");
   }
   if (url.pathname === "/fixture/session") {
     const part = value => Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -194,6 +231,21 @@ const server = createServer(async (request, response) => {
       vote_count: records("mascot_name_votes").filter(v => v.proposal_id === p.id).length,
     }))));
   }
+  if (url.pathname === "/rest/v1/mascot_name_proposals" && request.method === "PATCH") {
+    let body = "";
+    request.on("data", chunk => { body += chunk; });
+    request.on("end", () => {
+      const { name } = JSON.parse(body || "{}");
+      const own = mascotProposals.find(p => p.author_id === url.searchParams.get("author_id")?.slice(3));
+      if (mascotProposals.some(p => p !== own && p.name.toLocaleLowerCase("tr") === name?.toLocaleLowerCase("tr"))) {
+        response.statusCode = 409;
+        return response.end(JSON.stringify({ message: "duplicate key value violates unique constraint \"mascot_name_proposals_unique_name\"", code: "23505" }));
+      }
+      if (own) own.name = name;
+      response.end(JSON.stringify(own ? { id: own.id } : null));
+    });
+    return;
+  }
   if (!url.pathname.startsWith("/rest/v1/") || !["GET", "HEAD"].includes(request.method)) {
     response.statusCode = 405; return response.end(JSON.stringify({ message: "Yerel test verisi salt okunur.", code: "FIXTURE_READ_ONLY" }));
   }
@@ -217,7 +269,7 @@ const app = spawn(process.execPath, [resolve("node_modules/next/dist/bin/next"),
   ...(!prod && process.env.MUHUR_PREVIEW_WEBPACK === "1" ? ["--webpack"] : []), "-p", "3100"], {
   windowsHide: true, stdio: "inherit", env: { ...process.env, NODE_ENV: prod ? "production" : "development", MUHUR_TEST_PREVIEW: "1",
     NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54330", NEXT_PUBLIC_SUPABASE_ANON_KEY: "fixture-key",
-    SUPABASE_SERVICE_ROLE_KEY: "fixture-key", ADMIN_GITHUB_IDS: "424242", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
+    SUPABASE_SERVICE_ROLE_KEY: "fixture-key", NEXT_PUBLIC_SITE_URL: "http://127.0.0.1:3100",
     GITHUB_TOKEN: "", TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", CRON_SECRET: "fixture-cron",
   },
 });

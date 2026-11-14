@@ -1,5 +1,6 @@
 import "server-only";
 import { env } from "@/lib/env";
+import type { EventState } from "@/lib/data";
 import { STICKERS, type StickerId } from "@/lib/stickers";
 
 export { tg } from "@/lib/tg";
@@ -49,4 +50,10 @@ export async function notify(lines: string[], sticker?: StickerId, options: { ph
     // Bildirim gitmezse mühür etkilenmez.
     return false;
   }
+}
+
+/** Etkinliğin topluluğu Telegram'a izinliyse bildirir; değilse ağa hiç çıkmadan false döner. */
+export async function notifyEvent(event: Pick<EventState, "telegram">, lines: string[], sticker?: StickerId, options: { photo?: string } = {}) {
+  if (!event.telegram) return false;
+  return notify(lines, sticker, options);
 }

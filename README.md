@@ -49,6 +49,7 @@ Mevcut kurulumda yalnızca `0004_delivery.sql` çalıştırılır. `0002_events.
 
 `supabase/migrations/0007_gizem.sql` (gizem avcısı) 0006'dan sonra uygulanır ve geriye uyumludur: önce migration, sonra `npm run check:schema`, ardından uygulama yayını. `mystery_hunters` tablosu ve `claim_mystery` yalnızca sunucuya açıktır; kayıt yalnızca hackathon saatlerinde (başlangıçtan mühüre) yapılır. `anonymize_user` gizem kaydındaki adı da anonimleştirir.
 `supabase/migrations/0009_mascot_naming.sql` uygulama yayını öncesinde çalıştırılır. `/maskot` her güncel etkinlik için ayrı bir tur açar: kayıtlı yarışmacılar kişi başına bir isim önerir, organizatör önerileri gözden geçirip oylamayı başlatır, GitHub ile giriş yapan ziyaretçiler kişi başına bir oy verir. Kendi önerine oy verilemez. Liste ve oy toplamları yaklaşık 5 saniyede bir yenilenir; organizatör sonucu kapatıp açıklar. Aşama geçişi, tek öneri/oy ve kendi önerine oy engeli veritabanında da uygulanır.
+`supabase/migrations/0010_mascot_name_edit.sql` 0009'dan sonra, uygulama yayını öncesinde çalıştırılır ve geriye uyumludur. Yarışmacı kendi önerisini öneri aşaması boyunca düzenleyebilir; oylama açılınca isimler kilitlenir, yayından kaldırılan öneri düzenlenemez.
 
 ### 1. GitHub OAuth App
 GitHub → Settings → Developer settings → **OAuth Apps** (GitHub Apps değil) → New OAuth App:
@@ -68,7 +69,7 @@ GitHub → Settings → Developer settings → **OAuth Apps** (GitHub Apps deği
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → secret / `service_role` |
 | `GITHUB_TOKEN` | GitHub fine-grained token, *Public repositories (read-only)*, izin seçmeden; son kullanma tarihi etkinlikten sonra olmalı |
 | `CRON_SECRET` | Rastgele uzun bir dize |
-| `ADMIN_GITHUB_IDS` | Yöneticilerin **sabit sayısal** GitHub kimlikleri, virgülle. `https://api.github.com/users/<kullanıcı-adı>` yanıtındaki `id`. Kullanıcı adı yetki vermez (değiştirilebilir). |
+| `ADMIN_GITHUB_IDS` | Yalnızca **tek seferlik başlangıç girdisi**: ilk head admin'in sabit sayısal GitHub kimliği (`https://api.github.com/users/<kullanıcı-adı>` yanıtındaki `id`). Uygulama bunu okumaz ve yetki vermez; yalnızca `node scripts/bootstrap-head-admin.mjs` ilk kimliği okuyup `bootstrap_head_admin` ile head admin ve `deu-csai` sahibi atar (`true` = atandı, `false` = zaten bir head admin vardı). Sonraki yetkiler veritabanından (`platform_roles`) yönetilir. |
 | `NEXT_PUBLIC_SITE_URL` | Sitenin tam adresi |
 | `TELEGRAM_BOT_TOKEN` | İsteğe bağlı. Telegram'da @BotFather → `/newbot` |
 | `TELEGRAM_CHAT_ID` | İsteğe bağlı. Botu gruba ekle, gruba bir mesaj yaz, `https://api.telegram.org/bot<TOKEN>/getUpdates` yanıtındaki `chat.id` (gruplarda eksiyle başlar) |
@@ -99,7 +100,7 @@ npm run dev
 
 `npm run check`: uygulama testleri, ESLint ve TypeScript. ZIP çıktısı Python `zipfile`, QR ise Python/OpenCV ile bağımsız doğrulanır; bu kontroller için Python ve OpenCV gerekir.
 
-`npm run test:db`: ayrı `.test-db` klasöründe PostgreSQL başlatır; 0001/0002/0004/0005/0006/0007/0008/0009 migration'larını boş test veritabanında uygular; `tests/database-hardening.sql`, `tests/database-last-minute.sql`, `tests/database-mystery.sql`, `tests/database-activity.sql`, `tests/database-mascot.sql` ve davet yenileme, kurucu devri ve oylama kapanışı için gerçek iki bağlantılı yarış testleri de çalışır. Atomik kayıt, geç teslim, iş sahipliği, eski token reddi, kalıcı mühür ve eşzamanlı kayıt/worker senaryolarını sınar. PostgreSQL 17 kurulu olmalı veya `POSTGRES_BIN` ayarlanmalıdır. Canlı veritabanına bağlanmaz; 0003 yalnızca Supabase cron/Vault kurulumu içindir.
+`npm run test:db`: ayrı `.test-db` klasöründe PostgreSQL başlatır; 0001/0002/0004/0005/0006/0007/0008/0009/0010/0011/0012 migration'larını boş test veritabanında uygular; `tests/database-hardening.sql`, `tests/database-last-minute.sql`, `tests/database-mystery.sql`, `tests/database-activity.sql`, `tests/database-mascot.sql`, `tests/database-tenancy.sql` (çoklu topluluk ve yetki) ve davet yenileme, kurucu devri ve oylama kapanışı için gerçek iki bağlantılı yarış testleri de çalışır. Atomik kayıt, geç teslim, iş sahipliği, eski token reddi, kalıcı mühür ve eşzamanlı kayıt/worker senaryolarını sınar. PostgreSQL 17 kurulu olmalı veya `POSTGRES_BIN` ile PostgreSQL 17 ikili dosyaları gösterilmelidir. Canlı veritabanına bağlanmaz; 0003 yalnızca Supabase cron/Vault kurulumu içindir.
 
 `npm run preview:test`: 3100/54330 portlarında yalnızca örnek verilerle ayrı Next dev önizlemesi. `npm run test:browser`: Chrome/Edge ile masaüstü ve mobil render kontrolleri, `test-artifacts/` içinde ekran görüntüleri. Test önizlemesinde gerçek GitHub/Supabase anahtarları ve Telegram kullanılmaz.
 

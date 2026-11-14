@@ -12,7 +12,8 @@ type Initial = { name: string; team: string; summary: string; logo: string | nul
 const field =
   "w-full rounded-[2px] border border-rule-strong bg-plinth px-3 text-[1rem] placeholder:text-ink-3 focus:border-ink focus:outline-none aria-[invalid=true]:border-danger";
 
-export function ProjectForm({ mode, repo, initial }: { mode: "create" | "edit"; repo?: string; initial: Initial }) {
+/** `suspended`: etkinlik platform tarafından askıda; DB yazmayı zaten reddeder, düğme pasif kalır. */
+export function ProjectForm({ mode, repo, initial, suspended = false }: { mode: "create" | "edit"; repo?: string; initial: Initial; suspended?: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(mode === "create" ? createProject : updateProject, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   const [summary, setSummary] = useState(initial.summary);
@@ -191,7 +192,7 @@ export function ProjectForm({ mode, repo, initial }: { mode: "create" | "edit"; 
           </div>
         </details>
         <div className="flex flex-wrap items-center gap-4 pt-2">
-          <button type="submit" disabled={pending} aria-busy={pending} className={buttonStyles.primary}>
+          <button type="submit" disabled={pending || suspended} aria-busy={pending} className={buttonStyles.primary}>
             {pending
               ? mode === "create"
                 ? "Yerleştiriliyor…"

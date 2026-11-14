@@ -5,7 +5,7 @@ import { Mascot } from "@/components/mascot/mascot";
 import { SignInButton } from "@/components/buttons";
 import type { NamingProposal, NamingSnapshot } from "@/lib/mascot-naming";
 import {
-  setMascotPhase, setMascotProposalVisibility, suggestMascotName, voteMascotName,
+  editMascotName, setMascotPhase, setMascotProposalVisibility, suggestMascotName, voteMascotName,
   type NamingActionState,
 } from "./actions";
 
@@ -25,6 +25,37 @@ function SuggestionForm({ reload }: { reload: () => void }) {
     </div>
     {state?.error && <p role="alert" className="naming-error">{state.error}</p>}
   </form>;
+}
+
+function EditForm({ name, onSaved, onCancel }: { name: string; onSaved: () => void; onCancel: () => void }) {
+  const [state, action, pending] = useActionState(editMascotName, undefined);
+  // Kontrollü alan: React formu eylemden sonra sıfırlar, hata alınca yazılan isim kaybolmasın.
+  const [value, setValue] = useState(name);
+  useActionRefresh(state, onSaved);
+  return <form action={action} className="naming-form" aria-busy={pending}>
+    <label htmlFor="mascot-name-edit">İsmi düzenle</label>
+    <div className="naming-input-row">
+      <input id="mascot-name-edit" name="name" type="text" minLength={2} maxLength={24}
+        autoComplete="off" required readOnly={pending} autoFocus
+        value={value} onChange={event => setValue(event.target.value)} />
+      <button type="submit" disabled={pending}>{pending ? "Kaydediliyor…" : "Kaydet"}</button>
+    </div>
+    <button type="button" className="naming-text-button" onClick={onCancel} disabled={pending}>Vazgeç</button>
+    {state?.error && <p role="alert" className="naming-error">{state.error}</p>}
+  </form>;
+}
+
+function OwnProposal({ name, reload }: { name: string; reload: () => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const onSaved = useCallback(async () => {
+    await reload();
+    setEditing(false);
+  }, [reload]);
+  if (editing) return <EditForm name={name} onSaved={onSaved} onCancel={() => setEditing(false)} />;
+  return <>
+    <p className="naming-status">Önerin: <strong className="naming-own-name">{name}</strong></p>
+    <button type="button" className="naming-text-button" onClick={() => setEditing(true)}>İsmi düzenle</button>
+  </>;
 }
 
 function VoteForm({ proposalId, name, reload }: { proposalId: string; name: string; reload: () => void }) {
@@ -77,7 +108,7 @@ function ProposalCard({ item, snapshot, reload }: {
       {snapshot.phase !== "oneriler" && item.visible && <strong className="naming-vote-count" aria-label={`${item.votes} oy`}>{item.votes}</strong>}
     </div>
     {canVote && <VoteForm proposalId={item.id} name={item.name} reload={reload} />}
-    {snapshot.isAdmin && snapshot.phase === "oneriler" && <AdminForm
+    {snapshot.canManage && snapshot.phase === "oneriler" && <AdminForm
       action={setMascotProposalVisibility}
       fields={{ proposalId: item.id, visible: String(!item.visible) }}
       label={item.visible ? "Yayından kaldır" : "Yeniden göster"}
@@ -123,7 +154,9 @@ export function NamingExperience({ initial }: { initial: NamingSnapshot }) {
 
       <section className="naming-action" aria-label="Katılım">
         {snapshot.phase === "oneriler" ? <>
-          {snapshot.ownProposalId ? <p className="naming-status">Önerin kaydedildi</p>
+          {snapshot.ownProposal ? snapshot.ownProposal.visible
+            ? <OwnProposal name={snapshot.ownProposal.name} reload={reload} />
+            : <p className="naming-status">Önerin kaydedildi</p>
             : snapshot.canSuggest ? <SuggestionForm reload={reload} />
               : snapshot.isSignedIn ? <p className="naming-status">Yalnızca kayıtlı yarışmacılar isim önerebilir</p>
                 : <><p className="naming-status">İsim önermek için yarışmacı olmalısın</p><SignInButton next="/maskot" label="GitHub ile giriş yap" /></>}
@@ -143,7 +176,7 @@ export function NamingExperience({ initial }: { initial: NamingSnapshot }) {
           : <p className="naming-empty">Henüz öneri yok</p>}
       </section>
 
-      {snapshot.isAdmin && snapshot.phase !== "sonuc" && <section className="naming-admin-panel" aria-label="Organizatör işlemleri">
+      {snapshot.canManage && snapshot.phase !== "sonuc" && <section className="naming-admin-panel" aria-label="Organizatör işlemleri">
         <AdminForm action={setMascotPhase} fields={{ phase: snapshot.phase === "oneriler" ? "oylama" : "sonuc" }}
           label={snapshot.phase === "oneriler" ? "Oylamayı aç" : "Sonucu açıkla"} reload={reload}
           confirmMessage={snapshot.phase === "oneriler"

@@ -32,18 +32,20 @@ export function project(proj: ReturnType<typeof makeProjection>, p: LonLat): [nu
   return proj(p) as [number, number];
 }
 
-export const Globe: React.FC<{ cx: number; cy: number; r: number; rotate: [number, number]; scale?: number; children?: React.ReactNode }> = ({
+export const Globe: React.FC<{ cx: number; cy: number; r: number; rotate: [number, number]; scale?: number; w?: number; h?: number; children?: React.ReactNode }> = ({
   cx,
   cy,
   r,
   rotate,
   scale = 1,
+  w = 1920,
+  h = 1080,
   children,
 }) => {
   const proj = makeProjection(cx, cy, r, rotate);
   const path = geoPath(proj);
   return (
-    <svg width={1920} height={1080} style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+    <svg width={w} height={h} style={{ position: "absolute", inset: 0, overflow: "visible" }}>
       <defs>
         <radialGradient id="globe-shade" cx="38%" cy="32%" r="75%">
           <stop offset="0%" stopColor="#fff" stopOpacity={0.1} />

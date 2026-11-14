@@ -4,10 +4,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { buttonStyles } from "@/components/button-styles";
+import { eventPath } from "@/lib/event-routes";
 
 type Repo = { id: number; full_name: string; description: string | null; pushed: string; taken: boolean };
 
-export function RepoPicker({ repos, error, listFailed = false }: { repos: Repo[]; error?: string; listFailed?: boolean }) {
+export function RepoPicker({ slug, repos, error, listFailed = false }: { slug: string; repos: Repo[]; error?: string; listFailed?: boolean }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [paste, setPaste] = useState("");
@@ -16,7 +17,7 @@ export function RepoPicker({ repos, error, listFailed = false }: { repos: Repo[]
     return q ? repos.filter((r) => r.full_name.toLowerCase().includes(q)) : repos;
   }, [repos, query]);
 
-  const choose = (fullName: string) => router.push(`/panel?repo=${encodeURIComponent(fullName)}`);
+  const choose = (fullName: string) => router.push(`${eventPath(slug, "panel")}?repo=${encodeURIComponent(fullName)}`);
 
   return (
     <div>

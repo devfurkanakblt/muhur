@@ -4,9 +4,8 @@ create function pg_temp.assert_true(ok boolean, label text) returns void languag
 begin if ok is distinct from true then raise exception 'FAIL: %', label; end if; raise notice 'PASS: %', label; end $$;
 
 insert into auth.users(id) values ('50000000-0000-0000-0000-000000000001'), ('50000000-0000-0000-0000-000000000002');
-update public.events set is_current = false where is_current;
-insert into public.events(id, slug, title, starts_at, deadline, is_current)
-values ('60000000-0000-0000-0000-000000000001', 'son-dakika', 'Son Dakika', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', true);
+insert into public.events(id, slug, title, starts_at, deadline, community_id)
+values ('60000000-0000-0000-0000-000000000001', 'son-dakika', 'Son Dakika', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', (select id from communities where slug = 'deu-csai'));
 
 create temp table sd as select id from public.register_project(
   '60000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001',

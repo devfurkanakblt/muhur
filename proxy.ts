@@ -22,6 +22,9 @@ export async function proxy(request: NextRequest) {
     }
     const next = NextResponse.next({ request: { headers } });
     if (csp) next.headers.set("Content-Security-Policy", csp);
+    if (request.nextUrl.pathname.startsWith("/katil/")) {
+      next.headers.set("Referrer-Policy", "no-referrer"); next.headers.set("X-Robots-Tag", "noindex, nofollow"); next.headers.set("Cache-Control", "private, no-store");
+    }
     return next;
   };
 
@@ -50,5 +53,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|api/cron|api/rozet|api/sahne|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|api/cron|api/webhooks|api/rozet|api/sahne|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|webp)$).*)"],
 };

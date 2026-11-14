@@ -16,9 +16,8 @@ end $$;
 insert into auth.users(id) values
   ('00000000-0000-0000-0000-000000000001'), ('00000000-0000-0000-0000-000000000002'),
   ('00000000-0000-0000-0000-000000000003'), ('00000000-0000-0000-0000-000000000004');
-update public.events set is_current = false where is_current;
-insert into public.events(id, slug, title, starts_at, deadline, is_current)
-values ('10000000-0000-0000-0000-000000000001', 'test-event', 'Teslim Testi', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', true);
+insert into public.events(id, slug, title, starts_at, deadline, community_id)
+values ('10000000-0000-0000-0000-000000000001', 'test-event', 'Teslim Testi', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', (select id from communities where slug = 'deu-csai'));
 
 create temp table fixture as select id from public.register_project(
   '10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
@@ -84,24 +83,23 @@ insert into votes(event_id,user_id,project_id,github_login) select '10000000-000
 update events set voting = 'sonuclandi' where id = '10000000-0000-0000-0000-000000000001';
 select pg_temp.expect_error('delete from votes where event_id = ''10000000-0000-0000-0000-000000000001''', 'Oylama açık değil', 'Sonuçlandıktan sonra oy silinemez');
 
--- Başarısız etkinlik geçişinde güncel etkinlik korunur.
-select pg_temp.expect_error($cmd$ select public.switch_event('10000000-0000-0000-0000-000000000001','Yeni etkinlik','test-event',clock_timestamp(),clock_timestamp()+interval '2 hours') $cmd$, 'events_slug_key', 'Aynı slug ile yeni etkinlik reddedilir');
-select pg_temp.assert_true((select is_current from events where id='10000000-0000-0000-0000-000000000001'), 'Başarısız geçiş güncel etkinliği bozmadı');
-select public.switch_event('10000000-0000-0000-0000-000000000001','Yeni etkinlik','test-next',clock_timestamp(),clock_timestamp()+interval '2 hours');
-select pg_temp.assert_true((select count(*) = 1 from events where is_current), 'Başarılı geçişten sonra tam bir güncel etkinlik var');
+-- Aynı slug ile ikinci etkinlik reddedilir; kilitli ilk etkinliğin yanında yeni bir açık etkinlik eklenebilir.
+select pg_temp.expect_error($cmd$ insert into events(slug, title, starts_at, deadline, community_id) values('test-event','Yeni etkinlik',clock_timestamp(),clock_timestamp()+interval '2 hours',(select id from communities where slug = 'deu-csai')) $cmd$, 'events_slug_key', 'Aynı slug ile yeni etkinlik reddedilir');
+insert into events(id, slug, title, starts_at, deadline, community_id)
+values ('10000000-0000-0000-0000-000000000002', 'test-next', 'Yeni etkinlik', clock_timestamp(), clock_timestamp() + interval '2 hours', (select id from communities where slug = 'deu-csai'));
 
 -- Süre transaction başladıktan sonra dolarsa now() değil clock_timestamp() uygulanır.
 create temp table deadline_project as select id from public.register_project(
-  (select id from events where is_current), '00000000-0000-0000-0000-000000000004',
+  '10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000004',
   'late', null, 'Son Proje', 'Son Ekip', 'Bu bir son saniye testidir.', 999, 'late/repo', 'https://github.com/late/repo', 'main', null, repeat('f',40)
 );
 create temp table deadline_job as select * from public.claim_delivery_jobs((select id from deadline_project),1);
-update events set deadline=clock_timestamp()+interval '0.2 seconds', starts_at=clock_timestamp()-interval '1 hour' where is_current;
+update events set deadline=clock_timestamp()+interval '0.2 seconds', starts_at=clock_timestamp()-interval '1 hour' where id = '10000000-0000-0000-0000-000000000002';
 select pg_sleep(0.3);
 select pg_temp.assert_true(not public.complete_submission((select id from deadline_job), (select lease_token from deadline_job), 'teslim/' || (select id::text from deadline_job) || '.zip', repeat('a',64),128), 'Gerçek son tarih geçtikten sonra teslim kabul edilmedi');
-select pg_temp.expect_error('update events set deadline=clock_timestamp()+interval ''1 hour'' where is_current', 'LOCKED', 'Süre dolunca aynı transaction içinde zaman uzatılamaz');
+select pg_temp.expect_error('update events set deadline=clock_timestamp()+interval ''1 hour'' where id = ''10000000-0000-0000-0000-000000000002''', 'LOCKED', 'Süre dolunca aynı transaction içinde zaman uzatılamaz');
 
-select public.enqueue_seals((select id from events where is_current));
+select public.enqueue_seals('10000000-0000-0000-0000-000000000002');
 create temp table missing_seal as select * from public.claim_delivery_jobs((select id from deadline_project),1);
 select pg_temp.expect_error(format('select public.complete_seal(%L,%L)', (select id from missing_seal), (select lease_token from missing_seal)), 'kabul edilmiş teslim sürümü yok', 'Kod teslimi olmayan proje güncel HEAD ile mühürlenemez');
 select public.fail_delivery_job((select id from missing_seal), (select lease_token from missing_seal), 'Kabul edilmiş teslim yok.', false);
@@ -109,9 +107,10 @@ select pg_temp.assert_true((select state = 'failed' from delivery_jobs where id 
 select pg_temp.expect_error(format('select public.retry_delivery_job(%L)', (select id from deadline_job)), 'LOCKED', 'Geç teslim işi admin tarafından da kabul ettirilemez');
 select pg_temp.expect_error(format('update submissions set archive_sha256 = repeat(''f'',64) where project_id = %L', (select id from fixture)), 'LOCKED', 'Kabul geçmişi değiştirilemez');
 
-select public.switch_event((select id from events where is_current),'Worker testi','test-worker',clock_timestamp(),clock_timestamp()+interval '1 hour');
+insert into events(id, slug, title, starts_at, deadline, community_id)
+values ('10000000-0000-0000-0000-000000000003', 'test-worker', 'Worker testi', clock_timestamp(), clock_timestamp() + interval '1 hour', (select id from communities where slug = 'deu-csai'));
 create temp table expired_project as select id from public.register_project(
-  (select id from events where is_current), '00000000-0000-0000-0000-000000000003', 'worker', null,
+  '10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000003', 'worker', null,
   'Worker Proje', 'Worker Ekip', 'Bu bir worker zaman aşımı testidir.', 1001, 'worker/repo', 'https://github.com/worker/repo', 'main', null, repeat('a',40)
 );
 create temp table expired_job as select * from public.claim_delivery_jobs((select id from expired_project),1);
@@ -122,7 +121,7 @@ select pg_temp.assert_true((select delivery_error is not null from projects wher
 select pg_temp.assert_true(public.retry_delivery_job((select id from expired_job)), 'Teslim açıkken admin yeniden deneme başlatabilir');
 create temp table resumed_job as select * from public.claim_delivery_jobs((select id from expired_project),1);
 select pg_temp.assert_true(public.complete_submission((select id from resumed_job), (select lease_token from resumed_job), 'teslim/' || (select id::text from resumed_job) || '.zip', repeat('c',64),128), 'Yeniden denenen aynı sürüm kabul edildi');
-select public.lock_delivery_event((select id from events where is_current),'test-admin',true);
+select public.lock_delivery_event('10000000-0000-0000-0000-000000000003','test-admin',true);
 select pg_temp.assert_true((select e.locked_at > p.accepted_at from events e join projects p on p.event_id=e.id where p.id=(select id from expired_project)), 'Erken kilit zamanı DB kabulünden sonra hesaplandı');
 
 select pg_temp.assert_true(not has_function_privilege('anon','public.claim_delivery_jobs(uuid,integer)','EXECUTE'), 'Anon iş kuyruğunu çalıştıramaz');

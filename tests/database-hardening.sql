@@ -16,9 +16,8 @@ end $$;
 insert into auth.users(id) values
   ('30000000-0000-0000-0000-000000000001'), ('30000000-0000-0000-0000-000000000002'),
   ('30000000-0000-0000-0000-000000000003'), ('30000000-0000-0000-0000-000000000004');
-update public.events set is_current = false where is_current;
-insert into public.events(id, slug, title, starts_at, deadline, is_current)
-values ('40000000-0000-0000-0000-000000000001', 'hardening', 'Sertleştirme', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', true);
+insert into public.events(id, slug, title, starts_at, deadline, community_id)
+values ('40000000-0000-0000-0000-000000000001', 'hardening', 'Sertleştirme', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', (select id from communities where slug = 'deu-csai'));
 -- 0012: yönetim RPC'leri etkinliğin topluluğundaki organizatöre, anonimleştirme head admin'e açık.
 insert into auth.users(id) values ('30000000-0000-0000-0000-000000000005');
 update public.events set community_id = (select id from communities where slug = 'deu-csai') where id = '40000000-0000-0000-0000-000000000001';

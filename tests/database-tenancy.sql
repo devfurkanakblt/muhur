@@ -20,15 +20,14 @@ insert into auth.users(id) values
   ('50000000-0000-0000-0000-000000000001'), ('50000000-0000-0000-0000-000000000002'),
   ('50000000-0000-0000-0000-000000000003'), ('50000000-0000-0000-0000-000000000004'),
   ('50000000-0000-0000-0000-000000000005');
-update public.events set is_current = false where is_current;
 insert into public.communities(id, slug, name, status)
 values ('70000000-0000-0000-0000-000000000002', 'b-topluluk', 'B Topluluğu', 'onaylandi');
 insert into public.community_members(community_id, user_id, github_login, role) values
   ((select id from communities where slug = 'deu-csai'), '50000000-0000-0000-0000-000000000002', 'deu-org', 'organizator'),
   ('70000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000003', 'b-sahip', 'owner');
-insert into public.events(id, slug, title, starts_at, deadline, is_current, community_id) values
-  ('60000000-0000-0000-0000-000000000001', 'deu-etkinlik', 'DEÜ Etkinliği', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', false, (select id from communities where slug = 'deu-csai')),
-  ('60000000-0000-0000-0000-000000000002', 'b-etkinlik', 'B Etkinliği', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', false, '70000000-0000-0000-0000-000000000002');
+insert into public.events(id, slug, title, starts_at, deadline, community_id) values
+  ('60000000-0000-0000-0000-000000000001', 'deu-etkinlik', 'DEÜ Etkinliği', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', (select id from communities where slug = 'deu-csai')),
+  ('60000000-0000-0000-0000-000000000002', 'b-etkinlik', 'B Etkinliği', clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 hour', '70000000-0000-0000-0000-000000000002');
 insert into public.event_jurors(event_id, user_id, login, provider)
 values ('60000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000004', 'b-juri', 'github');
 
@@ -48,11 +47,8 @@ select pg_temp.assert_true(public.event_role('60000000-0000-0000-0000-0000000000
 select pg_temp.expect_error($c$ insert into community_members(community_id,user_id,github_login,role) select id,'50000000-0000-0000-0000-000000000005','x','owner' from communities where slug='deu-csai' $c$, 'community_one_owner', 'Toplulukta ikinci sahip olamaz');
 
 -- Bölüm 2 · katılımcı tarafı: yarışma yasağı ve askı ------------------------------------------
--- register_project yalnızca güncel etkinlikte çalışır; önce DEÜ, sonra B etkinliği güncel yapılır.
-update public.events set is_current = true where id = '60000000-0000-0000-0000-000000000001';
+-- İki etkinlik aynı anda açık; kayıt etkinliğin kendi kurallarıyla denetlenir.
 select pg_temp.expect_error($c$ select public.register_project('60000000-0000-0000-0000-000000000001','50000000-0000-0000-0000-000000000002','org',null,'Org Proje','Org Ekip','Organizatör kayıt denemesi.',901,'o/r','https://github.com/o/r','main',null,null) $c$, 'YARISAMAZ', 'Organizatör kendi topluluğunun etkinliğine kayıt olamaz');
-update public.events set is_current = false where id = '60000000-0000-0000-0000-000000000001';
-update public.events set is_current = true where id = '60000000-0000-0000-0000-000000000002';
 select pg_temp.expect_error($c$ select public.register_project('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','b-sahip',null,'Sahip Proje','Sahip Ekip','Topluluk sahibi kayıt denemesi.',902,'s/r','https://github.com/s/r','main',null,null) $c$, 'YARISAMAZ', 'Topluluk sahibi kendi etkinliğine kayıt olamaz');
 select pg_temp.assert_true((select (public.register_project('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000002','deu-org',null,'Misafir Proje','Misafir Ekip','Başka topluluğun etkinliğinde yarışma.',903,'d/r','https://github.com/d/r','main',null,null)).id is not null), 'Organizatör başka topluluğun etkinliğinde yarışabilir');
 select pg_temp.expect_error(format('select public.join_project_by_code(%L, %L, ''b-juri'', null)',
@@ -82,7 +78,6 @@ select pg_temp.assert_true((select not has_function_privilege('service_role', 'p
   and not has_function_privilege('anon', 'public.enqueue_submission(uuid, uuid, text, text, text)', 'execute')), 'İç _v0 fonksiyonu kapalı, sarmalayıcı yalnızca service_role için açık');
 update public.events set suspended_at = null, suspended_reason = null where id = '60000000-0000-0000-0000-000000000002';
 select pg_temp.assert_true((public.update_project((select id from projects where repo_id = 904), '50000000-0000-0000-0000-000000000005', 'Yeni Ad', 'Yeni Ekip', 'Askı kalkınca düzenleme.', null)) is null, 'Askı kalkınca proje yeniden düzenlenebilir');
-update public.events set is_current = false where id = '60000000-0000-0000-0000-000000000002';
 
 -- Bölüm 3 · yönetim tarafı: etkinlik kapsamı ve askıya alma ------------------------------------
 -- 50..06: sahiplik devri hedefi. B ödülü ve B oyu kurulum için koruma tetikleyicileri kapatılarak yazılır.
@@ -145,7 +140,7 @@ select pg_temp.expect_error($c$ select public.suspend_community('70000000-0000-0
 select public.suspend_community('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','Topluluk incelemesi');
 select pg_temp.assert_true((select status = 'askida' and suspended_reason = 'Topluluk incelemesi' from communities where id = '70000000-0000-0000-0000-000000000002'), 'Topluluk askıya alınır');
 select pg_temp.assert_true((select count(*) = 1 from admin_audit where action = 'community_suspended' and before->>'community' = '70000000-0000-0000-0000-000000000002' and reason = 'Topluluk incelemesi'), 'Topluluk askısı kayda girer');
-select pg_temp.expect_error($c$ select public.admin_switch_event('60000000-0000-0000-0000-000000000002','B Yeni','b-yeni',clock_timestamp(),clock_timestamp()+interval '2 hours','50000000-0000-0000-0000-000000000003','b-sahip') $c$, 'ASKIDA', 'Askıdaki topluluk yeni etkinlik açamaz');
+select pg_temp.expect_error($c$ select public.admin_create_event('70000000-0000-0000-0000-000000000002','B Yeni','b-yeni',clock_timestamp(),clock_timestamp()+interval '2 hours','50000000-0000-0000-0000-000000000003','b-sahip') $c$, 'ASKIDA', 'Askıdaki topluluk yeni etkinlik açamaz');
 select pg_temp.expect_error($c$ select public.admin_update_event('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003','b-sahip','announcement','{"announcement":"Askıda duyuru"}') $c$, 'ASKIDA', 'Askıdaki topluluk etkinliğini yönetemez');
 select pg_temp.expect_error($c$ select public.suspend_community('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','İkinci askı') $c$, 'onaylı', 'Askıdaki topluluk yeniden askıya alınmaz');
 select public.unsuspend_community('70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','bas','Topluluk incelemesi bitti');
@@ -162,12 +157,9 @@ select pg_temp.assert_true(public.event_role('60000000-0000-0000-0000-0000000000
   and public.event_role('60000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000003') = 'organizator', 'Yeni sahip atanır, eski sahip organizatör olur');
 select pg_temp.assert_true((select count(*) = 1 from admin_audit where action = 'community_owner_set' and reason = 'Sahip hesabını kaybetti'), 'Sahiplik devri kayda girer');
 
--- Yeni etkinlik aynı topluluğa bağlanır.
-update public.events set is_current = false where is_current;
-update public.events set is_current = true where id = '60000000-0000-0000-0000-000000000001';
-select public.lock_delivery_event('60000000-0000-0000-0000-000000000001', 'test', true);
-create temp table t3_new as select public.admin_switch_event('60000000-0000-0000-0000-000000000001','DEÜ Yeni','deu-yeni',clock_timestamp(),clock_timestamp()+interval '2 hours','50000000-0000-0000-0000-000000000002','deu-org') as id;
-select pg_temp.assert_true((select community_id = (select id from communities where slug = 'deu-csai') and is_current from events where id = (select id from t3_new)), 'Yeni etkinlik aynı topluluğa bağlanır');
+-- Organizatörün açtığı yeni etkinlik kendi topluluğuna bağlanır.
+create temp table t3_new as select public.admin_create_event((select id from communities where slug = 'deu-csai'),'DEÜ Yeni','deu-yeni',clock_timestamp(),clock_timestamp()+interval '2 hours','50000000-0000-0000-0000-000000000002','deu-org') as id;
+select pg_temp.assert_true((select community_id = (select id from communities where slug = 'deu-csai') from events where id = (select id from t3_new)), 'Yeni etkinlik aynı topluluğa bağlanır');
 
 -- Erişim: iç _v0 fonksiyonları kapalı, sarmalayıcılar ve yeni RPC'ler yalnızca service_role için açık.
 select pg_temp.assert_true((select not has_function_privilege('service_role', 'public.admin_update_event_v0(uuid, uuid, text, text, jsonb)', 'execute')
@@ -177,7 +169,7 @@ select pg_temp.assert_true((select not has_function_privilege('service_role', 'p
   and has_function_privilege('service_role', 'public.set_community_owner(uuid, uuid, text, uuid, text, text)', 'execute')
   and not has_function_privilege('authenticated', 'public.suspend_event(uuid, uuid, text, text)', 'execute')
   and not has_function_privilege('anon', 'public.suspend_community(uuid, uuid, text, text)', 'execute')
-  and not has_function_privilege('authenticated', 'public.admin_switch_event(uuid, text, text, timestamptz, timestamptz, uuid, text)', 'execute')),
+  and not has_function_privilege('authenticated', 'public.admin_create_event(uuid, text, text, timestamptz, timestamptz, uuid, text)', 'execute')),
   'Yönetim fonksiyonlarının erişimi doğru');
 
 -- Son: askıdaki etkinlik süre dolunca yine kilitlenir (etkinliği kalıcı kilitler, bu yüzden en sonda).

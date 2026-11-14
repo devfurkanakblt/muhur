@@ -69,3 +69,17 @@ export function claimDecision(input: {
   if (String(input.tokenUserId) !== input.githubId) return "denied";
   return input.tokenCanPush ? "collaborator" : "denied";
 }
+
+
+export type VerifiedIdentity = { provider: "github" | "linkedin"; subject: string; login: string; avatarUrl: string | null; githubId: string | null };
+
+/** Sağlayıcı kimliği yalnız getUser tarafından doğrulanmış identity kaydından okunur. */
+export function verifiedIdentity(user: AuthUserLike): VerifiedIdentity | null {
+  const github = githubIdentity(user);
+  if (github) return { provider: "github", subject: github.githubId, githubId: github.githubId, login: github.login, avatarUrl: github.avatarUrl };
+  const identity = user.identities?.find(i => i.provider === "linkedin_oidc");
+  const data = identity?.identity_data ?? {};
+  const subject = str(data.sub) ?? str(data.provider_id) ?? str(identity?.id);
+  if (!identity || !subject) return null;
+  return { provider: "linkedin", subject, githubId: null, login: str(data.name) ?? str(data.full_name) ?? "LinkedIn jürisi", avatarUrl: str(data.picture) ?? str(data.avatar_url) };
+}

@@ -9,6 +9,8 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith("@/")) specifier = new URL(specifier.slice(2), ROOT).href;
   try { return await nextResolve(specifier, context); }
   catch (error) {
+    // Next paketinin uzantısız alt modüllerini Node ESM testlerinde de çöz.
+    if (specifier.startsWith("next/") && !specifier.endsWith(".js")) return nextResolve(`${specifier}.js`, context);
     if (/^(\.|file:)/.test(specifier) && !/\.[a-z]+$/.test(specifier)) {
       return nextResolve(`${specifier}.ts`, context);
     }

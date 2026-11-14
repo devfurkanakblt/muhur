@@ -4,6 +4,12 @@ function required(name: string, value: string | undefined) {
 }
 
 export const env = {
+  get communityApplicationsEnabled() { return process.env.COMMUNITY_APPLICATIONS_ENABLED === "true"; },
+  get brevoApiKey() { return process.env.BREVO_API_KEY || undefined; },
+  get brevoFromEmail() { return process.env.BREVO_FROM_EMAIL || undefined; },
+  get brevoFromName() { return process.env.BREVO_FROM_NAME || "mühür"; },
+  get brevoWebhookSecret() { return process.env.BREVO_WEBHOOK_SECRET || undefined; },
+  get mailPayloadKey() { return process.env.MAIL_PAYLOAD_KEY || undefined; },
   get supabaseUrl() {
     return required("NEXT_PUBLIC_SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL);
   },

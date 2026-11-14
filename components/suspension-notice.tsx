@@ -12,6 +12,11 @@ export function askiBilgisi(event: EventState, showReason: boolean): Suspension 
   return { suspended: event.suspended, suspendedReason: showReason ? event.suspendedReason : null };
 }
 
+/** Sayfanın alt bileşenlerine (başlık dahil) verilecek etkinlik: gerekçe yalnızca görebilecek olana taşınır. */
+export function gorunenEtkinlik(event: EventState, showReason: boolean): EventState {
+  return showReason || event.suspendedReason == null ? event : { ...event, suspendedReason: null };
+}
+
 /**
  * Platform askısı uyarısı. Askı bir hata değil, bilgi olduğundan `--danger` ve indigo kullanılmaz:
  * `--ink` metin, `--rule-strong` çizgi. Gerekçe yalnızca etkinliği inceleyebilenlere (`incele`) gösterilir.

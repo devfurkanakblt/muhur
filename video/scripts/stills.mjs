@@ -36,6 +36,13 @@ const PICKS = {
   S20: [200, 300, 400],
   S21: [120, 200, 300],
   S22: [100],
+  // Reels (1080×1920)
+  R1: [0, 60, 150],
+  R2: [20, 120],
+  R3: [120],
+  R4: [100],
+  R5: [60, 130],
+  R6: [140],
 };
 
 const serveUrl = await bundle({ entryPoint: path.join(root, "src/index.ts"), publicDir: path.join(root, "public") });

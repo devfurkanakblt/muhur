@@ -10,7 +10,7 @@ const field =
 
 type Made = { first: string; last: string; src: string; download: string };
 
-export function CertificateMaker() {
+export function CertificateMaker({ slug }: { slug: string }) {
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [made, setMade] = useState<Made | null>(null);
@@ -26,7 +26,7 @@ export function CertificateMaker() {
       return;
     }
     setError(null);
-    const query = new URLSearchParams({ ad: a, soyad: b });
+    const query = new URLSearchParams({ e: slug, ad: a, soyad: b });
     const src = `/api/belge?${query}`;
     if (made?.src === src) return;
     setState("loading");

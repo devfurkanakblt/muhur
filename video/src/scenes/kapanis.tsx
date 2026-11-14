@@ -1,6 +1,7 @@
 import React from "react";
 import { Img, staticFile, useCurrentFrame } from "remotion";
 import { pop } from "../anim";
+import { LogoRow } from "../components/logos";
 import { Qr } from "../components/qr";
 import { Bubble, FadeUp, Kicker, Notice, Scene, Words } from "../components/ui";
 import { config } from "../config";
@@ -83,7 +84,7 @@ export const S22Bitis: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
   return (
     <Scene dur={dur} whoosh={false}>
-      <div style={{ position: "absolute", top: config.sponsors.length ? 200 : 290, width: 1920, display: "flex", justifyContent: "center", alignItems: "center", gap: 90 }}>
+      <div style={{ position: "absolute", top: config.logos.length ? 200 : 290, width: 1920, display: "flex", justifyContent: "center", alignItems: "center", gap: 90 }}>
         <FadeUp at={4} style={{ display: "flex", alignItems: "center", gap: 30 }}>
           <div style={{ position: "relative", width: 230, height: 190 }}>
             <Mascot frame={frame} x={115} y={190} size={230} mood="mutlu" />
@@ -100,18 +101,16 @@ export const S22Bitis: React.FC<{ dur: number }> = ({ dur }) => {
           </span>
         </FadeUp>
       </div>
-      <FadeUp at={34} style={{ position: "absolute", top: config.sponsors.length ? 480 : 600, width: 1920, textAlign: "center", fontFamily: F.mono, fontSize: 32, letterSpacing: "0.12em", color: C.ink3 }}>
+      <FadeUp at={34} style={{ position: "absolute", top: config.logos.length ? 480 : 600, width: 1920, textAlign: "center", fontFamily: F.mono, fontSize: 32, letterSpacing: "0.12em", color: C.ink3 }}>
         {config.event.name.toLocaleUpperCase("tr")} · DÜŞÜN, BAĞLAN, ÜRET.
       </FadeUp>
-      {config.sponsors.length > 0 && (
-        <FadeUp at={44} style={{ position: "absolute", top: 640, width: 1920, display: "grid", justifyItems: "center", gap: 30 }}>
-          <span style={{ fontFamily: F.display, fontSize: 22, letterSpacing: "0.1em", textTransform: "uppercase", color: C.ink3 }}>Destekleyenler</span>
-          <div style={{ display: "flex", gap: 70, alignItems: "center" }}>
-            {config.sponsors.map((s) => (
-              <Img key={s} src={staticFile(`sponsorlar/${s}`)} style={{ height: 110, maxWidth: 320, objectFit: "contain" }} />
-            ))}
-          </div>
-        </FadeUp>
+      {config.logos.length > 0 && (
+        <>
+          <FadeUp at={42} style={{ position: "absolute", top: 640, left: 360, width: 1200, height: 2, background: C.rule }}>
+            {null}
+          </FadeUp>
+          <LogoRow at={46} gap={110} style={{ position: "absolute", top: 720, width: 1920, height: 150 }} />
+        </>
       )}
     </Scene>
   );

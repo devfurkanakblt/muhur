@@ -1,6 +1,7 @@
 import "server-only";
-import { getEvent, getExhibits } from "@/lib/data";
+import { getExhibits, type EventState } from "@/lib/data";
 import { env } from "@/lib/env";
+import { eventUrl } from "@/lib/event-routes";
 import type { Winner } from "@/lib/winner-model";
 import { getWinners } from "@/lib/winners";
 
@@ -18,12 +19,12 @@ export type StageData = {
   /** Jüri ödülleri açıklanma sırasıyla, ardından halkın seçimi. */
   winners: Winner[];
   voting: string;
-  siteUrl: string;
+  /** Etkinlik vitrininin tam adresi; sahnedeki karekod buraya gider. */
+  vitrinUrl: string;
 };
 
 /** Sahne modunun ihtiyaç duyduğu her şey; yalnızca herkese açık bilgiler. */
-export async function getStageData(): Promise<StageData> {
-  const event = await getEvent();
+export async function getStageData(event: EventState): Promise<StageData> {
   const [exhibits, winners] = await Promise.all([getExhibits(event.id), getWinners(event)]);
   const recent = exhibits
     .filter((e) => {
@@ -47,6 +48,6 @@ export async function getStageData(): Promise<StageData> {
     recent,
     winners,
     voting: event.voting,
-    siteUrl: env.siteUrl,
+    vitrinUrl: eventUrl(env.siteUrl, event.slug),
   };
 }

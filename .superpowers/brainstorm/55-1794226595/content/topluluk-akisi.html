@@ -1,0 +1,77 @@
+<h2>Topluluk yolculuğu: 4 ekran</h2>
+<p class="subtitle">Senin anlattığın sıra. Gri notlar benim tahminlerim; yanlışsa terminalden söyle.</p>
+
+<style>
+  .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-top:16px}
+  .scr{background:#eef2f6;color:#0b0d1e;border:1px solid #b9c1cd;border-radius:2px;padding:14px;font-size:13px;min-height:360px;display:flex;flex-direction:column;gap:8px}
+  .scr .bar{display:flex;justify-content:space-between;border-bottom:1px solid #0b0d1e;padding-bottom:6px;font-weight:600}
+  .scr .bar b{color:#4a36cf}
+  .scr h4{margin:4px 0 0;font-size:16px}
+  .scr .f{background:#f8f9fb;border:1px solid #d3d9e2;border-radius:2px;padding:6px 8px;color:#61667d}
+  .scr .btn{background:#4a36cf;color:#fff;border-radius:2px;padding:7px 10px;text-align:center;font-weight:600;margin-top:auto}
+  .scr .chk{color:#44485f}
+  .scr .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#61667d}
+  .scr .pill{display:inline-block;background:#feccd7;border-radius:2px;padding:2px 6px;font-weight:600}
+  .note{font-size:12px;color:#8e94ad;margin-top:6px;line-height:1.4}
+  .step{font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.7;margin-bottom:4px}
+</style>
+
+<div class="flow">
+  <div>
+    <div class="step">1 · Topluluk kaydı</div>
+    <div class="scr">
+      <div class="bar"><span>mühür<b>.</b></span><span>GitHub ile giriş yapıldı</span></div>
+      <h4>Topluluğunu kaydet</h4>
+      <div class="lbl">Topluluk</div>
+      <div class="f">Topluluk adı</div>
+      <div class="f">Üniversite / kurum</div>
+      <div class="f">Instagram / web bağlantısı</div>
+      <div class="lbl">Sorumlu kişi</div>
+      <div class="f">Ad soyad</div>
+      <div class="f">E-posta · telefon</div>
+      <div class="chk">☐ Platform Kullanım Sözleşmesi'ni topluluk adına kabul ediyorum</div>
+      <div class="btn">Başvuruyu gönder</div>
+    </div>
+    <div class="note">Tahmin: Kayıttan önce GitHub ile giriş yapılır (Mühür zaten GitHub hesabıyla çalışıyor). Sözleşme bu adımda, başvuran kişi adına onaylanır.</div>
+  </div>
+
+  <div>
+    <div class="step">2 · Onay bekleniyor</div>
+    <div class="scr">
+      <div class="bar"><span>mühür<b>.</b></span><span>@kullanici</span></div>
+      <h4>Başvurun alındı</h4>
+      <div><span class="pill">İnceleniyor</span></div>
+      <div class="chk">DEÜ CS&AI · 9 Kasım 14:20'de gönderildi</div>
+      <div class="chk">Onaylandığında e-posta ile haber vereceğiz.</div>
+      <div class="f" style="margin-top:12px">Gönderdiğin bilgiler (salt okunur)</div>
+    </div>
+    <div class="note">Tahmin: Onay ya da ret sonucu e-postayla bildirilir. Ret durumunda bir gerekçe gösterilir ve yeniden başvurulabilir.</div>
+  </div>
+
+  <div>
+    <div class="step">3 · Giriş</div>
+    <div class="scr">
+      <div class="bar"><span>mühür<b>.</b></span><span></span></div>
+      <h4>Organizatör girişi</h4>
+      <div class="chk">Topluluğun onaylandı.</div>
+      <div class="btn" style="margin-top:12px">GitHub ile giriş yap</div>
+    </div>
+    <div class="note">Tahmin: Ayrı bir şifre yok, giriş yine GitHub ile. Topluluğun onaylıysa giriş seni doğrudan kendi panosuna götürür.</div>
+  </div>
+
+  <div>
+    <div class="step">4 · Etkinlik oluştur</div>
+    <div class="scr">
+      <div class="bar"><span>mühür<b>.</b></span><span>DEÜ CS&AI</span></div>
+      <h4>Yeni hackathon</h4>
+      <div class="f">Etkinlik adı</div>
+      <div class="f">Adres: muhur.app/e/<b>ekozeka-2027</b></div>
+      <div class="f">Başlangıç · tarih saat</div>
+      <div class="f">Son teslim · tarih saat</div>
+      <div class="f">Başvuru formu bağlantısı (kendi formunuz)</div>
+      <div class="f">Kurallar / aydınlatma metni bağlantısı</div>
+      <div class="btn">Etkinliği yayınla</div>
+    </div>
+    <div class="note">Tahmin: Senin kararınla etkinlik onay beklemeden doğrudan yayına girer. Logo, renk gibi marka ayarları sonraki aşamaya kalır.</div>
+  </div>
+</div>

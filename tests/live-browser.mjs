@@ -5,7 +5,7 @@ import { openBrowser } from "./browser-driver.mjs";
 const browser = await openBrowser();
 try {
   await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
-  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/yonetim" });
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/e/ornek-etkinlik/yonetim" });
   await browser.waitFor("document.querySelector('#announcement') && document.querySelector('#starts')");
   // Wait for the client live monitor to run, then modify two distinct forms.
   await browser.waitFor("performance.getEntriesByType('resource').some(e => e.name.includes('/api/durum'))");
@@ -52,7 +52,7 @@ try {
   console.log("PASS: Server Action hata yanıtı formu sıfırlamaz");
   // Slow the action transport, then submit three times in the same JavaScript turn.
   await fetch("http://127.0.0.1:54330/fixture/state?mode=voting");
-  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/yonetim" });
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/e/ornek-etkinlik/yonetim" });
   await browser.waitFor("document.querySelector('input[name=state][value=sonuclandi]') && performance.getEntriesByType('resource').some(e=>e.name.includes('/api/durum'))");
   await browser.evaluate(`(() => {
     window.actionPosts = 0; window.originalFetch = window.fetch;
@@ -80,7 +80,7 @@ try {
   // Halkın seçimi: oy geri alınmadan başka esere taşınır, sonra eski esere döner. Sayfa yenilenmeden her düğme
   // gösterdiği işi yapmalı; "Oy ver" yazan düğme mevcut oyu silmemeli.
   await fetch("http://127.0.0.1:54330/fixture/state?mode=voting");
-  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/" });
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/e/ornek-etkinlik" });
   const button = no => `document.querySelector('input[name=projectId][value="30000000-0000-0000-0000-00000000000${no}"]').form.querySelector('button')`;
   const voted = no => `${button(no)}.getAttribute('aria-pressed') === 'true' && !${button(no)}.disabled`;
   const notVoted = no => `${button(no)}.getAttribute('aria-pressed') === 'false' && !${button(no)}.disabled`;
@@ -100,7 +100,7 @@ try {
   console.log("PASS: Oyu geri alıp yeniden vermek, sayfa yenilendikten sonra da aynı görünür");
   // Kazanan duyurusu: yönetimden eklenen ödül vitrinde büyük görünür; sahne açıkken eklenen ödül tören ile açılır.
   await fetch("http://127.0.0.1:54330/fixture/state?mode=sealed");
-  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/yonetim" });
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/e/ornek-etkinlik/yonetim" });
   await browser.waitFor("document.querySelector('#award-title') && performance.getEntriesByType('resource').some(e => e.name.includes('/api/durum'))");
   await browser.evaluate(`(() => {
     const set = (el, value) => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -110,12 +110,12 @@ try {
     document.querySelector('#award-title').form.requestSubmit();
   })()`);
   await browser.waitFor("document.body.innerText.includes('Ödül açıklandı')");
-  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/" });
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/e/ornek-etkinlik" });
   await browser.waitFor("document.querySelector('#kazananlar') && document.querySelector('#kazananlar').innerText.includes('Birincilik') && document.querySelector('#kazananlar').innerText.includes('mehmet-k')");
   console.log("PASS: Yönetimden açıklanan ödül vitrinin başında eser, ekip ve gerekçesiyle görünür");
   const live = "document.querySelector('section[aria-label=Kazananlar] [aria-live]')";
   const current = "document.querySelector('section[aria-label=Kazananlar] [aria-current=true]')";
-  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/sahne" });
+  await browser.send("Page.navigate", { url: "http://127.0.0.1:3100/e/ornek-etkinlik/sahne" });
   await browser.waitFor(`${current} && ${live}.textContent === '' && performance.getEntriesByType('resource').some(e => e.name.includes('/api/sahne'))`);
   console.log("PASS: Sahne açılışında var olan kazananlar törensiz gösterilir");
   await fetch("http://127.0.0.1:54330/rest/v1/rpc/admin_add_award", { method: "POST", body: JSON.stringify({

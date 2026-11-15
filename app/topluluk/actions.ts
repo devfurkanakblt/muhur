@@ -9,6 +9,7 @@ import { newInviteToken, inviteHash } from "@/lib/role-invites";
 import { encryptMailSecret } from "@/lib/mail/secrets";
 import { githubIdentity } from "@/lib/identity";
 import { env } from "@/lib/env";
+import { checked, documentIds, safeConsentNext } from "@/lib/policies";
 export type CommunityActionState = { ok?: boolean; error?: string; link?: string; notice?: string } | undefined;
 const text = (f: FormData, key: string) => String(f.get(key) ?? "").trim();
 const FRESH = "Bu işlem için GitHub ile yeniden giriş yap; oturumun son 12 saat içinde açılmış olmalı.";
@@ -46,7 +47,12 @@ export async function acceptRoleInvite(_previous: CommunityActionState, form: Fo
   const viewer = await getViewer(); if (!viewer) return { error: "Daveti kabul etmek için giriş yap." };
   const token = text(form, "token"), hash = inviteHash(token); if (!hash) return { error: "Davet geçersiz veya süresi dolmuş." };
   const invitation = await getRoleInvite(token); if (!invitation) return { error: "Davet geçersiz veya kullanılmış." };
-  const result = await createAdminClient().rpc("accept_role_invite", { p_actor: viewer.id, p_login: viewer.login, p_provider: viewer.provider, p_token_hash: hash });
+  // Organizatör daveti: rol ve topluluk adına belge kabulü aynı transaction'da (0017). Belgeler gösterildiyse ikisi de işaretlenmeli.
+  const shown = form.getAll("policy_document");
+  if (shown.length && !shown.every((_, i) => checked(form, `accept_policy_${i}`))) return { error: "Her belgeyi ayrı ayrı onaylamalısın." };
+  const ids = shown.length ? documentIds(shown) : [];
+  if (ids === null) return { error: "Belge bilgisi değişmiş. Sayfayı yenile." };
+  const result = await createAdminClient().rpc("accept_role_invite_with_policies", { p_actor: viewer.id, p_login: viewer.login, p_provider: viewer.provider, p_token_hash: hash, p_document_ids: ids });
   if (result.error) return { error: communityError(result.error) };
   refresh(); redirect(invitation.kind === "juri" ? `/e/${invitation.slug}/juri` : `/topluluk/${invitation.slug}`);
 }
@@ -80,4 +86,22 @@ export async function retryCommunityMail(_previous: CommunityActionState, form: 
   const viewer = await manager(); if (!viewer) return { error: FRESH }; const id = text(form, "job"); if (!UUID.test(id)) return { error: "Geçersiz e-posta işi." };
   const result = await createAdminClient().rpc("retry_mail_job", { p_actor: viewer.id, p_login: viewer.login, p_job: id, p_confirm_uncertain: form.get("confirm") === "on" });
   if (result.error) return { error: communityError(result.error) }; refresh(); return { ok: true };
+}
+
+/**
+ * Sahip/organizatör güncel platform belgelerini topluluk adına onaylar. Kimlikler yalnız gösterilen sürümü
+ * bildirir; DB güncel setle karşılaştırır, form açıkken yeni sürüm yayınlandıysa reddeder (eski onay taşınmaz).
+ */
+export async function acceptManagementPolicies(_previous: CommunityActionState, form: FormData): Promise<CommunityActionState> {
+  const viewer = await getGithubViewer(); if (!viewer) return { error: "Onay için GitHub ile giriş yap." };
+  const community = text(form, "community"); if (!UUID.test(community)) return { error: "Geçersiz topluluk." };
+  const shown = form.getAll("policy_document");
+  if (!shown.length || !shown.every((_, i) => checked(form, `accept_policy_${i}`))) return { error: "Her belgeyi ayrı ayrı onaylamalısın." };
+  const ids = documentIds(shown); if (!ids) return { error: "Belge bilgisi değişmiş. Sayfayı yenile." };
+  const db = createAdminClient();
+  const scope = await db.from("communities").select("slug").eq("id", community).maybeSingle();
+  if (scope.error || !scope.data) return { error: "Topluluk bulunamadı." };
+  const result = await db.rpc("accept_management_policies", { p_actor: viewer.id, p_login: viewer.login, p_community: community, p_document_ids: ids });
+  if (result.error) return { error: communityError(result.error) };
+  refresh(); redirect(safeConsentNext(text(form, "next"), `/topluluk/${scope.data.slug}`));
 }

@@ -52,3 +52,13 @@ test("denialMessage: yalnızca askı yüzünden reddedilince askı mesajı", () 
   assert.equal(denialMessage(null, "incele"), "Yetkisiz");
   assert.equal(denialMessage({ ...none, communityRole: "owner", eventSuspended: true }, "askiya-al"), "Yetkisiz");
 });
+
+test("yonet: güncel onay eksikse reddedilir ve neyin eksik olduğu söylenir", async () => {
+  const { ONAY_MESAJI } = await import("../lib/authz.ts");
+  const pending = { ...none, communityRole: "owner", policyPending: true };
+  assert.equal(can(pending, "yonet"), false);
+  assert.equal(denialMessage(pending, "yonet"), ONAY_MESAJI);
+  assert.equal(can(pending, "incele"), true, "salt okuma açık kalır");
+  assert.equal(denialMessage({ ...none, policyPending: true }, "yonet"), YETKISIZ_MESAJI, "rolü olmayana onay mesajı gösterilmez");
+  assert.equal(denialMessage({ ...pending, eventSuspended: true }, "yonet"), YETKISIZ_MESAJI);
+});

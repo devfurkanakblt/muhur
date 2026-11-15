@@ -55,3 +55,7 @@ Plan 3 uygulama kaydı ve test kanıtları ilgili plan dosyasında tamamlandı; 
 ## Güncel yerel durum
 
 `feat/topluluk-basvuru`: plan belgeleri `f27573a`, uygulama/testler `cbde216`. Plan 3'ün 101 test, üretim derlemesi, SQL/rol yarışları, HTTP ve tarayıcı kontrolleri geçti. Genel başvuru kapalı. Gerçek Supabase migration geçmişi, Plan 2 yayını ve Brevo/LinkedIn dış servis provası canlı yayın önkoşulu olarak durur. Bu tur uzak depoya gönderim veya canlı veri yazımı yapılmadı.
+
+## Plan 4 yerel durumu (15 Kasım 2026)
+
+`feat/sozlesme-surumleri`: 0017/0018, uygulama, birim/rota testleri yazıldı; `npm run check` ve `next build` geçti. SQL ve iki bağlantılı yarış testleri yazıldı ancak bu makinede PostgreSQL bulunmadığı için çalıştırılmadı. Commit, uzak aktarım ve canlı migration yapılmadı. Ayrıntı Plan 4 dosyasının uygulama kaydında.

@@ -63,6 +63,7 @@ export default async function ManagementHub() {
         <nav aria-label="Topluluk yönetimi" className="flex flex-wrap gap-6">
           <Link className="underline underline-offset-4" href="/topluluk">Topluluklarım</Link>
           {headAdmin && <Link className="underline underline-offset-4" href="/yonetim/topluluklar">Topluluk başvurularını incele</Link>}
+          {headAdmin && <Link className="underline underline-offset-4" href="/yonetim/belgeler">Platform belgelerini yönet</Link>}
         </nav>
 
         <Section

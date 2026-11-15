@@ -21,7 +21,11 @@ const secondProjectId = "30000000-0000-0000-0000-000000000004";
 // "yabanci": başka (henüz onay bekleyen) bir topluluğun organizatörü (bu etkinlikte yetkisi yok, yönetim merkezi de boş);
 // "komsu": başka (onaylı) bir topluluğun organizatörü; merkezde yalnızca kendi topluluğunu görür.
 let role = "yonetici";
-const policyDocs = ["platform","data_processing"].map((kind,i)=>({id:`50000000-0000-0000-0000-00000000000${i+1}`,kind,version:"test-1",content:"Yalnız yerel test belgesi. Hukuki metin değildir.",content_sha256:"a".repeat(64),status:"published"}));
+const policyDocs = ["platform","data_processing"].map((kind,i)=>({id:`50000000-0000-0000-0000-00000000000${i+1}`,kind,version:"test-1",content:"Yalnız yerel test belgesi. Hukuki metin değildir.",content_sha256:"a".repeat(64),status:"published",published_at:stamp(-86400000),created_at:stamp(-90000000)}));
+// Plan 4: katılımcı belgesi ve etkinlik kuralı. ?onay=eksik: yönetici güncel belgeleri onaylamamış (zorunluluk açık).
+const participantDoc = {id:"50000000-0000-0000-0000-000000000003",kind:"participant",version:"test-1",content:"Yalnız yerel test belgesi. Hukuki metin değildir.",content_sha256:"c".repeat(64),status:"published",published_at:stamp(-86400000),created_at:stamp(-90000000)};
+const fixtureTerms = {id:"51000000-0000-0000-0000-000000000001",event_id:eventId,version:1,rules_url:"https://example.com/kurallar",privacy_url:"https://example.com/aydinlatma",content_sha256:null};
+let consentMissing = false;
 const contact = {university:"Örnek Üniversite",city:"İzmir",link:null,contact_name:"Örnek Sorumlu",contact_email:"private-applicant@example.test",contact_phone:"+905551234567",created_at:stamp(-86400000),reviewed_at:null,review_reason:null,suspended_reason:null};
 const hashToken = token => createHash("sha256").update(token).digest("hex");
 // Denetim kayıtları (log_admin RPC) bellekte tutulur; /fixture/audit okur. ?denetim=hata ile yazma başarısız olur.
@@ -86,7 +90,7 @@ function records(table) {
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
       community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
-      community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+      community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", current_terms_version_id: fixtureTerms.id, terms: fixtureTerms, announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     communities: [
       { ...contact, applicant_id: "00000000-0000-0000-0000-000000000098", id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", city: "İzmir", status: "onaylandi", telegram_enabled: false },
       otherCommunity(),
@@ -99,8 +103,11 @@ function records(table) {
       : role === "yabanci" || role === "komsu"
         ? [{ community_id: otherCommunityId, user_id: userId, github_login: "preview-admin", role: "organizator", community: (({ id, slug, name, status }) => ({ id, slug, name, status }))(otherCommunity()) }] : [],
     event_jurors: ["juri","linkedin"].includes(role) ? [{ event_id: eventId, user_id: userId, login: role === "linkedin" ? "LinkedIn Jürisi" : "preview-admin",provider:role === "linkedin" ? "linkedin" : "github" }] : [],
-    policy_documents:policyDocs,
-    policy_requirements:policyDocs.map(document=>({kind:document.kind,document})),
+    policy_documents:[...policyDocs,participantDoc],
+    policy_requirements:[...policyDocs,participantDoc].map(document=>({kind:document.kind,document_id:document.id,document})),
+    event_terms_versions:[fixtureTerms],
+    // Fikstür kullanıcısı etkinliklere önceden kaydolmuştur: mevcut panel akışları yeniden onay istemez.
+    participant_enrollments:[eventId,secondEventId].map(event_id=>({user_id:userId,event_id,source:"accepted",created_at:stamp(-3600_000)})),
     role_invites:["a","b","c","d"].map((char,i)=>({id:`60000000-0000-0000-0000-00000000000${i+1}`,token_hash:hashToken(char.repeat(43)),kind:i===3?"organizator":"juri",community_id:i===3?communityId:null,event_id:i===3?null:eventId,recipient_email:"invite-private@example.test",created_at:stamp(-1000),expires_at:stamp(i===2?-1000:86400000),revoked_at:i===1?stamp(-500):null,accepted_at:null})),
     mail_outbox:[{id:"70000000-0000-0000-0000-000000000001",community_id:communityId,kind:"application_approved",recipient_email:contact.contact_email,state:"uncertain",delivery_state:"unknown",last_error:"Brevo gönderimi doğrulanamadı; sağlayıcı kaydını kontrol et.",created_at:stamp(-1000)}],
     projects,
@@ -151,6 +158,7 @@ const server = createServer(async (request, response) => {
     suspended = url.searchParams.get("askida") === "1";
     multiEvent = url.searchParams.get("coklu") === "1";
     auditFails = url.searchParams.get("denetim") === "hata";
+    consentMissing = url.searchParams.get("onay") === "eksik";
     audits = [];
     hunters = [];
     votes = sealedVotes();
@@ -189,6 +197,9 @@ const server = createServer(async (request, response) => {
   }
   // Browser UI tests can reach a normal action error without a real database lease.
   if (url.pathname === "/rest/v1/rpc/try_worker_lease") return response.end("true");
+  if (url.pathname === "/rest/v1/rpc/policy_enforcement_enabled") return response.end("true");
+  if (url.pathname === "/rest/v1/rpc/management_policy_documents") return response.end(JSON.stringify(policyDocs.map(({ id, kind, version }) => ({ id, kind, version }))));
+  if (url.pathname === "/rest/v1/rpc/missing_management_policies") return response.end(JSON.stringify(consentMissing ? policyDocs.map(({ id, kind, version }) => ({ id, kind, version })) : []));
   // Oy toplamları DB'de sayılır (vote_tallies RPC); fikstür aynı sonucu örnek oylardan üretir.
   if (url.pathname === "/rest/v1/rpc/vote_tallies") {
     const tallies = {};

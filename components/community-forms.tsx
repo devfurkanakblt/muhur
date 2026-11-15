@@ -5,6 +5,7 @@ import { useProtectedForm } from "@/components/protected-form";
 import { buttonStyles } from "@/components/button-styles";
 import { acceptRoleInvite, changeCommunityRole, createRoleInvite, retryCommunityMail, reviewApplication, submitApplication, type CommunityActionState } from "@/app/topluluk/actions";
 import type { CommunityMember, PolicyDocument } from "@/lib/community";
+import { PolicyCheckboxes, type ConsentDocument } from "@/components/policy-consent-form";
 const input = "min-h-12 w-full rounded-[2px] border border-rule-strong bg-plinth px-3 py-2 text-base text-ink focus:border-ink focus:outline-none";
 function Result({ state, success = "İşlem tamamlandı." }: { state: CommunityActionState; success?: string }) {
   return state?.error ? <p role="alert" className="text-[0.9375rem] text-danger">{state.error}</p> : state?.ok ? <p role="status" className="text-[0.9375rem] text-ink-2">{state.notice ?? success}</p> : null;
@@ -59,9 +60,12 @@ export function RoleInviteForm({ kind, scope, requestId }: { kind: "juri" | "org
     {state?.link && <Field id={`invite-link-${scope}`} label="Davet bağlantısı (yalnızca şimdi gösterilir)"><input readOnly value={state.link} id={`invite-link-${scope}`} className={input} onFocus={e => e.currentTarget.select()} /></Field>}
   </form>;
 }
-export function AcceptRoleInviteForm({ token }: { token: string }) {
+/** Organizatör davetinde rol, topluluk adına belge kabulüyle aynı işlemde kurulur (`documents` boşsa belge yok). */
+export function AcceptRoleInviteForm({ token, documents = [] }: { token: string; documents?: ConsentDocument[] }) {
   const [state, action, pending] = useActionState(acceptRoleInvite, undefined); const protectedForm = useProtectedForm(action, state, pending);
-  return <form {...protectedForm} className="grid justify-items-start gap-4" aria-busy={pending}><input type="hidden" name="token" value={token} /><Submit pending={pending}>Daveti kabul et</Submit><Result state={state} /></form>;
+  return <form {...protectedForm} className="grid justify-items-start gap-6" aria-busy={pending}><input type="hidden" name="token" value={token} />
+    {documents.length > 0 && <PolicyCheckboxes documents={documents} disabled={pending} intro="Organizatör olarak topluluk adına güncel belgeleri ayrı ayrı onayla" />}
+    <div className="flex flex-wrap items-center gap-4"><Submit pending={pending}>Daveti kabul et</Submit><Result state={state} /></div></form>;
 }
 export function CommunityRoleForm({ scope, operation, members = [], target, label }: { scope: string; operation: "remove" | "transfer" | "recover" | "suspend" | "unsuspend" | "revoke" | "remove-juror"; members?: CommunityMember[]; target?: string; label: string }) {
   const [state, action, pending] = useActionState(changeCommunityRole, undefined); const protectedForm = useProtectedForm(action, state, pending); const id = `${operation}-${scope}-${target ?? "choice"}`;

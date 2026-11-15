@@ -22,6 +22,7 @@ import { safeAuthNext } from "@/lib/auth-redirect";
 import { claimOnce, releaseOnce, requestKey } from "@/lib/once";
 import { isMysteryAnswer, mysteryOpen } from "@/lib/mystery";
 import { announceAward, announcePeoplesChoice } from "@/lib/winners";
+import { checked, consentError } from "@/lib/policies";
 
 /** notice: hata olmayan bilgi (ör. "bu commit zaten kabul edilmiş"); nötr gösterilir. */
 export type FormState = { error?: string; ok?: boolean; status?: string; notice?: string } | undefined;
@@ -29,6 +30,9 @@ export type FormState = { error?: string; ok?: boolean; status?: string; notice?
 const LOCKED_MSG = "Teslim süresi doldu. Sistem kilitli, değişiklik kabul edilmiyor.";
 
 function dbError(message: string) {
+  // Sözleşme önekleri (0017): kullanıcı hangi belgeyi onaylaması gerektiğini görür.
+  const consent = consentError(message);
+  if (consent) return consent;
   // Yetki ve askı önekleri (0012_topluluklar): asıl zorlama DB'dedir, uygulama Türkçe mesaja çevirir.
   if (message.includes("ASKIDA:")) return ASKIDA_MESAJI;
   if (message.includes("YARISAMAZ:")) return YARISAMAZ_MESAJI;
@@ -108,6 +112,24 @@ function readFields(formData: FormData): Fields | string {
   } catch (e) { return e instanceof Error ? e.message : "Demo bağlantısı geçersiz."; }
 }
 
+/**
+ * Etkinliğe ilk kayıtta iki ayrı onay (katılımcı koşulları + etkinlik kuralları). Form onay alanlarını
+ * gösterdiyse ikisi de açıkça işaretlenmelidir; belge kimliklerinin formda bulunması onay sayılmaz.
+ * Kimlikler yalnız "hangi sürüm gösterildi" bilgisidir: DB güncel sürümle karşılaştırır, eskiyse reddeder.
+ * Daha önce kaydı olan kişide alanlar yoktur; DB mevcut enrollment'ı kullanır.
+ */
+type Consent = { document: string | null; terms: string | null };
+function readConsent(formData: FormData): Consent | string {
+  const document = String(formData.get("participant_document") ?? "");
+  const terms = String(formData.get("event_terms_version") ?? "");
+  if (!document && !terms) return { document: null, terms: null };
+  if (!UUID_RE.test(document) || !UUID_RE.test(terms)) return "Koşul bilgisi değişmiş. Sayfayı yenileyip tekrar dene.";
+  if (!checked(formData, "accept_participant") || !checked(formData, "accept_event_terms")) {
+    return "Katılımcı koşullarını ve etkinlik kurallarını ayrı ayrı onaylamalısın.";
+  }
+  return { document, terms };
+}
+
 /** Logo tarayıcıda da denetlenir; burada tarayıcı atlatılsa bile görsel çözülüp yeniden kodlanır. */
 async function readLogo(formData: FormData, required: boolean): Promise<NormalizedLogo | null | string> {
   const file = formData.get("logo");
@@ -144,6 +166,8 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
   if (!fullName) return { error: "Geçerli bir GitHub reposu seç." };
   const fields = readFields(formData);
   if (typeof fields === "string") return { error: fields };
+  const consent = readConsent(formData);
+  if (typeof consent === "string") return { error: consent };
   const logo = await readLogo(formData, true);
   if (typeof logo === "string") return { error: logo };
 
@@ -165,11 +189,12 @@ export async function createProject(_: FormState, formData: FormData): Promise<F
   const db = createAdminClient();
   let sha: string | null;
   try { sha = await getHeadSha(repo); } catch { return { error: "GitHub'a ulaşılamadı. Tekrar dene." }; }
-  const { data, error } = await db.rpc("register_project", {
+  // Kabul, enrollment, proje ve ilk teslim işi tek transaction'da oluşur (0017).
+  const { data, error } = await db.rpc("register_project_with_terms", {
     p_event: event.id, p_user: viewer.id, p_login: viewer.login, p_avatar: viewer.avatarUrl,
     p_name: fields.name, p_team: fields.team, p_summary: fields.summary, p_repo_id: repo.id,
     p_repo_name: repo.full_name, p_repo_url: repo.html_url, p_branch: repo.default_branch,
-    p_demo: fields.demo, p_sha: sha,
+    p_demo: fields.demo, p_sha: sha, p_document: consent.document, p_terms_version: consent.terms,
   }).single();
   const project = data as { id: string; event_id: string; exhibit_no: number; name: string; team_name: string; repo_id: number; repo_full_name: string; frozen_sha: string | null } | null;
   if (error || !project) return { error: dbError(error?.message ?? "") };
@@ -368,9 +393,12 @@ export async function joinProject(_: FormState, formData: FormData): Promise<For
   const { data: invited } = await db.from("projects").select("event_id").eq("invite_code", code).maybeSingle();
   if (invited?.event_id !== event.id) return { error: "Davet bağlantısı geçersiz ya da yenilenmiş." };
   if (await getOwnProject(viewer.id, event.id)) return { error: "Zaten bir projenin ekibindesin." };
-  // Kod, etkinlik kilidi ve üyelik aynı kilit altında denetlenir; yenilenen kod bekleyen katılımı da durdurur.
-  const { error } = await db.rpc("join_project_by_code", {
-    p_code: code, p_user: viewer.id, p_login: viewer.login, p_avatar: viewer.avatarUrl,
+  const consent = readConsent(formData);
+  if (typeof consent === "string") return { error: consent };
+  // Kod, etkinlik kilidi, üyelik ve ilk kayıt onayı aynı kilit ve transaction altında denetlenir.
+  const { error } = await db.rpc("join_project_with_terms", {
+    p_code: code, p_actor: viewer.id, p_login: viewer.login, p_avatar: viewer.avatarUrl,
+    p_document: consent.document, p_terms_version: consent.terms,
   });
   if (error) return { error: dbError(error.message) };
   revalidatePath(eventPath(event.slug, "panel"));
@@ -682,6 +710,33 @@ export async function createEvent(_: FormState, formData: FormData): Promise<For
   }
   revalidatePath("/yonetim");
   revalidatePath("/");
+  return { ok: true };
+}
+
+/**
+ * Etkinlik kuralları ve aydınlatma metni: her değişiklik yeni, değişmez bir sürümdür. İlk sürüm kilitten önce
+ * her zaman kurulabilir; var olan sürüm başlangıçtan ya da ilk katılımcı kaydından sonra değiştirilemez (DB).
+ * Harici sayfalar sunucudan indirilmez; içerik özeti yalnız topluluk sabit metnin SHA-256'sını verdiyse kaydedilir.
+ */
+export async function setEventTerms(_: FormState, formData: FormData): Promise<FormState> {
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
+  const admin = await requireFreshManager(event);
+  if (typeof admin === "string") return { error: admin };
+  const expected = String(formData.get("expected") ?? "");
+  if (expected && !UUID_RE.test(expected)) return { error: "Kural bilgisi değişmiş. Sayfayı yenile." };
+  let rulesUrl, privacyUrl;
+  try { rulesUrl = httpsLink(formData.get("rules_url")); privacyUrl = httpsLink(formData.get("privacy_url")); }
+  catch { return { error: "Kurallar ve aydınlatma metni geçerli HTTPS adresleri olmalı." }; }
+  if (!rulesUrl || !privacyUrl) return { error: "Kurallar ve aydınlatma metni bağlantılarının ikisi de gerekli." };
+  const sha = String(formData.get("content_sha256") ?? "").trim().toLowerCase();
+  if (sha && !/^[a-f0-9]{64}$/.test(sha)) return { error: "İçerik özeti 64 karakterlik SHA-256 olmalı (isteğe bağlı)." };
+  const { error } = await createAdminClient().rpc("set_event_terms", {
+    p_actor: admin.id, p_login: admin.login, p_event: event.id, p_expected_version: expected || null,
+    p_rules_url: rulesUrl, p_privacy_url: privacyUrl, p_content_sha256: sha || null,
+  });
+  if (error) return { error: dbError(error.message) };
+  revalidateEvent(event);
   return { ok: true };
 }
 

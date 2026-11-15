@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getViewer, type EventState, type Viewer } from "@/lib/data";
+import { getManagementConsent } from "@/lib/policy-data";
 import { can, denialMessage, type CommunityRole, type EventAccess, type EventAction } from "@/lib/authz";
 
 /**
@@ -24,13 +25,17 @@ export const getEventAccess = cache(async (viewer: Viewer | null, event: EventSt
     throw new Error("Yetki bilgisi okunamadı. Lütfen biraz sonra tekrar dene.");
   }
   const role = membership.data?.role;
+  const communityRole = role === "owner" || role === "organizator" ? (role as CommunityRole) : null;
+  // Onay durumu yalnız rolü olan için okunur; DB her yönetim yazmasında aynı kuralı ayrıca uygular.
+  const policyPending = communityRole && event.communityId ? (await getManagementConsent(viewer.id, event.communityId)).blocking : false;
   return {
     headAdmin: viewer.isHeadAdmin,
-    communityRole: role === "owner" || role === "organizator" ? (role as CommunityRole) : null,
+    communityRole,
     juror: !!juror.data,
     eventSuspended: event.suspended,
     communitySuspended: event.communityStatus === "askida",
     locked: event.locked,
+    policyPending,
   };
 });
 

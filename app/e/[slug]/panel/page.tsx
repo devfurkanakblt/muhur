@@ -24,6 +24,7 @@ import { eventPath } from "@/lib/event-routes";
 import { askiBilgisi, gorunenEtkinlik, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
+import { consentPlan, getParticipantTerms } from "@/lib/policy-data";
 import { leaveProject, recheckHealth, removeMember, renewInvite, signOut } from "@/app/actions";
 
 export const maxDuration = 300;
@@ -139,6 +140,8 @@ export default async function PanelPage({ params: route, searchParams }: PagePro
         : "GitHub'a şu an ulaşılamadı; repo kontrol edilemedi. Biraz sonra tekrar dene.";
     }
     if (!repoError) {
+      // Etkinliğe ilk kayıtta iki ayrı onay; belge/kural eksikse form yerine açık yapılandırma mesajı.
+      const plan = consentPlan(await getParticipantTerms(viewer.id, event.id));
       return (
         <Shell viewer={viewer} event={event} notice={notice}>
           <Link href={eventPath(event.slug, "panel")} className="mb-8 inline-flex items-center gap-1.5 text-[0.9375rem] text-ink-2 hover:text-ink">
@@ -147,13 +150,18 @@ export default async function PanelPage({ params: route, searchParams }: PagePro
           <PageTitle note={<>Seçilen repo: <span className="font-mono text-[0.9375rem] text-ink">{repoName}</span></>}>
             Eserini tanıt.
           </PageTitle>
-          <ProjectForm
-            eventId={event.id}
-            mode="create"
-            suspended={event.suspended}
-            repo={repoName}
-            initial={{ name: repoName.split("/")[1].replace(/[-_]/g, " "), team: "", summary: "", logo: null }}
-          />
+          {plan.state === "unavailable" ? (
+            <p role="status" className="max-w-[60ch] leading-relaxed text-ink-2">{plan.message}</p>
+          ) : (
+            <ProjectForm
+              eventId={event.id}
+              mode="create"
+              suspended={event.suspended}
+              repo={repoName}
+              consent={plan.state === "ready" ? plan.consent : null}
+              initial={{ name: repoName.split("/")[1].replace(/[-_]/g, " "), team: "", summary: "", logo: null }}
+            />
+          )}
         </Shell>
       );
     }

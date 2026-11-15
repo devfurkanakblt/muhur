@@ -10,12 +10,15 @@ export type EventAccess = {
   eventSuspended: boolean;
   communitySuspended: boolean;
   locked: boolean;
+  /** Rol var ama güncel yönetim belgeleri onaylanmamış (zorunluluk açıkken). Rol bilgisi başkasına açılmaz. */
+  policyPending?: boolean;
 };
 
 export type EventAction = "yonet" | "isletim" | "incele" | "juri-paketi" | "askiya-al" | "anonimlestir";
 
 export const YETKISIZ_MESAJI = "Yetkisiz";
 export const ASKIDA_MESAJI = "Bu etkinlik platform tarafından geçici olarak durduruldu.";
+export const ONAY_MESAJI = "Yönetim işlemleri için güncel platform belgelerini topluluk adına onaylaman gerekiyor.";
 export const YARISAMAZ_MESAJI = "Bu etkinlikte organizatör ya da jürisin; yarışmaya katılamazsın.";
 
 export function can(access: EventAccess | null, action: EventAction): boolean {
@@ -24,7 +27,7 @@ export function can(access: EventAccess | null, action: EventAction): boolean {
   const incele = access.headAdmin || rolVar;
   switch (action) {
     case "yonet":
-      return rolVar && !access.eventSuspended && !access.communitySuspended;
+      return rolVar && !access.eventSuspended && !access.communitySuspended && !access.policyPending;
     case "isletim":
     case "incele":
       return incele;
@@ -42,5 +45,7 @@ export function denialMessage(access: EventAccess | null, action: EventAction): 
   if (access.eventSuspended || access.communitySuspended) {
     if (can({ ...access, eventSuspended: false, communitySuspended: false }, action)) return ASKIDA_MESAJI;
   }
+  // Rolü olan ama güncel belgeyi onaylamamış kişiye Yetkisiz yerine neyin eksik olduğu söylenir.
+  if (access.policyPending && can({ ...access, policyPending: false }, action)) return ONAY_MESAJI;
   return YETKISIZ_MESAJI;
 }

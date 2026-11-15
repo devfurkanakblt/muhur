@@ -1,6 +1,6 @@
 # Çoklu topluluk · Plan 4: Sözleşme sürümleri ve yeniden onay
 
-Tarih: 13 Kasım 2026 · Durum: uygulanacak plan; kodlanmadı.
+Tarih: 13 Kasım 2026 · Durum: 15 Kasım 2026'da yerelde kodlandı (`feat/sozlesme-surumleri`, commit'lenmedi); DB testleri bu makinede çalıştırılamadı — aşağıdaki uygulama kaydına bak.
 
 **Amaç:** kimin, hangi belgeyi, hangi sürümde, hangi topluluk/etkinlik için, ne zaman kabul ettiğinin değişmez kaydı; yönetici belgeleri yenilendiğinde yeniden onay; katılımcının etkinliğe ilk katılımında ayrı platform ve etkinlik kural onayı.
 
@@ -103,3 +103,21 @@ Plan 3 kullanıcı/scope kilit sırası korunur. Belge işaretçisi `FOR SHARE` 
 ## Bitiş ölçütü
 
 Eksik güncel yönetici onayı DB'de yazmayı reddeder; arşiv işçisi çalışır. Katılımcının ilk etkinlik onayları kaydıyla birlikte atomiktir; yeni belge mevcut teslimi engellemez. Eski metin/kanıt değişmez ve kişinin kendi geçmişi okunur. Yeni topluluğun başvuru ve yönetiminde Plan 3 ile aynı kabul kayıtları kullanılır.
+
+## Uygulama kaydı (15 Kasım 2026)
+
+Dal: `feat/sozlesme-surumleri` (main `126924f` üzerinden). Değişiklikler commit'lenmedi; uzak aktarım ve canlı migration yapılmadı.
+
+**Migration'lar**
+- `0017_sozlesme_uygulama.sql` (additive): `policy_enforcement_enabled()=false`; belge taslak/yayın (`create_policy_draft`, `publish_policy_document`, taslaktan yayına yalnız RPC içinden), emekli sürümün geri yayınlanamaması; `policy_requirements.activated_at`; kabul türü↔kapsam eşlemesi; `event_terms_versions` + `events.current_terms_version_id` (kendi etkinliğine bileşik FK, işaretçi trigger'ı), `event_terms_acceptances`, `participant_enrollments` (accepted/legacy, ekleme-only); mevcut üyelikler `legacy` işaretlenir, zorunluluk kapalıyken eski girişlerden gelen yeni üyelikler de trigger ile `legacy` olur; `missing_management_policies`, `assert_management_policies` (rol/askı denetiminden sonra), `accept_management_policies`, `accept_role_invite_with_policies`; `require_community_manager`, `require_event_manager`, `admin_create_event` kapıya bağlandı; `set_event_terms`; `register_project_with_terms`, `join_project_with_terms`; `anonymize_user` kişi↔özne eşlemesini ayırır.
+- `0018_sozlesme_zorunlulugu.sql` (aktivasyon): üç belge türü yayınlanmadıysa durur; zorunluluğu açar; `register_project`, `join_project_by_code`, `accept_role_invite` servis rolüne kapanır. **Yalnız yeni uygulama yayındayken ve gerçek metinler yayınlandıktan sonra.**
+
+**Uygulama**: `lib/policies.ts`, `lib/policy-hash.ts`, `lib/policy-data.ts`; `EventAccess.policyPending` + `ONAY_MESAJI`; kayıt/katılım eylemleri yeni RPC'lerde ve iki ayrı checkbox'la; `/topluluk/[slug]/onay`, `/hesabim/onaylar`, `/yonetim/belgeler` (+ taslak önizleme), `/kosullar/...` emekli sürüm notu; etkinlik yönetiminde kural formu ve onay uyarısı; organizatör davetinde belge onayı; sahip için topluluk onay kanıtı; gizlilik sayfasında onay kayıtları bölümü; `npm run policy -- preview|draft` (yayınlamaz) ve `content/policies/README.md`.
+
+**Testler**
+- Geçti: `npm run check` (111 birim testi, lint, tsc), `next build`, `tests/routes.mjs` Plan 4 bloğu (yerel sahte Supabase + webpack dev).
+- Yazıldı, **çalıştırılmadı**: `tests/database-policies.sql`, `database-policies-setup.sql`, `database-policies-enforced.sql`, `database-policy-privacy.sql`, `tests/policy-races.mjs` (`npm run test:db`'ye bağlı), stres düzeneği yeni girişlere geçirildi. Bu makinede PostgreSQL kurulu değil; indirilen ikililerin yürütülmesi oturum izin denetimine takıldı.
+- Önceden var olan sorun: `tests/routes.mjs` içindeki "iki açık etkinlik / ikinci-etkinlik paneli" kontrolü değişiklikler olmadan da (main) başarısız oluyor; Plan 4 ile ilgisiz.
+- Yapılmadı: gerçek tarayıcı/390px görsel kontrol (Task 5), canlı Supabase provası.
+
+**Açık kalan yayın girdileri**: hukuki incelemesi tamamlanmış üç belge metni; gerçek DB'de 0017 → uygulama yayını → metin yayını → 0018 sırası; genel başvuru anahtarı kapalı kalır.

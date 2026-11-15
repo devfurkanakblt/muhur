@@ -359,9 +359,12 @@ async function main() {
     // 0003 (pg_cron) yerelde yoktur; scripts/test-db.mjs ile aynı liste. 0012+ topluluk ve askı sarmalayıcılarını da sınar.
     for (const file of ["0001_init.sql", "0002_events.sql", "0004_delivery.sql", "0005_hardening.sql", "0006_son_dakika.sql", "0007_gizem.sql",
       "0008_activity.sql", "0009_mascot_naming.sql", "0010_mascot_name_edit.sql", "0011_bayat_teslim_hatasi.sql", "0012_topluluklar.sql",
-      "0013_etkinlik_olustur.sql", "0014_guncel_etkinlik_kaldir.sql", "0015_basvuru_ve_sozlesme_temeli.sql", "0016_davetler_ve_brevo_kuyrugu.sql"]) {
+      "0013_etkinlik_olustur.sql", "0014_guncel_etkinlik_kaldir.sql", "0015_basvuru_ve_sozlesme_temeli.sql", "0016_davetler_ve_brevo_kuyrugu.sql", "0017_sozlesme_uygulama.sql"]) {
       await psql(await readFile(resolve("supabase/migrations", file), "utf8"), database);
     }
+    // Plan 4: stres kaydı da yeni giriş sözleşmesini kullanır (0018 açık, eski kayıt girişleri servise kapalı).
+    await psql(await readFile(resolve("tests/database-policies-setup.sql"), "utf8"), database);
+    await psql(await readFile(resolve("supabase/migrations/0018_sozlesme_zorunlulugu.sql"), "utf8"), database);
     pool = new pg.Pool({ host: "127.0.0.1", port: Number(port), user: "postgres", database, max: CFG.pool });
     const sampler = setInterval(() => {
       poolPeak = { waiting: Math.max(poolPeak.waiting, pool.waitingCount), total: Math.max(poolPeak.total, pool.totalCount) };
@@ -372,6 +375,10 @@ async function main() {
     eventId = randomUUID();
     await pool.query(`insert into events(id,slug,title,starts_at,deadline,community_id)
       values('${eventId}','stres','Stres Testi',clock_timestamp()-interval '1 hour',clock_timestamp()+interval '1 day',(select id from communities where slug='deu-csai'))`);
+    await pool.query(`insert into event_terms_versions(event_id,version,rules_url,privacy_url) values('${eventId}',1,'https://example.test/kurallar','https://example.test/aydinlatma');
+      update events set current_terms_version_id=(select id from event_terms_versions where event_id='${eventId}') where id='${eventId}'`);
+    const [{ doc: participantDoc, terms: termsVersion }] = (await pool.query(`select (select document_id from policy_requirements where kind='participant') doc,
+      (select current_terms_version_id from events where id='${eventId}') terms`)).rows;
     const teams = planTeams();
     const userCount = teams.length * 3;
     const users = Array.from({ length: userCount }, () => randomUUID());
@@ -381,12 +388,12 @@ async function main() {
       team.members = users.slice(i * 3, i * 3 + 1 + Math.floor(rnd() * 3));
       team.baseSize = sizeFor(team);
       const sha = team.kind === "never" ? null : github.push(team.no, 0, team.kind === "fat" ? Math.round(3 * MB) : team.baseSize);
-      const [row] = await db("register_project", `select id, invite_code from register_project($1::uuid,$2::uuid,$3,null,$4,$5,$6,$7::bigint,$8,$9,'main',null,$10)`,
+      const [row] = await db("register_project", `select id, invite_code from register_project_with_terms($1::uuid,$2::uuid,$3,null,$4,$5,$6,$7::bigint,$8,$9,'main',null,$10,$11::uuid,$12::uuid)`,
         [eventId, team.members[0], `kurucu${team.no}`, `Proje ${team.no}`, `Ekip ${team.no}`, "Stres testi projesi.", 1000 + team.no,
-          `stres/ekip-${team.no}`, `https://github.com/stres/ekip-${team.no}`, sha]);
+          `stres/ekip-${team.no}`, `https://github.com/stres/ekip-${team.no}`, sha, participantDoc, termsVersion]);
       team.projectId = row.id;
       for (const member of team.members.slice(1)) {
-        await db("join_project_by_code", "select join_project_by_code($1,$2::uuid,$3,null)", [row.invite_code, member, `uye-${member.slice(0, 6)}`]);
+        await db("join_project_by_code", "select join_project_with_terms($1,$2::uuid,$3,null,$4::uuid,$5::uuid)", [row.invite_code, member, `uye-${member.slice(0, 6)}`, participantDoc, termsVersion]);
       }
     }));
     const registerMs = performance.now() - t0;

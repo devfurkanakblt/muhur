@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
+import { consentPlan, getParticipantTerms } from "@/lib/policy-data";
 
 export const metadata = { title: "Ekibe katıl" };
 
@@ -35,7 +36,13 @@ export default async function InvitePage({ params }: PageProps<"/davet/[code]">)
   if (event.locked) body = <p className="text-ink-2">Teslim süresi doldu; ekipler artık değiştirilemez.</p>;
   else if (!viewer) body = <SignInButton next={`/davet/${code}`} label="GitHub ile giriş yap ve katıl" />;
   else if (own) body = <p className="text-ink-2">Zaten bir projenin ekibindesin. Bu ekibe katılmak için önce oradan ayrılmalısın.</p>;
-  else body = <JoinForm eventId={event.id} code={code} suspended={event.suspended} />;
+  else {
+    // Etkinliğe ilk katılımda iki ayrı onay; aynı etkinliğe önceden kaydolan kişide (ayrılıp dönen) istenmez.
+    const plan = consentPlan(await getParticipantTerms(viewer.id, event.id));
+    body = plan.state === "unavailable"
+      ? <p role="status" className="leading-relaxed text-ink-2">{plan.message}</p>
+      : <JoinForm eventId={event.id} code={code} suspended={event.suspended} consent={plan.state === "ready" ? plan.consent : null} />;
+  }
   const showReason = event.suspended && can(await getEventAccess(viewer, event), "incele");
 
   return (

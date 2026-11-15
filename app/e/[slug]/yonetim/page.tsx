@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowUpRightIcon, DownloadSimpleIcon, MonitorPlayIcon } from "@phosphor-icons/react/ssr";
 import { SiteHeader } from "@/components/site-header";
-import { ActivityForm, AnnouncementForm, AwardForm, ScheduleForm, SuspendForm } from "@/components/admin-forms";
+import { ActivityForm, AnnouncementForm, AwardForm, EventTermsForm, ScheduleForm, SuspendForm } from "@/components/admin-forms";
+import { PolicyNotice } from "@/components/policy-notice";
+import { getManagementConsent } from "@/lib/policy-data";
 import { DeliveryJobList, Section, SessionNotice } from "@/components/admin-sections";
 import { SuspensionNotice } from "@/components/suspension-notice";
 import { HoldToLock } from "@/components/hold-to-lock";
@@ -64,8 +66,14 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
   const access = await getEventAccess(viewer, event);
   if (!can(access, "incele")) notFound();
   const manage = can(access, "yonet");
+  // Rolü olan kişiye güncel belge onayı eksikse onay ekranına giden uyarı gösterilir (rol bilgisi başkasına açılmaz).
+  const consent = access?.communityRole && event.communityId ? await getManagementConsent(viewer.id, event.communityId) : null;
   const platform = can(access, "askiya-al");
   const session = await getAdminSession();
+  const termsResult = await createAdminClient().from("events").select("terms:event_terms_versions!events_current_terms_own(id,version,rules_url,privacy_url,content_sha256)").eq("id", event.id).maybeSingle();
+  if (termsResult.error) throw new Error(`Etkinlik kuralları okunamadı: ${termsResult.error.message}`);
+  const rawTerms = termsResult.data?.terms as unknown as { id: string; version: number; rules_url: string; privacy_url: string; content_sha256: string | null } | null;
+  const terms = rawTerms ? { id: rawTerms.id, version: rawTerms.version, rulesUrl: rawTerms.rules_url, privacyUrl: rawTerms.privacy_url, contentSha256: rawTerms.content_sha256 } : null;
   const db = createAdminClient();
   // Okuma hatası "Henüz eser yok" ya da "zamanlayıcı hiç çalışmadı" gibi gösterilmez; sayfa hata ekranına düşer (A09).
   const [rows, votes] = await Promise.all([
@@ -126,12 +134,16 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
           <SessionNotice session={session} now={event.now} actions="Kilit, zamanlama, oylama ve askı" next={eventPath(event.slug, "yonetim")} />
         )}
 
+        {consent && consent.missing.length > 0 && event.communitySlug && (
+          <PolicyNotice slug={event.communitySlug} next={eventPath(event.slug, "yonetim")} blocking={consent.blocking} />
+        )}
+
         {/* Sayfayı açabilen herkes etkinliği inceleyebilir; gerekçe görünür. */}
         <SuspensionNotice event={event} showReason />
 
         {!manage && (
           <p role="status" className="border-y border-rule-strong py-4 text-ink">
-            Salt okunur: bu etkinliği yönetme yetkin yok ya da etkinlik askıda.
+            {access?.policyPending ? "Salt okunur: güncel platform belgelerini onaylayana kadar yönetim işlemleri kapalı." : "Salt okunur: bu etkinliği yönetme yetkin yok ya da etkinlik askıda."}
           </p>
         )}
 
@@ -160,6 +172,12 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
               <HoldToLock eventId={event.id} />
             </Section>
           </>
+        )}
+
+        {manage && !event.locked && (
+          <Section title="Etkinlik kuralları" note="Katılımcı ilk kaydında bu bağlantıları platform koşullarından ayrı olarak onaylar. İlk katılımcı kaydından ya da başlangıçtan sonra değiştirilemez.">
+            <EventTermsForm eventId={event.id} current={terms} />
+          </Section>
         )}
 
         {manage && <>

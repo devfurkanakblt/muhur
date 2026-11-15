@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addAward, anonymizeUser, createEvent, retryDeliveryJob, setActivity, setAnnouncement, setSchedule, suspendEvent, unsuspendEvent, type FormState } from "@/app/actions";
+import { addAward, anonymizeUser, createEvent, retryDeliveryJob, setActivity, setAnnouncement, setEventTerms, setSchedule, suspendEvent, unsuspendEvent, type FormState } from "@/app/actions";
 import type { Activity } from "@/lib/data";
 import { SubmitButton } from "@/components/buttons";
 import { buttonStyles } from "@/components/button-styles";
@@ -268,6 +268,33 @@ export function NewEventForm({ communities }: { communities: { id: string; name:
         </SubmitButton>
         <button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button>
         <Status state={state} ok="Yeni etkinlik açıldı; bu etkinlik olduğu gibi sürüyor." />
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Etkinlik kuralları ve aydınlatma metni: her kayıt yeni, değişmez bir sürüm oluşturur. İlk katılımcı kaydından ya da
+ * başlangıçtan sonra var olan sürüm değiştirilemez (DB). `expected` eşzamanlı başka bir değişikliği yakalar.
+ */
+export function EventTermsForm({ eventId, current }: { eventId: string; current: { id: string; version: number; rulesUrl: string; privacyUrl: string; contentSha256: string | null } | null }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(setEventTerms, undefined);
+  const protectedForm = useProtectedForm(action, state, pending);
+  return (
+    <form {...protectedForm} className="grid gap-4">
+      <EventField id={eventId} />
+      <input type="hidden" name="expected" value={current?.id ?? ""} />
+      <label className="grid gap-2"><span className={label}>Etkinlik kuralları bağlantısı</span>
+        <input name="rules_url" type="url" required maxLength={2048} placeholder="https://" defaultValue={current?.rulesUrl ?? ""} className={input} /></label>
+      <label className="grid gap-2"><span className={label}>Aydınlatma metni bağlantısı</span>
+        <input name="privacy_url" type="url" required maxLength={2048} placeholder="https://" defaultValue={current?.privacyUrl ?? ""} className={input} /></label>
+      <label className="grid gap-2"><span className={label}>Sabit metnin SHA-256 özeti (isteğe bağlı)</span>
+        <input name="content_sha256" maxLength={64} pattern="[a-fA-F0-9]{64}" spellCheck={false} defaultValue={current?.contentSha256 ?? ""} className={`${input} font-mono`} /></label>
+      <p className="text-[0.8125rem] text-ink-3">Bağlantıların içeriği mühür tarafından indirilmez; katılımcının kabul kaydı o anki bağlantıyı ve sürümü gösterir. Özet yalnız değişmeyecek bir metin sunuyorsan anlamlıdır.</p>
+      <div className="flex flex-wrap items-center gap-4">
+        <SubmitButton variant="ink" busy={pending} pending="Kaydediliyor…">{current ? "Yeni sürüm olarak kaydet" : "Kuralları yayınla"}</SubmitButton>
+        <button type="reset" disabled={pending} className="min-h-11 underline">Değişiklikleri geri al</button>
+        <Status state={state} ok="Etkinlik kuralları kaydedildi." />
       </div>
     </form>
   );

@@ -221,3 +221,35 @@ assert.equal((await fetch("http://127.0.0.1:3100/e/ikinci-etkinlik/maskot", hubA
 assert.equal((await fetch("http://127.0.0.1:3100/api/maskot/durum?e=ikinci-etkinlik")).status, 404);
 await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
 console.log("PASS: İki açık etkinliğin panelleri ve davetleri ayrıdır; başka topluluğun yönetimi ve maskotu kapalıdır.");
+
+// Plan 4: güncel belge onayı eksik yönetici salt okur ve onay ekranına yönlendirilir; onay ekranı belgeleri ayrı ayrı ister.
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=sahip&onay=eksik");
+const pendingAdmin = await htmlOf("/e/ornek-etkinlik/yonetim", hubAuth);
+assert.ok(pendingAdmin.includes("Belgeleri oku ve onayla") && pendingAdmin.includes("güncel platform belgelerini onaylayana kadar"), "Onay eksik yönetici uyarıyı görmüyor.");
+assert.ok(!pendingAdmin.includes("Kuralları yayınla") && !pendingAdmin.includes("Yeni sürüm olarak kaydet"), "Onay eksikken yönetim formu gösteriliyor.");
+const consentPage = await htmlOf("/topluluk/deu-csai/onay?next=%2Fe%2Fornek-etkinlik%2Fyonetim", hubAuth);
+assert.ok(consentPage.includes('name="accept_policy_0"') && consentPage.includes('name="accept_policy_1"') && consentPage.includes('href="/kosullar/veri-isleme/test-1"'), "Onay ekranı iki ayrı checkbox ve belge bağlantısı göstermiyor.");
+assert.ok(!/name="accept_policy_\d"[^>]*checked/.test(consentPage), "Checkbox önceden işaretli.");
+assert.equal((await fetch("http://127.0.0.1:3100/topluluk/deu-csai/onay", { ...hubAuth, redirect: "manual" })).status, 200);
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=sahip");
+const okAdmin = await htmlOf("/e/ornek-etkinlik/yonetim", hubAuth);
+assert.ok(!okAdmin.includes("Belgeleri oku ve onayla") && okAdmin.includes("Etkinlik kuralları") && okAdmin.includes("https://example.com/kurallar"), "Onaylı yönetici kural formunu görmüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=yabanci");
+assert.equal((await fetch("http://127.0.0.1:3100/topluluk/deu-csai/onay", hubAuth)).status, 404, "Rolü olmayan onay ekranını görüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+for (const path of ["/kosullar/katilimci/test-1", "/kosullar/platform/test-1"]) {
+  const doc = await htmlOf(path);
+  assert.ok(doc.includes("Sürüm test-1") && doc.includes("SHA-256"), `${path} sürüm ve hash göstermiyor.`);
+}
+assert.equal((await fetch("http://127.0.0.1:3100/kosullar/platform/yok")).status, 404);
+assert.equal((await fetch("http://127.0.0.1:3100/kosullar/data_processing/test-1")).status, 404);
+const history = await htmlOf("/hesabim/onaylar", hubAuth);
+assert.ok(history.includes("Onay geçmişim"), "Onay geçmişi sayfası açılmıyor.");
+const anonymousHistory = await htmlOf("/hesabim/onaylar");
+assert.ok(anonymousHistory.includes("giriş yap") && !anonymousHistory.includes("Platform belgeleri</h2>"), "Oturumsuz kullanıcı onay geçmişi görüyor.");
+const policyAdmin = await htmlOf("/yonetim/belgeler", hubAuth);
+assert.ok(policyAdmin.includes("Platform belgeleri") && policyAdmin.includes("Geçerli sürüm"), "Head admin belge yönetimini görmüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open&rol=sahip");
+assert.equal((await fetch("http://127.0.0.1:3100/yonetim/belgeler", hubAuth)).status, 404, "Head admin olmayan belge yönetimini görüyor.");
+await fetch("http://127.0.0.1:54330/fixture/state?mode=open");
+console.log("PASS: Plan 4 onay ekranı, salt okuma uyarısı, belge sürüm sayfaları ve onay geçmişi.");

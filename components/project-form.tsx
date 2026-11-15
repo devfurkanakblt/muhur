@@ -5,6 +5,7 @@ import { createProject, updateProject, type FormState } from "@/app/actions";
 import { buttonStyles } from "@/components/button-styles";
 import { LOGO, logoSizeError } from "@/lib/logo-spec";
 import { formChanges, useProtectedForm } from "@/components/protected-form";
+import { ParticipantConsent, type ParticipantConsentProps } from "@/components/policy-consent-form";
 
 type Initial = { name: string; team: string; summary: string; logo: string | null; demo?: string | null };
 
@@ -12,8 +13,11 @@ type Initial = { name: string; team: string; summary: string; logo: string | nul
 const field =
   "w-full rounded-[2px] border border-rule-strong bg-plinth px-3 text-[1rem] placeholder:text-ink-3 focus:border-ink focus:outline-none aria-[invalid=true]:border-danger";
 
-/** `suspended`: etkinlik platform tarafından askıda; DB yazmayı zaten reddeder, düğme pasif kalır. */
-export function ProjectForm({ eventId, mode, repo, initial, suspended = false }: { eventId: string; mode: "create" | "edit"; repo?: string; initial: Initial; suspended?: boolean }) {
+/**
+ * `suspended`: etkinlik platform tarafından askıda; DB yazmayı zaten reddeder, düğme pasif kalır.
+ * `consent`: etkinliğe ilk kayıtta gösterilecek iki ayrı onay (önceden kaydı olan kişide yok).
+ */
+export function ProjectForm({ eventId, mode, repo, initial, suspended = false, consent = null }: { eventId: string; mode: "create" | "edit"; repo?: string; initial: Initial; suspended?: boolean; consent?: ParticipantConsentProps | null }) {
   const [state, action, pending] = useActionState<FormState, FormData>(mode === "create" ? createProject : updateProject, undefined);
   const protectedForm = useProtectedForm(action, state, pending);
   const [summary, setSummary] = useState(initial.summary);
@@ -192,6 +196,7 @@ export function ProjectForm({ eventId, mode, repo, initial, suspended = false }:
             <p id="demo-help" className="text-[0.8125rem] text-ink-3">Herkese açık HTTPS bağlantısı. Demo sonradan değişebilir; jüri için esas kayıt mühürlü koddur.</p>
           </div>
         </details>
+        {mode === "create" && consent && <ParticipantConsent {...consent} disabled={pending} />}
         <div className="flex flex-wrap items-center gap-4 pt-2">
           <button type="submit" disabled={pending || suspended} aria-busy={pending} className={buttonStyles.primary}>
             {pending

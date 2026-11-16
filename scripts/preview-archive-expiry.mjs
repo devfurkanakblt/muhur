@@ -4,7 +4,7 @@
 // kopyalanmaz. Manifest sayfalı okunur, beklenen toplamla ve DB özetiyle karşılaştırılır; uyuşmazlıkta durur.
 import envPackage from "@next/env";
 import { createClient } from "@supabase/supabase-js";
-import { manifestHash } from "../lib/archive-retention.ts";
+import { manifestHash } from "../lib/archive-manifest.ts";
 
 envPackage.loadEnvConfig(process.cwd());
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

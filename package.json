@@ -19,7 +19,8 @@
     "test:routes": "node tests/routes.mjs && node tests/branding-routes.mjs && node tests/retention-routes.mjs",
     "test:stress": "node --import ./tests/register.mjs scripts/stress-seal.mjs",
     "test:community": "node tests/community-browser.mjs",
-    "policy": "node --import ./tests/register.mjs scripts/publish-policy.mjs"
+    "policy": "node --import ./tests/register.mjs scripts/publish-policy.mjs",
+    "preview:archive": "node --import ./tests/register.mjs scripts/preview-archive-expiry.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

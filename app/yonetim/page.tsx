@@ -8,7 +8,10 @@ import { DeliveryJobList, Section, SessionNotice } from "@/components/admin-sect
 import { getAdminSession, getManagementScope, getRequestNow, getViewer, type EventState } from "@/lib/data";
 import { eventPath } from "@/lib/event-routes";
 import { createAdminClient } from "@/lib/supabase/server";
-import { formatDay, formatTime } from "@/lib/format";
+import { formatDateTime, formatDay, formatTime } from "@/lib/format";
+import { ConfirmReadersForm, RetentionToggleForm } from "@/components/retention-admin";
+
+type RetentionReport = { enabled: boolean; gate_open: boolean; readers_confirmed_at: string | null; deleted: number; failed: number; pending: number; blocked_runs: number; oldest_overdue: string | null; last_success: string | null };
 
 export const metadata = { title: "Yönetim" };
 
@@ -46,6 +49,9 @@ export default async function ManagementHub() {
   // Okuma hatası "zamanlayıcı hiç çalışmadı" gibi gösterilmez; sayfa hata ekranına düşer (A09).
   if (runsResult.error) throw new Error(`Zamanlayıcı kayıtları okunamadı: ${runsResult.error.message}`);
   if (jobsResult.error) throw new Error(`Teslim işleri okunamadı: ${jobsResult.error.message}`);
+  // Saklama raporu platform geneli: yalnız head admin. 0020 uygulanmadıysa rapor yerine açıklama gösterilir.
+  const retentionResult = headAdmin ? await db.rpc("archive_retention_report") : { data: null, error: null };
+  const retention = (retentionResult.data ?? null) as RetentionReport | null;
   const runs = runsResult.data ?? [];
   const jobs = jobsResult.data ?? [];
   const lastSuccess = runs.find(r => r.finished_at && !r.error);
@@ -109,6 +115,23 @@ export default async function ManagementHub() {
             </p>
             {runs.filter(r => r.error).map(r => <p key={r.id} className="mt-2 break-all text-sm text-danger">{formatTime(r.started_at)} · {r.error}</p>)}
             <DeliveryJobList jobs={jobs} showEvent />
+          </Section>
+        )}
+
+        {headAdmin && (
+          <Section title="Arşiv saklama (30 gün)" note="Kilitten 30 gün sonra ZIP dosyaları silinir; mühür, SHA-256 ve doğrulama kayıtları kalır. Silme varsayılan kapalıdır ve ayrı onayla açılır.">
+            {!retention ? <p className="text-ink-2">Saklama defteri okunamadı (0020 uygulanmamış olabilir).</p> : <>
+              <dl className="grid gap-2 text-[0.9375rem] sm:grid-cols-[220px_1fr]">
+                <dt className="text-ink-3">Durum</dt><dd className={retention.enabled ? "font-medium" : ""}>{retention.enabled ? "Süreli silme açık" : "Süreli silme kapalı"}{retention.gate_open ? "" : " · aktivasyon kapısı (0021) kapalı"}</dd>
+                <dt className="text-ink-3">Okuyucu / kuru koşum onayı</dt><dd>{retention.readers_confirmed_at ? formatDateTime(retention.readers_confirmed_at) : "Yok"}</dd>
+                <dt className="text-ink-3">Silinen dosya</dt><dd>{retention.deleted}</dd>
+                <dt className="text-ink-3">Başarısız / bekleyen</dt><dd className={retention.failed ? "text-danger" : ""}>{retention.failed} / {retention.pending}{retention.blocked_runs ? ` · ${retention.blocked_runs} iş durduruldu` : ""}</dd>
+                <dt className="text-ink-3">En eski vadesi geçmiş iş</dt><dd>{retention.oldest_overdue ? formatDateTime(retention.oldest_overdue) : "Yok"}</dd>
+                <dt className="text-ink-3">Son başarılı silme</dt><dd>{retention.last_success ? formatDateTime(retention.last_success) : "Henüz yok"}</dd>
+              </dl>
+              {!retention.enabled && <div className="mt-6"><ConfirmReadersForm /></div>}
+              <div className="mt-6"><RetentionToggleForm enabled={retention.enabled} gateOpen={retention.gate_open} /></div>
+            </>}
           </Section>
         )}
 

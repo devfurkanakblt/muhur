@@ -71,7 +71,35 @@
   color-scheme: dark;
 }
 
+/* Etkinlik rengi: yalnız [data-accent] kapsayıcısında (lib/branding.ts accentVariables). Kök --indigo yeniden
+   atanmaz; mühür, kilit ve platform imzası kendi indigo kimliğini korur. Kapsayıcı dışında platform rengi. */
+:root {
+  --accent: var(--indigo);
+  --accent-fill: var(--indigo-fill);
+  --accent-on-fill: #fff;
+}
+[data-accent] {
+  --accent: var(--accent-light);
+  --accent-fill: var(--accent-fill-light);
+  --accent-on-fill: var(--accent-on-fill-light);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [data-accent] {
+    --accent: var(--accent-dark);
+    --accent-fill: var(--accent-fill-dark);
+    --accent-on-fill: var(--accent-on-fill-dark);
+  }
+}
+:root[data-theme="dark"] [data-accent] {
+  --accent: var(--accent-dark);
+  --accent-fill: var(--accent-fill-dark);
+  --accent-on-fill: var(--accent-on-fill-dark);
+}
+
 @theme inline {
+  --color-brand: var(--accent);
+  --color-brand-fill: var(--accent-fill);
+  --color-brand-on-fill: var(--accent-on-fill);
   --color-wall: var(--wall);
   --color-plinth: var(--plinth);
   --color-ink: var(--ink);

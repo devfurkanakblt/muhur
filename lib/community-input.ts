@@ -22,5 +22,16 @@ export function communityFields(form: FormData): CommunityFields {
 export function communityError(error: { code?: string; message: string }): string {
   if (error.code === "23505") return "Bu adres veya istek zaten kullanılıyor. Başvurularını kontrol et.";
   if (error.code !== "P0001") return "İşlem tamamlanamadı. Biraz sonra tekrar dene.";
-  return error.message.replace(/^(YETKI|ASKIDA|YARISAMAZ|ONAY):\s*/, "");
+  return error.message.replace(/^(YETKI|ASKIDA|YARISAMAZ|ONAY|OZELLIK|LOCKED):\s*/, "");
+}
+
+/** Topluluk marka formu: yalnız genel marka alanları. İletişim, sahip ve durum bu formdan değişmez. */
+export function brandingFields(form: FormData): { name: string; university: string | null; city: string | null; link: string | null } {
+  const text = (key: string) => String(form.get(key) ?? "").trim();
+  const fields = { name: text("name"), university: text("university") || null, city: text("city") || null, link: httpsLink(form.get("link")) };
+  const control = /[\u0000-\u001f\u007f]/;
+  if (fields.name.length < 2 || fields.name.length > 80 || control.test(fields.name)) throw new Error("Topluluk adı 2–80 karakter olmalı.");
+  if ((fields.university?.length ?? 0) > 160 || control.test(fields.university ?? "")) throw new Error("Üniversite / kurum en fazla 160 karakter olabilir.");
+  if ((fields.city?.length ?? 0) > 80 || control.test(fields.city ?? "")) throw new Error("Şehir en fazla 80 karakter olabilir.");
+  return fields;
 }

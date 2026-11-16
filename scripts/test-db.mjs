@@ -139,10 +139,18 @@ try {
   // Plan 4 aktivasyonu: belgeler yayınlanır, 0018 uygulanır; zorunluluk ve yarış testleri bundan sonra çalışır.
   for (const file of ["tests/database-policies-setup.sql", "supabase/migrations/0018_sozlesme_zorunlulugu.sql", "tests/database-policies-enforced.sql", "tests/database-policy-privacy.sql",
     // Plan 5: marka/özellik (0019) ve saklama defteri (0020); süreli silme aktivasyonu (0021) en son.
-    "supabase/migrations/0019_marka_ve_ozellikler.sql", "tests/database-branding.sql"]) {
+    "supabase/migrations/0019_marka_ve_ozellikler.sql", "tests/database-branding.sql",
+    "supabase/migrations/0020_arsiv_saklama_temeli.sql", "tests/database-retention.sql"]) {
     run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve(file)]);
   }
   console.log("Sözleşme zorunluluğu testleri geçti.");
+  // 0021 okuyucu/kuru koşum onayı olmadan uygulanamaz; onaydan sonra kapıyı açar ama silmeyi açmaz.
+  assert.throws(() => run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve("supabase/migrations/0021_arsiv_saklama_aktivasyonu.sql")], { stdio: "pipe" }), e => /okuyucu sürümü/.test(String(e.stderr ?? e.message)));
+  console.log("PASS: 0021 okuyucu onayı olmadan durur.");
+  for (const file of ["tests/database-retention-gate-setup.sql", "supabase/migrations/0021_arsiv_saklama_aktivasyonu.sql", "tests/database-retention-gate.sql"]) {
+    run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve(file)]);
+  }
+  console.log("Saklama defteri ve aktivasyon kapısı testleri geçti.");
   await testPolicyRaces({ psql, asyncPsql, database });
 } catch (error) {
   console.error(error.stderr?.toString() || error.message);

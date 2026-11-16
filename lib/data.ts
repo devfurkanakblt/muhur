@@ -34,6 +34,7 @@ type EventRow = {
   suspended_at: string | null;
   suspended_reason: string | null;
   accent_color?: string | null;
+  archive_expires_at?: string | null;
   features?: unknown;
   presentation_updated_at?: string | null;
   community: { name: string; slug: string; city: string | null; status: string; telegram_enabled: boolean; logo_path?: string | null; branding_updated_at?: string | null } | null;
@@ -97,6 +98,8 @@ export type EventState = {
   brand: EventBrand;
   /** Marka/özellik/snapshot sürümü: canlı durum özetine girer. */
   presentationVersion: string;
+  /** ZIP saklama vadesi (kalıcı locked_at + 720 saat; 0020). Yetkili karar DB'nin archive_access'ıdır. */
+  archiveExpiresAt: string | null;
   /** Sunucunun okuma anı; geri sayımın ilk karesi için. */
   now: number;
 };
@@ -138,6 +141,7 @@ function toState(row: EventRow): EventState {
     features: parseFeatures(row.features, row.community?.slug ?? null, row.community_id != null),
     accentColor: row.accent_color ?? null,
     brand,
+    archiveExpiresAt: row.archive_expires_at ?? null,
     presentationVersion: [row.presentation_updated_at ?? "", row.community?.branding_updated_at ?? "", snapshot?.captured_at ?? ""].join("|"),
     now,
   };

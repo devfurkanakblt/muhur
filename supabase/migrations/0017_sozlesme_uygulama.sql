@@ -117,7 +117,7 @@ update events e set current_terms_version_id=t.id from event_terms_versions t wh
 create trigger events_terms_pointer before update of current_terms_version_id on events for each row execute function guard_event_terms_pointer();
 
 -- Geçmiş üyelikler: kabul kanıtı değil, yalnızca "bu kişi bu etkinliğe önceden katılmıştı" işareti.
-insert into participant_enrollments(user_id,event_id,source) select distinct user_id,event_id from project_members on conflict do nothing;
+insert into participant_enrollments(user_id,event_id,source) select distinct user_id,event_id,'legacy' from project_members on conflict do nothing;
 
 -- Proje üyeliği her zaman bir etkinlik kaydına dayanır. Zorunluluk kapalıyken (eski uygulama yayında)
 -- kayıtsız ekleme `legacy` işaretlenir; açıkken reddedilir — eski girişler kabul denetimini atlatamaz.

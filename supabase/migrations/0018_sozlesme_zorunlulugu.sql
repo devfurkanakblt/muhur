@@ -16,7 +16,7 @@ end $$;
 -- 0017 ile bu migration arasında eski girişlerden eklenen üyelikler de legacy olarak işaretlenmiş olmalı (trigger);
 -- yine de eksik kalan varsa burada tamamlanır. Kabul tarihi üretilmez.
 insert into public.participant_enrollments(user_id,event_id,source)
-  select distinct user_id,event_id from public.project_members on conflict do nothing;
+  select distinct user_id,event_id,'legacy' from public.project_members on conflict do nothing;
 
 -- Yönetim yazmaları onay ister; kayıtsız proje üyeliği reddedilir.
 create or replace function public.policy_enforcement_enabled() returns boolean language sql stable set search_path=public as $$ select true $$;

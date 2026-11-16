@@ -3,7 +3,9 @@ import { Mascot } from "@/components/mascot/mascot";
 import { Wordmark } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Announcement } from "@/components/announcement";
-import { getManagementScope, type EventState, type Viewer } from "@/lib/data";
+import { communityLogoUrl, getManagementScope, type EventState, type Viewer } from "@/lib/data";
+import { CommunityMark, MuhurSignature } from "@/components/event-brand";
+import { eventShowsMascot } from "@/lib/event-features";
 import { eventPath } from "@/lib/event-routes";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
@@ -15,7 +17,9 @@ import { ActionForm, ActionButton } from "@/components/action-form";
 const navLink = "inline-flex min-h-11 items-center text-ink-2 hover:text-ink";
 
 /**
- * Etkinlik sayfalarında (`event` verilince) gezinme o etkinliğin yüzeylerine gider ve duyuru şeridi o etkinliğindir.
+ * Etkinlik sayfalarında (`event` verilince) başlık topluluğun adı/logosu, etkinlik adı ve "mühür. ile" imzasıdır;
+ * gezinme o etkinliğin yüzeylerine gider ve duyuru şeridi o etkinliğindir. Kilitli etkinlikte marka kilit anındaki
+ * snapshot'tan gelir. DEÜ maskotu yalnız platform sayfalarında ve maskotun topluluğunun (logosuz) etkinliklerinde.
  * Platform sayfalarında yalnızca wordmark, sergiler, (yetkisi olana) yönetim merkezi ve tema düğmesi görünür.
  */
 export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; event?: EventState }) {
@@ -28,17 +32,14 @@ export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; eve
     <>
       {event?.announcement && event.announcementAt && <Announcement text={event.announcement} stamp={event.announcementAt} />}
       <header className="mx-auto flex min-h-16 w-full max-w-[1240px] flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-2 sm:px-8">
-        <div className="flex items-center gap-2.5">
-          <Link href="/" className="flex items-center gap-2.5 rounded-[2px]" aria-label="mühür, ana sayfa">
-            <Mascot mood="normal" title="" className="mascot-sm h-7 w-auto" />
-            <Wordmark className="text-[1.375rem] leading-none" />
-          </Link>
-          {event?.communityName && (
-            <Link href={eventPath(event.slug)} className="hidden border-l border-rule-strong pl-2.5 text-[0.8125rem] leading-none text-ink-3 hover:text-ink sm:inline">
-              {event.communityName}
+        {event ? <EventBrandLink event={event} /> : (
+          <div className="flex items-center gap-2.5">
+            <Link href="/" className="flex items-center gap-2.5 rounded-[2px]" aria-label="mühür, ana sayfa">
+              <Mascot mood="normal" title="" className="mascot-sm h-7 w-auto" />
+              <Wordmark className="text-[1.375rem] leading-none" />
             </Link>
-          )}
-        </div>
+          </div>
+        )}
         {event ? (
           <nav aria-label="Ana gezinme" className="flex flex-wrap items-center gap-3 text-[0.9375rem] sm:gap-5">
             <Link href={`${eventPath(event.slug)}#vitrin`} className={navLink}>
@@ -90,5 +91,28 @@ export async function SiteHeader({ viewer, event }: { viewer: Viewer | null; eve
         )}
       </header>
     </>
+  );
+}
+
+/** Etkinlik başlığı: topluluk logosu (yoksa DEÜ'de maskot, diğerlerinde baş harfler), topluluk ve etkinlik adı, imza. */
+function EventBrandLink({ event }: { event: EventState }) {
+  const name = event.brand.communityName ?? event.communityName ?? "Topluluk";
+  const logo = communityLogoUrl(event.brand.logoPath);
+  const mark = logo || !eventShowsMascot(event)
+    ? <CommunityMark name={name} logoUrl={logo} size={32} />
+    : <Mascot mood="normal" title="" className="mascot-sm h-7 w-auto shrink-0" />;
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <Link href={eventPath(event.slug)} className="flex min-w-0 items-center gap-2.5 rounded-[2px]" aria-label={`${name}, ${event.title}`}>
+        {mark}
+        <span className="min-w-0 leading-tight">
+          <span className="block max-w-[46vw] truncate text-[0.9375rem] font-semibold sm:max-w-[28ch]">{name}</span>
+          <span className="block max-w-[46vw] truncate text-[0.8125rem] text-brand sm:max-w-[28ch]">{event.title}</span>
+        </span>
+      </Link>
+      <Link href="/" className="shrink-0 border-l border-rule-strong pl-2.5 text-[0.8125rem] leading-none hover:text-ink" aria-label="mühür. ile, platform ana sayfası">
+        <MuhurSignature />
+      </Link>
+    </div>
   );
 }

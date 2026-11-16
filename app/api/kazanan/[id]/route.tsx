@@ -1,30 +1,20 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import sharp from "sharp";
 import { getEventById } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/server";
 import { PEOPLES_CHOICE_PREFIX } from "@/lib/winner-model";
 import { exhibitNo } from "@/lib/format";
 import { getWinners } from "@/lib/winners";
+import { eventBrandArt, pngDataUrl } from "@/lib/brand-image";
 
 const INK = "#0b0d1e";
 const INK_2 = "#44485f";
 const INK_3 = "#61667d";
 const BLUSH = "#feccd7";
 
-/** Kaide için logo: WEBP dahil her biçim PNG'ye çevrilir (görsel motoru WEBP çizmez). Alınamazsa null. */
-async function logoData(url: string | null) {
-  if (!url) return null;
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return null;
-    const png = await sharp(Buffer.from(await response.arrayBuffer())).resize(320, 320, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
-    return `data:image/png;base64,${png.toString("base64")}`;
-  } catch {
-    return null;
-  }
-}
+/** Kaide için eser logosu: WEBP dahil her biçim PNG'ye çevrilir (görsel motoru WEBP çizmez). Alınamazsa null. */
+const logoData = (url: string | null) => pngDataUrl(url, 320);
 
 /** Kazananın etkinliği kaydın kendisinden okunur: jüri ödülünde ödül satırı, halkın seçiminde eser. */
 async function winnerEventId(id: string): Promise<string | null> {
@@ -48,10 +38,10 @@ export async function GET(_: Request, ctx: RouteContext<"/api/kazanan/[id]">) {
   const event = eventId ? await getEventById(eventId) : null;
   const winner = event ? (await getWinners(event)).find((w) => w.id === id) : undefined;
   if (!event || !winner) return new Response("Kazanan bulunamadı.", { status: 404 });
-  const [regular, semibold, mascot, logo] = await Promise.all([
+  const [regular, semibold, art, logo] = await Promise.all([
     readFile(join(process.cwd(), "assets/schibsted-grotesk-400.woff")),
     readFile(join(process.cwd(), "assets/schibsted-grotesk-600.woff")),
-    readFile(join(process.cwd(), "assets/mascot.svg")),
+    eventBrandArt(event),
     logoData(winner.logo),
   ]);
   const jury = winner.kind === "juri";
@@ -79,7 +69,7 @@ export async function GET(_: Request, ctx: RouteContext<"/api/kazanan/[id]">) {
             <div style={{ display: "flex", fontSize: 52, fontWeight: 600, letterSpacing: "-0.04em" }}>
               mühür<span style={{ color: "#4a36cf" }}>.</span>
             </div>
-            <div style={{ fontSize: 24, color: INK_3 }}>{event.title}</div>
+            <div style={{ fontSize: 24, color: INK_3 }}>{`${art.name} · ${event.title}`}</div>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between" }}>
@@ -91,7 +81,7 @@ export async function GET(_: Request, ctx: RouteContext<"/api/kazanan/[id]">) {
             </div>
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`data:image/svg+xml;base64,${mascot.toString("base64")}`} width={190} height={155} alt="" />
+          {art.mascot ? <img src={art.mascot} width={190} height={155} alt="" /> : art.logo ? <img src={art.logo} width={130} height={130} alt="" /> : <div style={{ display: "flex", height: 130 }} />}
         </div>
       </div>
     ),

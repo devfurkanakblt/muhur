@@ -17,11 +17,15 @@ import { can } from "@/lib/authz";
 import { selectAll } from "@/lib/paginate";
 import { createAdminClient } from "@/lib/supabase/server";
 import { HEALTH_TEXT } from "@/lib/health";
-import { exhibitNo, formatBytes, formatDay, formatTime, relativeTR, toLocalInput } from "@/lib/format";
+import { exhibitNo, formatBytes, formatDateTime, formatDay, formatTime, relativeTR, toLocalInput } from "@/lib/format";
 import { retryFreeze, setVoting, removeAward, runWorker } from "@/app/actions";
 import { LiveState } from "@/components/live-state";
 import { getLiveStatus } from "@/lib/status";
 import { ActionForm, ActionButton } from "@/components/action-form";
+import { EventPresentationForm } from "@/components/branding-form";
+import { communityLogoUrl } from "@/lib/data";
+import { isMascotCommunity } from "@/lib/event-features";
+import { archiveAvailability, retentionLabel } from "@/lib/archive-retention";
 
 export const maxDuration = 300;
 
@@ -180,6 +184,19 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
           </Section>
         )}
 
+        <Section title="Görünüm ve özellikler" note="Etkinlik rengi ve isteğe bağlı özellikler. Özellikler etkinlik başlamadan ayarlanır; kilitten sonra görünüm mühürle birlikte donar.">
+          {manage && !event.locked ? (
+            <EventPresentationForm eventId={event.id} title={event.title} communityName={event.brand.communityName ?? event.communityName ?? "Topluluk"}
+              logoUrl={communityLogoUrl(event.brand.logoPath)} color={event.accentColor} features={event.features} started={event.started}
+              mascotAllowed={isMascotCommunity(event.communitySlug, event.communityId != null)} />
+          ) : (
+            <p className="text-ink-2">
+              {event.locked ? "Görünüm kilit anında dondu; mühürlü sergi bu renk ve logoyla kalır." : "Salt okunur."}{" "}
+              Açık özellikler: {Object.entries(event.features).filter(([, on]) => on).map(([k]) => ({ public_voting: "halk oylaması", mystery_hunt: "gizem avı", easter_eggs: "klavye sürprizleri", mascot_naming: "maskota isim ver" } as Record<string, string>)[k]).join(", ") || "yok"}.
+            </p>
+          )}
+        </Section>
+
         {manage && <>
           <Section title="Yemek ve etkinlik saati" note="Duyurduğun an ana sayfadaki maskot ve selam değişir; bitirene kadar sürer. Telegram grubuna da gider.">
             <ActivityForm eventId={event.id} current={event.activity} since={event.activity ? formatTime(event.activity.at).slice(0, 5) : null} />
@@ -190,7 +207,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
           </Section>
         </>}
 
-        <Section
+        {event.features.public_voting && <Section
           title="Halkın seçimi"
           note={
             event.locked
@@ -220,7 +237,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
             </ActionForm>
           )}
           {event.voting === "sonuclandi" && <p className="text-ink-2">Sonuçlar vitrinde ve sahnede yayında.</p>}
-        </Section>
+        </Section>}
 
         <Section title="Teslim işleri" note="Bu etkinliğin tamamlanmamış işleri. Kuyruk dakikalık zamanlayıcıyla da işlenir; her iş en fazla 5 kez denenir.">
           <ActionForm action={runWorker.bind(null, event.id)}><ActionButton pending="Kuyruk işleniyor…" className="press underline underline-offset-4">Kuyruğu şimdi işle</ActionButton></ActionForm>
@@ -228,6 +245,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
         </Section>
 
         <Section title="Jüri paketi" note="Geçerli teslimler paketi yalnızca mühürlü arşivleri içerir; dışarıda kalanları nedenleriyle listeler. Eksiksiz paket için bütün kayıtların mührü tamamlanmış olmalı.">
+          {juryReady && event.archiveExpiresAt && <p className="mb-3 text-[0.9375rem] text-ink-2">{retentionLabel(archiveAvailability(event.archiveExpiresAt, event.now), event.archiveExpiresAt, formatDateTime)}</p>}
           {juryReady ? (
             <p className="flex flex-wrap gap-x-4 gap-y-1 text-[0.9375rem]">
               <a href={`/api/juri/${event.slug}?paket=gecerli`} className="underline underline-offset-4">Mühürlü teslimler ZIP</a>
@@ -237,7 +255,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
           ) : <p className="text-ink-2">Etkinlik kilitlendiğinde paket hazır olacak.</p>}
         </Section>
 
-        <Section title="Gizem avcıları" note="Açılış videosundaki gizli mesajı çözüp Ctrl+Shift+S penceresine doğru cümleyi yazanlar. Yalnızca hackathon saatlerinde kaydedilir; rozet takıma verilir.">
+        {event.features.mystery_hunt && <Section title="Gizem avcıları" note="Açılış videosundaki gizli mesajı çözüp Ctrl+Shift+S penceresine doğru cümleyi yazanlar. Yalnızca hackathon saatlerinde kaydedilir; rozet takıma verilir.">
           {hunters.length === 0 ? <p className="text-ink-2">Henüz kimse bulamadı.</p> : <>
             <p className="mb-3 text-ink-2">{hunters.length} kişi buldu.</p>
             <ol className="divide-y divide-rule border-y border-rule">{hunters.map(h => <li key={h.user_id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-3 text-[0.9375rem]">
@@ -245,7 +263,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
               <span className="font-mono text-ink-2">{formatDay(h.found_at)}, {formatTime(h.found_at)}</span>
             </li>)}</ol>
           </>}
-        </Section>
+        </Section>}
 
         {event.locked && <Section title="Jüri ödülleri" note="Ödülü açıkladığın anda vitrinin başında ve eser sayfasında yayımlanır, sahnede tören gösterisiyle açılır ve Telegram kanalına duyurulur. Sırayla açıklamak için ödülleri tören anında tek tek ekle.">
           {manage && <AwardForm eventId={event.id} projects={rows.filter(r => !!r.archive_path)} />}
@@ -349,9 +367,11 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
                             >
                               {r.frozen_sha?.slice(0, 7)}
                             </a>
-                            <a href={`/api/arsiv/${r.id}`} className="inline-flex items-center gap-1 text-ink-2 hover:text-ink">
-                              <DownloadSimpleIcon size={14} /> ZIP · {formatBytes(r.archive_bytes ?? 0)}
-                            </a>
+                            {archiveAvailability(event.archiveExpiresAt, event.now) === "expired"
+                              ? <span className="text-[0.8125rem] text-ink-3">ZIP saklama süresi doldu · kayıt geçerli</span>
+                              : <a href={`/api/arsiv/${r.id}`} className="inline-flex items-center gap-1 text-ink-2 hover:text-ink">
+                                <DownloadSimpleIcon size={14} /> ZIP · {formatBytes(r.archive_bytes ?? 0)}
+                              </a>}
                             {r.frozen_method === "head" && (
                               <span className="text-[0.8125rem] text-ink-3">Push kaydı okunamadı; kilit anındaki son commit alındı.</span>
                             )}

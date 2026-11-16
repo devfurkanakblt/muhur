@@ -23,6 +23,8 @@ import { claimOnce, releaseOnce, requestKey } from "@/lib/once";
 import { isMysteryAnswer, mysteryOpen } from "@/lib/mystery";
 import { announceAward, announcePeoplesChoice } from "@/lib/winners";
 import { checked, consentError } from "@/lib/policies";
+import { checkAccent } from "@/lib/branding";
+import { featuresFromForm, FEATURE_DISABLED } from "@/lib/event-features";
 
 /** notice: hata olmayan bilgi (ör. "bu commit zaten kabul edilmiş"); nötr gösterilir. */
 export type FormState = { error?: string; ok?: boolean; status?: string; notice?: string } | undefined;
@@ -38,6 +40,8 @@ function dbError(message: string) {
   if (message.includes("YARISAMAZ:")) return YARISAMAZ_MESAJI;
   if (message.includes("YETKI:")) return YETKISIZ_MESAJI;
   if (message.includes("VOTING:")) return message.split("VOTING:")[1].split("\n")[0].trim();
+  // Kapalı özellik ve sunum kuralları (0019): DB'nin Türkçe mesajı olduğu gibi gösterilir.
+  if (message.includes("OZELLIK:")) return message.split("OZELLIK:")[1].split("\n")[0].trim();
   if (message.includes("LOCKED")) return LOCKED_MSG;
   if (message.includes("MEMBER:")) return "Zaten bir projenin ekibindesin.";
   if (message.includes("TEAM:")) return message.split("TEAM:")[1].split("\n")[0].trim();
@@ -467,6 +471,7 @@ export async function vote(_: FormState, formData: FormData): Promise<FormState>
   if (!viewer) return { error: "Oy vermek için GitHub ile giriş yap." };
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
+  if (!event.features.public_voting) return { error: FEATURE_DISABLED.public_voting };
   if (event.voting !== "acik") return { error: "Oylama açık değil." };
   const db = createAdminClient();
   const { error } = formData.get("intent") === "withdraw"
@@ -487,6 +492,7 @@ export async function huntMystery(_: FormState, formData: FormData): Promise<For
   const answer = String(formData.get("answer") ?? "");
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
+  if (!event.features.mystery_hunt) return { error: FEATURE_DISABLED.mystery_hunt };
   if (!mysteryOpen(event)) return { error: "Gizem yalnızca hackathon saatlerinde açık." };
   if (!isMysteryAnswer(answer)) return { error: "Hmm… olmadı. 🤔" };
   const viewer = await getGithubViewer();
@@ -633,6 +639,15 @@ export async function lockNowAction(eventId: string): Promise<{ error?: string }
   return {};
 }
 
+const RETENTION_RETRY_MSG = "Arşivin 30 günlük saklama süresi doldu; mühür yeniden denenemez. Mühür kaydı ve doğrulama geçerli kalır.";
+
+/** Saklama süresi DB saatine göre; okunamazsa yeniden deneme başlatılmaz (fail-closed). */
+async function archiveExpired(eventId: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().rpc("archive_expired", { p_event: eventId });
+  if (error) throw new Error("Saklama durumu okunamadı.");
+  return data === true;
+}
+
 export async function retryFreeze(formData: FormData): Promise<{ error: string } | void> {
   const id = String(formData.get("id") ?? "");
   const db = createAdminClient();
@@ -643,6 +658,7 @@ export async function retryFreeze(formData: FormData): Promise<{ error: string }
   const admin = owner ? await authorize(owner, "isletim") : YETKISIZ_MESAJI;
   if (typeof admin === "string") return { error: admin };
   const event = await getEventRow(row.event_id);
+  if (await archiveExpired(row.event_id)) return { error: RETENTION_RETRY_MSG };
   if ((event.locked_at || Date.now() >= +new Date(event.deadline)) && (await claimOnce(requestKey("muhur-yeniden", row.id), 30))) {
     await auditAdmin(admin, "retry_seal", { eventId: row.event_id, projectId: row.id });
     after(() => retrySeal(row.id, row.event_id));
@@ -657,6 +673,7 @@ export async function setVoting(formData: FormData): Promise<{ error: string } |
   if (typeof admin === "string") return { error: admin };
   const state = String(formData.get("state") ?? "");
   if (state !== "acik" && state !== "sonuclandi") return;
+  if (!event.features.public_voting) return { error: FEATURE_DISABLED.public_voting };
   // Durum zaten buysa ya da aynı istek az önce işlendiyse tekrar yazılmaz ve bildirim yinelenmez.
   if (event.voting === state) return;
   const once = requestKey("oylama", event.id, state);
@@ -740,6 +757,32 @@ export async function setEventTerms(_: FormState, formData: FormData): Promise<F
   return { ok: true };
 }
 
+/**
+ * Etkinlik sunumu: renk ve isteğe bağlı özellikler. Renk kaydetmeden önce iki temada sınanır; okunamayan renk
+ * sessizce değiştirilmez, öneriyle reddedilir. Özellikler yalnız etkinlik başlamadan ve kapatılan özelliğin
+ * kaydı yokken değişir; kilitten sonra sunum donar (DB: update_event_presentation).
+ */
+export async function updateEventPresentation(_: FormState, formData: FormData): Promise<FormState> {
+  const event = await loadEvent(formData.get("event"));
+  if (typeof event === "string") return { error: event };
+  const admin = await requireManager(event);
+  if (typeof admin === "string") return { error: admin };
+  const raw = String(formData.get("accent_color") ?? "").trim();
+  let color: string | null = null;
+  if (raw && formData.get("accent_default") !== "on") {
+    const check = checkAccent(raw);
+    if (!check.ok) return { error: check.suggestion ? `${check.error} Önerilen yakın ton: ${check.suggestion}` : check.error };
+    color = check.color;
+  }
+  const { error } = await createAdminClient().rpc("update_event_presentation", {
+    p_actor: admin.id, p_login: admin.login, p_event: event.id, p_color: color, p_features: featuresFromForm(formData),
+  });
+  if (error) return { error: dbError(error.message) };
+  revalidateEvent(event);
+  revalidatePath(`/sergi/${event.slug}`, "layout");
+  return { ok: true };
+}
+
 export async function addAward(_: FormState, formData: FormData): Promise<FormState> {
   const event = await loadEvent(formData.get("event"));
   if (typeof event === "string") return { error: event };
@@ -805,6 +848,7 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
   const owner = await getEventById(job.event_id);
   const admin = owner ? await authorize(owner, "isletim") : YETKISIZ_MESAJI;
   if (typeof admin === "string") return { error: admin };
+  if (await archiveExpired(job.event_id)) return { error: RETENTION_RETRY_MSG };
   const { data, error } = await db.rpc("retry_delivery_job", { p_job: id });
   if (error) return { error: dbError(error.message) };
   if (data !== true) {

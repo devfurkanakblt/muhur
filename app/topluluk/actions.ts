@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { getAdminSession, getGithubViewer, getViewer } from "@/lib/data";
-import { communityFields, communityError, UUID } from "@/lib/community-input";
+import { brandingFields, communityFields, communityError, UUID } from "@/lib/community-input";
+import { normalizeCommunityLogo, saveCommunityBranding } from "@/lib/brand-logo";
 import { getRoleInvite } from "@/lib/community";
 import { newInviteToken, inviteHash } from "@/lib/role-invites";
 import { encryptMailSecret } from "@/lib/mail/secrets";
@@ -104,4 +105,46 @@ export async function acceptManagementPolicies(_previous: CommunityActionState, 
   const result = await db.rpc("accept_management_policies", { p_actor: viewer.id, p_login: viewer.login, p_community: community, p_document_ids: ids });
   if (result.error) return { error: communityError(result.error) };
   refresh(); redirect(safeConsentNext(text(form, "next"), `/topluluk/${scope.data.slug}`));
+}
+
+/**
+ * Topluluk markası (ad, kurum, şehir, bağlantı, logo). Yalnız sahip; yetki, askı ve Plan 4 onayı DB'de
+ * (update_community_branding). Logo sunucuda çözülüp WEBP'ye yeniden kodlanır; yol sunucuda üretilir.
+ * DB yazması başarısızsa yeni dosya silinir; mühürlü bir sergide kullanılan eski logo silinmez.
+ */
+export async function updateCommunityBranding(_previous: CommunityActionState, form: FormData): Promise<CommunityActionState> {
+  const viewer = await manager(); if (!viewer) return { error: FRESH };
+  const community = text(form, "community"); if (!UUID.test(community)) return { error: "Geçersiz topluluk." };
+  let fields; try { fields = brandingFields(form); } catch (e) { return { error: e instanceof Error ? e.message : "Bilgileri kontrol et." }; }
+  const file = form.get("logo");
+  let logo = null;
+  if (file instanceof File && file.size > 0) {
+    const normalized = await normalizeCommunityLogo(new Uint8Array(await file.arrayBuffer()), file.type);
+    if (typeof normalized === "string") return { error: normalized };
+    logo = normalized;
+  }
+  const changes: Record<string, string | null> = { ...fields };
+  if (!logo && form.get("remove_logo") === "on") changes.logo_path = null;
+  const db = createAdminClient();
+  try {
+    await saveCommunityBranding(community, changes, logo, {
+      upload: async (path, bytes) => {
+        const { error } = await db.storage.from("logos").upload(path, bytes, { contentType: "image/webp", upsert: false });
+        if (error) throw new Error("Logo yüklenemedi. Tekrar dene.");
+      },
+      save: async (payload) => {
+        const result = await db.rpc("update_community_branding", { p_actor: viewer.id, p_login: viewer.login, p_community: community, p_changes: payload });
+        if (result.error) throw Object.assign(new Error(communityError(result.error)), { userFacing: true });
+        const data = (result.data ?? {}) as { previous_logo?: string | null };
+        return { previousLogo: data.previous_logo ?? null };
+      },
+      remove: async (path) => {
+        const { error } = await db.storage.from("logos").remove([path]);
+        if (error) console.error("[marka] logo silinemedi; depo temizliği yeniden dener:", error.message);
+      },
+    });
+  } catch (e) {
+    return { error: e instanceof Error && "userFacing" in e ? e.message : e instanceof Error ? e.message : "Marka kaydedilemedi." };
+  }
+  refresh(); return { ok: true };
 }

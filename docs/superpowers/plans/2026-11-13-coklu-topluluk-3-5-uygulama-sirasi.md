@@ -59,3 +59,7 @@ Plan 3 uygulama kaydı ve test kanıtları ilgili plan dosyasında tamamlandı; 
 ## Plan 4 yerel durumu (15 Kasım 2026)
 
 `feat/sozlesme-surumleri`: 0017/0018, uygulama, birim/rota testleri yazıldı; `npm run check` ve `next build` geçti. SQL ve iki bağlantılı yarış testleri yazıldı ancak bu makinede PostgreSQL bulunmadığı için çalıştırılmadı. Commit, uzak aktarım ve canlı migration yapılmadı. Ayrıntı Plan 4 dosyasının uygulama kaydında.
+
+## Plan 5 yerel durumu (16 Kasım 2026)
+
+`feat/sozlesme-surumleri` üzerinde Plan 5 Task 1–6 commit'lendi; 0019–0021, uygulama ve testler yazıldı. 0017/0018'deki eksik `legacy` değeri düzeltildi. SQL testleri PGlite ile, rota/tarayıcı testleri sahte Supabase ile geçti; gerçek PostgreSQL ile yarış testleri ve canlı prova açık. Uzak aktarım, canlı migration ve canlı arşiv silme yapılmadı. Ayrıntı Plan 5 dosyasının uygulama kaydında.

@@ -22,7 +22,7 @@ function ago(iso: string, now: number) {
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** Projektör için tam ekran sahne: dev geri sayım, push akışı, kilit anında kapanan cam. */
-export function Stage({ slug, initial, qrRows }: { slug: string; initial: StageData; qrRows: string[] }) {
+export function Stage({ slug, initial, qrRows, mascot = false }: { slug: string; initial: StageData; qrRows: string[]; mascot?: boolean }) {
   const [data, setData] = useState(initial);
   const now = useServerNow(data.now);
   const [offline, setOffline] = useState(false);
@@ -140,7 +140,7 @@ export function Stage({ slug, initial, qrRows }: { slug: string; initial: StageD
         </div>
         {/* Masadan okunabilsin diye büyük: ekran yüksekliğinin ~%60'ı. Ortada dürbünlü maskot. */}
         <a href={data.vitrinUrl} className="flex flex-col items-center gap-[1.6vh]">
-          <StageQr rows={qrRows} className="h-[min(36vw,60vh)] w-[min(36vw,60vh)]" />
+          <StageQr rows={qrRows} mascot={mascot} className="h-[min(36vw,60vh)] w-[min(36vw,60vh)]" />
           <span className="text-[clamp(1.125rem,1.8vw,2rem)] font-semibold tracking-[-0.01em]">
             {data.voting === "acik" ? "Tara, oy ver" : "Tara, vitrini gez"}
           </span>

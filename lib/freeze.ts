@@ -251,7 +251,14 @@ export async function tick() {
 
     let processed = (await step("teslim kuyruğu", () => processDeliveryJobs(null, 4))) ?? [];
     for (const ev of events) {
-      await step(`kilit ${ev.slug}`, async () => { if (await ensureLocked(ev.id, "otomatik")) await enqueueSeals(ev.id); });
+      await step(`kilit ${ev.slug}`, async () => {
+        if (await ensureLocked(ev.id, "otomatik")) {
+          await enqueueSeals(ev.id);
+          // Görünüm snapshot'u kilit tetikleyicisinde alınır; eksikse tek sefer tamamlanır (hash/SHA'ya dokunmaz).
+          const { error } = await db.rpc("ensure_event_brand_snapshot", { p_event: ev.id });
+          if (error) throw new Error(`görünüm snapshot'u: ${error.message}`);
+        }
+      });
     }
     processed = [...processed, ...((await step("mühür kuyruğu", () => drainDeliveryJobs(SEAL_DRAIN_MS))) ?? [])];
     details.jobs = { processed: processed.length, failed: processed.filter((r) => !r.ok).length };

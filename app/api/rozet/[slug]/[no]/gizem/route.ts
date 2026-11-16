@@ -5,6 +5,10 @@ import { getEventBySlug, getExhibit, projectHasMystery } from "@/lib/data";
 export async function GET(_: Request, ctx: RouteContext<"/api/rozet/[slug]/[no]/gizem">) {
   const { slug, no } = await ctx.params;
   const event = await getEventBySlug(slug);
+  // Gizem avı kapalı etkinlikte rozet yoktur; eski <img> bağlantıları kırılmasın diye yine bir rozet döner.
+  if (event && !event.features.mystery_hunt) {
+    return new Response(badge("kapalı", "#61667d"), { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=300, s-maxage=300" } });
+  }
   const exhibit = event ? await getExhibit(event.id, Number(no)) : null;
   const found = exhibit ? await projectHasMystery(event!.id, exhibit.id) : false;
   const svg = found ? badge("gizem avcısı", "#2f7a4f") : badge("bulunamadı", "#61667d");

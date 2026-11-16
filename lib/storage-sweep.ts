@@ -1,12 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { selectAll } from "@/lib/paginate";
+import { logoKeepSet, orphanLogo, type Listed } from "@/lib/storage-keep";
 
 /** Yeni yüklenen ya da işlenmekte olan dosyaya dokunmamak için yaş eşiği. */
 const MIN_AGE_MS = 24 * 3600_000;
 const MAX_DELETE = 200;
-
-type Listed = { name: string; id: string | null; created_at: string | null };
 
 async function listAll(bucket: string, prefix: string) {
   const db = createAdminClient();
@@ -24,11 +23,13 @@ const old = (f: Listed, now: number) => !!f.id && !!f.created_at && now - new Da
 /**
  * Depodaki dosyaları DB referanslarıyla karşılaştırır; hiçbir kayda bağlı olmayan ve 24 saatten eski dosyaları siler.
  * Mühürlü, güncel kabul, budanmamış kabul geçmişi, ara mühür ve aktif iş dosyaları her zaman korunur.
+ * Logolarda proje logosu, topluluğun güncel logosu ve mühürlü etkinlik görünümündeki (snapshot) logo korunur.
+ * Süreli arşiv silme (30 gün) bu temizliğin işi değildir; ayrı işçidedir (lib/archive-expiry-worker.ts).
  * Herhangi bir okuma başarısız olursa hiçbir şey silinmez. Silinenler denetim kaydına yazılır.
  */
 export async function sweepStorage(now = Date.now()) {
   const db = createAdminClient();
-  const [projects, snapshots, submissions, jobs] = await Promise.all([
+  const [projects, snapshots, submissions, jobs, communities, brandSnapshots] = await Promise.all([
     selectAll<{ id: string; archive_path: string | null; accepted_archive_path: string | null; logo_path: string | null }>((from, to) =>
       db.from("projects").select("id, archive_path, accepted_archive_path, logo_path", { count: "exact" }).order("id").range(from, to)),
     selectAll<{ archive_path: string }>((from, to) =>
@@ -37,6 +38,10 @@ export async function sweepStorage(now = Date.now()) {
       db.from("submissions").select("archive_path", { count: "exact" }).is("archive_pruned_at", null).order("id").range(from, to)),
     selectAll<{ id: string }>((from, to) =>
       db.from("delivery_jobs").select("id", { count: "exact" }).eq("kind", "submit").in("state", ["queued", "processing"]).order("id").range(from, to)),
+    selectAll<{ logo_path: string | null }>((from, to) =>
+      db.from("communities").select("logo_path", { count: "exact" }).not("logo_path", "is", null).order("id").range(from, to)),
+    selectAll<{ community_logo_path: string | null }>((from, to) =>
+      db.from("event_brand_snapshots").select("community_logo_path", { count: "exact" }).not("community_logo_path", "is", null).order("event_id").range(from, to)),
   ]);
   const keep = new Set<string>();
   for (const p of projects) for (const path of [p.archive_path, p.accepted_archive_path]) if (path) keep.add(path);
@@ -56,12 +61,22 @@ export async function sweepStorage(now = Date.now()) {
     }
   }
 
-  const logoByProject = new Map(projects.map((p) => [p.id, p.logo_path]));
+  const keepLogos = logoKeepSet(projects, communities, brandSnapshots);
   const logos: string[] = [];
   for (const folder of (await listAll("logos", "")).filter((f) => !f.id)) {
+    // Topluluk logoları bir seviye daha derindedir: topluluk/<topluluk-id>/<dosya>.webp
+    if (folder.name === "topluluk") {
+      for (const community of (await listAll("logos", "topluluk")).filter((f) => !f.id)) {
+        for (const f of await listAll("logos", `topluluk/${community.name}`)) {
+          const path = `topluluk/${community.name}/${f.name}`;
+          if (orphanLogo(path, f, keepLogos, now, MIN_AGE_MS)) logos.push(path);
+        }
+      }
+      continue;
+    }
     for (const f of await listAll("logos", folder.name)) {
       const path = `${folder.name}/${f.name}`;
-      if (old(f, now) && logoByProject.get(folder.name) !== path) logos.push(path);
+      if (orphanLogo(path, f, keepLogos, now, MIN_AGE_MS)) logos.push(path);
     }
   }
 

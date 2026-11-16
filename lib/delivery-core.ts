@@ -23,7 +23,8 @@ export function validateArchive(bytes: Uint8Array) {
 
 /** Yeniden denemekle düzelmeyecek hatalar. Kayıp arşiv de buna dahildir: yönetici incelemesi gerekir. */
 export function isPermanentDeliveryError(message: string) {
-  return /50 MB|Geçerli bir ZIP|kabul edilmiş teslim sürümü yok|bütünlü|LOCKED|Eski mühür|depoda bulunamadı/i.test(message);
+  // SAKLAMA: 30 günlük saklama süresi dolmuş etkinlikte mühür yeniden denenmez (Plan 5).
+  return /50 MB|Geçerli bir ZIP|kabul edilmiş teslim sürümü yok|bütünlü|LOCKED|Eski mühür|depoda bulunamadı|SAKLAMA/i.test(message);
 }
 
 /**

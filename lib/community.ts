@@ -3,13 +3,13 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { selectAll } from "@/lib/paginate";
 import { inviteHash } from "@/lib/role-invites";
 import type { Viewer } from "@/lib/data";
-export type Community = { id: string; slug: string; name: string; university: string | null; city: string | null; link: string | null; status: string; review_reason: string | null; suspended_reason: string | null; created_at: string; reviewed_at: string | null };
+export type Community = { id: string; slug: string; name: string; university: string | null; city: string | null; link: string | null; logo_path: string | null; status: string; review_reason: string | null; suspended_reason: string | null; created_at: string; reviewed_at: string | null };
 export type Application = Community & { contact_name: string; contact_email: string; contact_phone: string };
 export type CommunityMember = { user_id: string; github_login: string; role: "owner" | "organizator" };
 export type PolicyDocument = { id: string; kind: string; version: string; content: string; content_sha256: string };
 export type InviteSummary = { id: string; kind: string; recipient_email: string; created_at: string; expires_at: string; revoked_at: string | null; accepted_at: string | null };
 export type MailSummary = { id: string; kind: string; recipient_email: string; state: string; delivery_state: string; created_at: string; last_error: string | null };
-const PUBLIC = "id,slug,name,university,city,link,status,review_reason,suspended_reason,created_at,reviewed_at";
+const PUBLIC = "id,slug,name,university,city,link,logo_path,status,review_reason,suspended_reason,created_at,reviewed_at";
 async function rows<T>(request: PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
   const result = await request; if (result.error) throw new Error("Topluluk bilgileri okunamadı. Biraz sonra tekrar dene."); return (result.data ?? []) as T[];
 }

@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { exhibitPath } from "@/lib/data";
+import { archiveAvailability } from "@/lib/archive-retention";
 
 export type Match = {
   kind: "arsiv" | "commit";
@@ -14,6 +15,11 @@ export type Match = {
   sha: string | null;
   /** Commit araması tam 40 haneli SHA ile mi yapıldı; kısa önek birden çok commit'e uyabilir. */
   exactCommit: boolean;
+  /**
+   * Arşiv dosyasının 30 günlük saklama süresi doldu mu. Mühür kaydı ve hash eşleşmesi bundan etkilenmez;
+   * sunucu dosyayı yeniden indirip doğrulamaz, eşleşme kullanıcının elindeki dosyanın hash'iyle yapılır.
+   */
+  fileExpired: boolean;
 };
 
 /**
@@ -25,7 +31,7 @@ export async function lookupSeal(query: string): Promise<Match[]> {
   const q = query.trim().toLowerCase();
   if (!/^[0-9a-f]{7,64}$/.test(q)) return [];
   const db = createAdminClient();
-  const select = "name, team_name, exhibit_no, frozen_sha, frozen_at, archive_sha256, events(title, slug)";
+  const select = "name, team_name, exhibit_no, frozen_sha, frozen_at, archive_sha256, events(title, slug, archive_expires_at)";
   const [byArchive, byCommit] = await Promise.all([
     q.length === 64 ? db.from("projects").select(select).eq("archive_sha256", q) : Promise.resolve({ data: [], error: null }),
     q.length <= 40
@@ -37,7 +43,8 @@ export async function lookupSeal(query: string): Promise<Match[]> {
     throw new Error("Doğrulama kayıtları okunamadı.");
   }
 
-  type Row = { name: string; team_name: string; exhibit_no: number; frozen_sha: string | null; frozen_at: string | null; events: { title: string; slug: string } | null };
+  type Row = { name: string; team_name: string; exhibit_no: number; frozen_sha: string | null; frozen_at: string | null; events: { title: string; slug: string; archive_expires_at: string | null } | null };
+  const now = Date.now();
   const toMatch = (kind: Match["kind"]) => (r: Row): Match => ({
     kind,
     name: r.name,
@@ -48,6 +55,7 @@ export async function lookupSeal(query: string): Promise<Match[]> {
     sealedAt: r.frozen_at,
     sha: r.frozen_sha,
     exactCommit: q.length === 40,
+    fileExpired: archiveAvailability(r.events?.archive_expires_at ?? null, now) === "expired",
   });
   return [
     ...((byArchive.data ?? []) as unknown as Row[]).map(toMatch("arsiv")),

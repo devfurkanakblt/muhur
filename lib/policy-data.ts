@@ -179,3 +179,13 @@ export async function getManagementDocuments(): Promise<PolicyRef[]> {
   const docs = refs(data);
   return docs.length === 2 ? docs : [];
 }
+
+/**
+ * Alt bilgideki "Kullanım Sözleşmesi" bağlantısı: yayındaki platform belgesinin değişmez adresi. Okuma hatası
+ * bütün sayfaları düşürmesin diye null döner; bağlantı o istekte gösterilmez (sahte adres üretilmez).
+ */
+export const getCurrentPlatformPolicy = cache(async (): Promise<PolicyRef | null> => {
+  const { data, error } = await createAdminClient().rpc("management_policy_documents");
+  if (error) { console.error("[sözleşme] alt bilgi belgesi:", error.message); return null; }
+  return refs(data).find(d => d.kind === "platform") ?? null;
+});

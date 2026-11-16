@@ -6,6 +6,7 @@ import { ADMIN_REAUTH_MS, verifiedIdentity, isFreshSignIn, sessionSignedInAt } f
 import { selectAll } from "@/lib/paginate";
 import { notFound } from "next/navigation";
 import { isListed } from "@/lib/event-routes";
+import { parseFeatures, type EventFeatures } from "@/lib/event-features";
 
 /** Okuma hatası "kayıt yok" gibi gösterilmez; sayfa hata ekranına düşer. */
 function readFailed(what: string, error: { message: string }): never {
@@ -32,11 +33,29 @@ type EventRow = {
   community_id: string | null;
   suspended_at: string | null;
   suspended_reason: string | null;
-  community: { name: string; slug: string; city: string | null; status: string; telegram_enabled: boolean } | null;
+  accent_color?: string | null;
+  archive_expires_at?: string | null;
+  features?: unknown;
+  presentation_updated_at?: string | null;
+  community: { name: string; slug: string; city: string | null; status: string; telegram_enabled: boolean; logo_path?: string | null; branding_updated_at?: string | null } | null;
+  brand?: BrandSnapshotRow | BrandSnapshotRow[] | null;
 };
 
-/** Etkinlik satırı, bağlı olduğu toplulukla birlikte okunur. */
-const EVENT_SELECT = "*, community:communities(name,slug,city,status,telegram_enabled)";
+type BrandSnapshotRow = { community_name: string | null; community_logo_path: string | null; accent_color: string | null; event_title: string; source: "lock" | "worker" | "legacy"; captured_at: string };
+
+/**
+ * Etkinlik satırı, bağlı olduğu toplulukla (yalnız genel marka alanları; iletişim verisi yok) ve kilitte
+ * donan görünüm snapshot'uyla birlikte okunur.
+ */
+const EVENT_SELECT = "*, community:communities(name,slug,city,status,telegram_enabled,logo_path,branding_updated_at), brand:event_brand_snapshots(community_name,community_logo_path,accent_color,event_title,source,captured_at)";
+
+/** Etkinliğin görünen markası: kilitliyse donmuş snapshot, değilse topluluğun güncel markası. */
+export type EventBrand = {
+  communityName: string | null;
+  logoPath: string | null;
+  accentColor: string | null;
+  source: "live" | "lock" | "worker" | "legacy";
+};
 
 /** Yöneticinin duyurduğu yemek ya da mini oyun; bitirilene kadar sürer. */
 export type Activity = { kind: "yemek" | "oyun"; title: string; at: string };
@@ -72,12 +91,25 @@ export type EventState = {
   /** Platform tarafından askıya alındı mı (etkinlik düzeyinde). */
   suspended: boolean;
   suspendedReason: string | null;
+  /** Doğrulanmış özellik bayrakları (fail-closed; maskot yalnız DEÜ). */
+  features: EventFeatures;
+  /** Etkinliğin güncel rengi (yönetim formu için); görünümde `brand.accentColor` kullanılır. */
+  accentColor: string | null;
+  brand: EventBrand;
+  /** Marka/özellik/snapshot sürümü: canlı durum özetine girer. */
+  presentationVersion: string;
+  /** ZIP saklama vadesi (kalıcı locked_at + 720 saat; 0020). Yetkili karar DB'nin archive_access'ıdır. */
+  archiveExpiresAt: string | null;
   /** Sunucunun okuma anı; geri sayımın ilk karesi için. */
   now: number;
 };
 
 function toState(row: EventRow): EventState {
   const now = Date.now();
+  const snapshot = Array.isArray(row.brand) ? row.brand[0] ?? null : row.brand ?? null;
+  const brand: EventBrand = snapshot
+    ? { communityName: snapshot.community_name, logoPath: snapshot.community_logo_path, accentColor: snapshot.accent_color, source: snapshot.source }
+    : { communityName: row.community?.name ?? null, logoPath: row.community?.logo_path ?? null, accentColor: row.accent_color ?? null, source: "live" };
   const deadline = new Date(row.deadline).getTime();
   const lockedAt = row.locked_at ? new Date(row.locked_at).getTime() : null;
   const seal = lockedAt !== null && lockedAt < deadline ? lockedAt : deadline;
@@ -106,6 +138,11 @@ function toState(row: EventRow): EventState {
     telegram: row.community?.telegram_enabled === true,
     suspended: row.suspended_at != null,
     suspendedReason: row.suspended_reason ?? null,
+    features: parseFeatures(row.features, row.community?.slug ?? null, row.community_id != null),
+    accentColor: row.accent_color ?? null,
+    brand,
+    archiveExpiresAt: row.archive_expires_at ?? null,
+    presentationVersion: [row.presentation_updated_at ?? "", row.community?.branding_updated_at ?? "", snapshot?.captured_at ?? ""].join("|"),
     now,
   };
 }
@@ -371,6 +408,9 @@ export function logoUrl(path: string | null) {
   if (!path) return null;
   return `${env.supabaseUrl}/storage/v1/object/public/logos/${path}`;
 }
+
+/** Topluluk logosu da `logos` deposundadır (`topluluk/<id>/<rastgele>.webp`). */
+export const communityLogoUrl = logoUrl;
 
 export function exhibitPath(slug: string, no: number) {
   return `/sergi/${slug}/${no}`;

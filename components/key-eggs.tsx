@@ -16,6 +16,7 @@ const KONAMI = ["arrowup", "arrowup", "arrowdown", "arrowdown", "arrowleft", "ar
 const KONAMI_PEEK: Peek = { mood: "oyun", text: "↑↑↓↓←→←→BA. Hileyi bildin; teslim süresini uzatmıyor ama." };
 const LONGEST = Math.max(KONAMI.length, ...Object.keys(WORDS).map((w) => w.length));
 
+const CONSOLE_PLAIN = "mühür. · Kaputun altına baktın; demek ki doğru yerdesin. Süre dolar, mühür vurulur.";
 const CONSOLE_ART = String.raw`
    .-~~~-.
   ( o   o )   mühür.
@@ -31,15 +32,18 @@ function typing(target: EventTarget | null) {
 /**
  * Klavye sürprizleri: Konami kodu, "mühür" / "kahve" / "pizza" yazmak ve konsoldaki selam.
  * Form alanlarında ya da açık bir pencere varken hiçbiri tetiklenmez; sunucuya hiçbir şey gitmez.
+ * Yalnız etkinlik bayrağı açıkken monte edilir (components/event-surface). `mascot` kapalıysa DEÜ maskotu
+ * ne baloncukta ne konsol çiziminde görünür.
  */
-export function KeyEggs() {
+export function KeyEggs({ mascot }: { mascot: boolean }) {
   const [peek, setPeek] = useState<Peek | null>(null);
   const [stamp, setStamp] = useState(0);
   const keys = useRef<string[]>([]);
   const timers = useRef<{ peek?: ReturnType<typeof setTimeout>; stamp?: ReturnType<typeof setTimeout> }>({});
 
   useEffect(() => {
-    console.log(`%c${CONSOLE_ART}`, "font-family: monospace; color: #8466F3");
+    if (mascot) console.log(`%c${CONSOLE_ART}`, "font-family: monospace; color: #8466F3");
+    else console.log(CONSOLE_PLAIN);
 
     const showPeek = (p: Peek) => {
       setPeek(p);
@@ -80,7 +84,7 @@ export function KeyEggs() {
       clearTimeout(t.peek);
       clearTimeout(t.stamp);
     };
-  }, []);
+  }, [mascot]);
 
   return (
     <>
@@ -96,8 +100,8 @@ export function KeyEggs() {
       )}
       {peek && (
         <div key={peek.mood} aria-hidden className="egg-peek pointer-events-none fixed right-4 bottom-0 z-50 flex items-end gap-2 sm:right-8">
-          <p className="mb-16 max-w-[26ch] rounded-[2px] bg-ink px-3.5 py-2.5 text-[0.9375rem] leading-snug text-wall">{peek.text}</p>
-          <Mascot mood={peek.mood} title="" className="-mb-3 w-28 sm:w-36" />
+          <p className={`${mascot ? "mb-16" : "mb-6"} max-w-[26ch] rounded-[2px] bg-ink px-3.5 py-2.5 text-[0.9375rem] leading-snug text-wall`}>{peek.text}</p>
+          {mascot && <Mascot mood={peek.mood} title="" className="-mb-3 w-28 sm:w-36" />}
         </div>
       )}
     </>

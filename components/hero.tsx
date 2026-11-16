@@ -6,6 +6,10 @@ import { Mascot, type MascotMood } from "@/components/mascot/mascot";
 import { formatDateTime } from "@/lib/format";
 import { greetingAt, moodAt } from "@/lib/daypart";
 import type { Activity } from "@/lib/data";
+import { CommunityMark } from "@/components/event-brand";
+
+/** Hero'nun sağ tarafı: DEÜ'de maskot; diğer topluluklarda topluluğun logosu ya da baş harfleri. */
+export type HeroMark = { mascot: true } | { mascot: false; name: string; logoUrl: string | null };
 
 // Maskota tıklayınca sırayla bu ifadeler; birkaç saniye sonra saate göre ifadeye döner.
 const PLAY: MascotMood[] = ["mutlu", "kalp", "merakli", "heyecanli", "odakli"];
@@ -20,6 +24,7 @@ export function Hero({
   activity,
   action,
   celebrate = false,
+  mark = { mascot: true },
 }: {
   startsAt: string;
   deadline: string;
@@ -31,6 +36,7 @@ export function Hero({
   action: React.ReactNode;
   /** Kazananlar açıklandı: kilit sonrası uykulu maskot yerine mutlu maskot. */
   celebrate?: boolean;
+  mark?: HeroMark;
 }) {
   const [lockedLive, setLockedLive] = useState(false);
   const locked = lockedInitially || lockedLive;
@@ -85,13 +91,17 @@ export function Hero({
         <div className="mt-8">{action}</div>
       </div>
 
-      <div className="relative mx-auto w-[min(56vw,240px)] md:mx-0 md:-mb-20 md:w-[300px] lg:w-[340px]">
+      {!mark.mascot ? (
+        <div className="relative mx-auto md:mx-0">
+          <CommunityMark name={mark.name} logoUrl={mark.logoUrl} size={168} className="text-[2.5rem]" />
+        </div>
+      ) : <div className="relative mx-auto w-[min(56vw,240px)] md:mx-0 md:-mb-20 md:w-[300px] lg:w-[340px]">
         <div className={locked ? undefined : "breathe"}>
           <button type="button" onClick={poke} aria-label="Maskotu dürt" className="block w-full cursor-pointer rounded-[2px] active:scale-[0.98] transition-transform duration-150">
             <Mascot key={mood} mood={mood} title="" className="mascot-lg mascot-enter block aspect-[1310/1070] h-auto w-full" />
           </button>
         </div>
-      </div>
+      </div>}
     </section>
   );
 }

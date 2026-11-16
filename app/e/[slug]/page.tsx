@@ -6,7 +6,8 @@ import { Vitrine } from "@/components/vitrine";
 import { SiteHeader } from "@/components/site-header";
 import { SignInButton } from "@/components/buttons";
 import { buttonStyles } from "@/components/button-styles";
-import { getViewer, requireEventBySlug } from "@/lib/data";
+import { communityLogoUrl, getViewer, requireEventBySlug } from "@/lib/data";
+import { eventShowsMascot } from "@/lib/event-features";
 import { eventPath } from "@/lib/event-routes";
 import { buildVitrine } from "@/lib/vitrine";
 import { ensureLocked, freezeAll } from "@/lib/freeze";
@@ -90,13 +91,14 @@ export default async function EventHome({ params }: PageProps<"/e/[slug]">) {
           activity={event.activity}
           action={action}
           celebrate={announced}
+          mark={eventShowsMascot(event) ? { mascot: true } : { mascot: false, name: event.brand.communityName ?? event.communityName ?? "Topluluk", logoUrl: communityLogoUrl(event.brand.logoPath) }}
         />
         {(event.applicationUrl || event.rulesUrl || event.privacyUrl) && <nav aria-label="Etkinlik belgeleri" className="wrap flex flex-wrap gap-x-6 gap-y-3 py-5 text-sm text-ink-muted">
           {event.applicationUrl && <a href={event.applicationUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Başvuru formu ↗</a>}
           {event.rulesUrl && <a href={event.rulesUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Etkinlik kuralları ↗</a>}
           {event.privacyUrl && <a href={event.privacyUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">Aydınlatma metni ↗</a>}
         </nav>}
-        <Vitrine key={`vitrin-${event.id}`} eventId={event.id} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} />
+        <Vitrine key={`vitrin-${event.id}`} mascot={eventShowsMascot(event)} eventId={event.id} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} />
       </main>
     </>
   );

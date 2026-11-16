@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { JetBrains_Mono, Schibsted_Grotesk } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
-import { SaveEgg } from "@/components/save-egg";
-import { KeyEggs } from "@/components/key-eggs";
 import { env } from "@/lib/env";
 import "./globals.css";
 
@@ -20,7 +18,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL(env.siteUrl),
-  title: { default: "mühür · DEÜ CS&AI Hackathon", template: "%s · mühür" },
+  title: { default: "mühür · hackathon teslim ve mühür platformu", template: "%s · mühür" },
   description: "Süre dolar, mühür vurulur. Hackathon projeleri son teslim anında mühürlenir.",
   applicationName: "mühür",
 };
@@ -41,8 +39,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <a href="#main-content" className="skip-link no-print">İçeriğe geç</a>
         {children}
         <SiteFooter />
-        <SaveEgg />
-        <KeyEggs />
       </body>
     </html>
   );

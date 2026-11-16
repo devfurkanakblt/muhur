@@ -3,6 +3,8 @@ import type { EventState, OwnProject, ProjectJob, TimelineEntry } from "@/lib/da
 import { formatDateTime, formatBytes } from "@/lib/format";
 import { SubmissionButton } from "@/components/team-actions";
 import { SealSuccess } from "@/components/seal-success";
+import { eventShowsMascot } from "@/lib/event-features";
+import { archiveAvailability, RETENTION_MESSAGE } from "@/lib/archive-retention";
 
 const timelineLabels: Record<string, string> = {
   registered: "Proje kaydı oluşturuldu", submission_requested: "Teslim güncellemesi istendi",
@@ -63,7 +65,9 @@ export function DeliveryPanel({ project, event, jobs, timeline }: {
     </div>}
     {!event.locked && <div className="mt-5"><SubmissionButton eventId={event.id} pendingJob={active?.state === "processing"} hasVersion={!!project.accepted_sha} suspended={event.suspended} /></div>}
     {project.accepted_sha && <div className="mt-4 grid gap-2 text-[0.875rem]">
-      <a href={`/api/arsiv/${project.id}?surum=kabul`} className="inline-flex min-h-11 items-center underline">Kabul edilmiş teslim arşivini indir</a>
+      {archiveAvailability(event.archiveExpiresAt, event.now) === "expired"
+        ? <p className="text-ink-2">{RETENTION_MESSAGE} Kabul kaydı ve SHA-256 özeti geçerli kalır.</p>
+        : <a href={`/api/arsiv/${project.id}?surum=kabul`} className="inline-flex min-h-11 items-center underline">Kabul edilmiş teslim arşivini indir</a>}
       {project.accepted_archive_sha256 && <p className="break-all text-ink-2">Arşivin SHA-256 özeti: <span className="font-mono">{project.accepted_archive_sha256}</span></p>}
     </div>}
     {active && <p className="mt-3 text-[0.875rem] text-ink-2">{retrying
@@ -75,7 +79,7 @@ export function DeliveryPanel({ project, event, jobs, timeline }: {
         <span aria-hidden>{c.ok ? "✓" : "○"}</span> {c.label}
       </li>)}</ul>
     </details>}
-    {project.archive_sha256 && <SealSuccess projectId={project.id} />}
+    {project.archive_sha256 && <SealSuccess projectId={project.id} mascot={eventShowsMascot(event)} />}
     <details className="mt-6">
       <summary className="cursor-pointer font-medium">Teslim zaman çizelgesi</summary>
       <ol className="mt-4 grid gap-3 text-[0.875rem]">{timeline.length ? timeline.map(t => <li key={t.id}>

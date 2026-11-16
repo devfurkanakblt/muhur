@@ -5,7 +5,7 @@ import { SiteHeader } from "@/components/site-header";
 import { EventList, type EventListItem } from "@/components/event-list";
 import { Mascot } from "@/components/mascot/mascot";
 import { TAGLINE } from "@/components/brand";
-import { getListedEvents, getRequestNow, getViewer, type EventState } from "@/lib/data";
+import { communityLogoUrl, getListedEvents, getRequestNow, getViewer, type EventState } from "@/lib/data";
 import { eventPath, splitHomeEvents } from "@/lib/event-routes";
 
 export const metadata = { title: { absolute: "mühür" } };
@@ -13,7 +13,8 @@ export const metadata = { title: { absolute: "mühür" } };
 /** Satır için yalnızca herkese açık alanlar (askı gerekçesi vb. listeye taşınmaz). */
 function item(e: EventState, href: string): EventListItem {
   return {
-    id: e.id, href, title: e.title, communityName: e.communityName, communityCity: e.communityCity,
+    id: e.id, href, title: e.title, communityName: e.brand.communityName ?? e.communityName, communityCity: e.communityCity,
+    logoUrl: communityLogoUrl(e.brand.logoPath),
     startsAt: e.startsAt, deadline: e.deadline, sealTime: e.sealTime,
   };
 }

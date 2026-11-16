@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Wordmark } from "@/components/brand";
-import { Mascot } from "@/components/mascot/mascot";
+import { EventMascot } from "@/components/event-mascot";
+import { eventShowsMascot } from "@/lib/event-features";
 import { SealRecord } from "@/components/seal-record";
 import { PrintButton } from "@/components/print-button";
 import { getEventBySlug, getExhibit, getMembers } from "@/lib/data";
@@ -27,7 +28,7 @@ export default async function ReceiptPage({ params }: PageProps<"/sergi/[slug]/[
           <Wordmark className="text-[2rem] leading-none" />
           <p className="mt-2 text-[0.6875rem] font-medium tracking-[0.1em] text-ink-3 uppercase">Mühür makbuzu</p>
         </div>
-        <Mascot mood="uykulu" title="" className="w-20 shrink-0" />
+        <EventMascot show={eventShowsMascot(event)} mood="uykulu" className="w-20 shrink-0" />
       </div>
 
       <div className="mt-8">
@@ -41,7 +42,7 @@ export default async function ReceiptPage({ params }: PageProps<"/sergi/[slug]/[
       </div>
 
       <div className="mt-8">
-        <SealRecord project={exhibit} sealTime={event.sealTime} print />
+        <SealRecord project={exhibit} sealTime={event.sealTime} print archiveExpiresAt={event.archiveExpiresAt} now={event.now} />
       </div>
 
       <p className="mt-8 max-w-[62ch] text-[0.9375rem] leading-relaxed text-ink-2">

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeftIcon, ArrowUpRightIcon, ReceiptIcon } from "@phosphor-icons/react/ssr";
 import { SiteHeader } from "@/components/site-header";
+import { gorunenEtkinlik } from "@/components/suspension-notice";
 import { Plinth } from "@/components/exhibit-label";
 import { SealRecord } from "@/components/seal-record";
 import { VoteButton } from "@/components/vote-button";
@@ -46,7 +47,7 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
 
   return (
     <>
-      <SiteHeader viewer={viewer} />
+      <SiteHeader viewer={viewer} event={gorunenEtkinlik(event, false)} />
       <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1240px] flex-1 px-5 pt-10 pb-28 sm:px-8 md:pt-16">
         {open && <LiveState slug={event.slug} />}
         <Link href={back} className="mb-10 inline-flex items-center gap-1.5 text-[0.9375rem] text-ink-2 hover:text-ink">
@@ -115,7 +116,7 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
                 )}
               </div>
               {event.locked ? (
-                <SealRecord project={exhibit} sealTime={event.sealTime} />
+                <SealRecord project={exhibit} sealTime={event.sealTime} archiveExpiresAt={event.archiveExpiresAt} now={event.now} />
               ) : (
                 <p className="text-ink-2">Teslim {formatDateTime(event.deadline)} anında kapanacak. Ekip, son push&apos;tan sonra teslim sürümünü panelden güncellemelidir.</p>
               )}

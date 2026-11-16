@@ -7,6 +7,8 @@ import { csvTable, zipEntries } from "@/lib/zip";
 import { selectAll } from "@/lib/paginate";
 import { exclusionReason, type JuryRow } from "@/lib/jury";
 import { auditHeadAdminDownload, isHeadAdminOnly } from "@/lib/download-audit";
+import { getArchiveAccess, getExpiredObjects, type ArchiveAccess } from "@/lib/archive-access";
+import { RETENTION_MESSAGE } from "@/lib/archive-retention";
 
 export const maxDuration = 300;
 
@@ -16,6 +18,9 @@ export const maxDuration = 300;
  * ?format=csv: tüm kayıtların durumu.
  * Yetki etkinlik kapsamındadır: topluluk rolü, head admin ya da (kilitten sonra) etkinliğin jürisi.
  * Yalnızca head admin yetkisiyle yapılan indirme (CSV dahil) içerik verilmeden önce denetim kaydına girer.
+ * Saklama (Plan 5): CSV/manifest kanıtı her zaman indirilebilir ve archive_status / silinme / vade alanlarını taşır.
+ * Kilitten 30 gün sonra ZIP 410 döner; dosya talebi metadata talebinden ayrıdır. Uzun akışta her nesneden önce
+ * saklama yeniden denetlenir; süre dolarsa akış hatayla kesilir, yarım ZIP eksiksiz paket gibi sunulmaz.
  */
 export async function GET(request: Request, ctx: { params: Promise<{ slug: string }> }) {
   const viewer = await getViewer();
@@ -29,6 +34,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
   const params = new URL(request.url).searchParams;
   const mode = params.get("paket") === "gecerli" ? "gecerli" : "eksiksiz";
   const db = createAdminClient();
+  let retention: ArchiveAccess;
+  let ledger: Awaited<ReturnType<typeof getExpiredObjects>>;
+  try { [retention, ledger] = await Promise.all([getArchiveAccess(event.id), getExpiredObjects(event.id)]); }
+  catch { return Response.json({ error: "Saklama durumu denetlenemedi. Tekrar dene." }, { status: 503 }); }
+  const fileStatus = (path: string | null) => !path ? "none" : ledger.get(path)?.state === "deleted" ? "deleted" : retention.state;
   let projects: JuryRow[];
   try {
     // Satır sınırı sessizce eksik paket üretmesin: sayfalı okunur, toplam sayımla karşılaştırılır.
@@ -43,16 +53,17 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
   const missing = projects.filter(p => !p.archive_path || !p.archive_sha256);
   const included = projects.filter(p => p.archive_path && p.archive_sha256);
   const manifest = { event: event.title, slug: event.slug, sealTime: event.sealTime, package: mode,
+    archiveExpiresAt: retention.expiresAt, archiveStatus: retention.state,
     included: included.length, excluded: missing.length,
     projects: projects.map(p => ({ no: p.exhibit_no, name: p.name, team: p.team_name, summary: p.summary, demo: p.demo_url,
       members: p.members.map(m => m.github_login), repo: p.repo_full_name, sha: p.frozen_sha,
       acceptedAt: p.accepted_at, branch: p.accepted_branch, sha256: p.archive_sha256, bytes: p.archive_bytes,
-      file: p.archive_sha256 ? `arsivler/${names.get(p.id)}` : null, status: p.archive_sha256 ? "sealed" : "missing",
-      reason: exclusionReason(p) })),
+      file: p.archive_sha256 && retention.state !== "expired" ? `arsivler/${names.get(p.id)}` : null, status: p.archive_sha256 ? "sealed" : "missing",
+      reason: exclusionReason(p), archive_status: fileStatus(p.archive_path), deleted_at: p.archive_path ? ledger.get(p.archive_path)?.deletedAt ?? null : null })),
   };
   const csv = csvTable([
-    ["No", "Proje", "Ekip", "Üyeler", "Özet", "Demo", "Repo", "Commit", "Dal", "Kabul zamanı", "SHA-256", "Bayt", "Durum", "Pakete girmeme nedeni"],
-    ...manifest.projects.map(p => [p.no, p.name, p.team, p.members.join("; "), p.summary, p.demo, p.repo, p.sha, p.branch, p.acceptedAt, p.sha256, p.bytes, p.status, p.reason]),
+    ["No", "Proje", "Ekip", "Üyeler", "Özet", "Demo", "Repo", "Commit", "Dal", "Kabul zamanı", "SHA-256", "Bayt", "Durum", "Pakete girmeme nedeni", "archive_status", "deleted_at", "archive_expires_at"],
+    ...manifest.projects.map(p => [p.no, p.name, p.team, p.members.join("; "), p.summary, p.demo, p.repo, p.sha, p.branch, p.acceptedAt, p.sha256, p.bytes, p.status, p.reason, p.archive_status, p.deleted_at, retention.expiresAt]),
   ]);
   // Kayıt yazılamazsa içerik verilmez.
   const audit = async (format: string) => !isHeadAdminOnly(access)
@@ -61,6 +72,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
   if (params.get("format") === "csv") {
     if (!(await audit("csv"))) return auditFailed();
     return new Response(csv, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${event.slug}-teslimler.csv"`, "Cache-Control": "private, no-store" } });
+  }
+  // Dosya talebi: süre dolduysa paket verilmez; kanıt CSV'de kalır. "gecerli" paket süresi dolmuş arşivi listeleyemez.
+  if (retention.state === "expired") {
+    return Response.json({ error: `${RETENTION_MESSAGE} Mühür kayıtları ve SHA-256 değerleri CSV listesinde (?format=csv).`, retention: "expired", expiresAt: retention.expiresAt },
+      { status: 410, headers: { "Cache-Control": "private, no-store" } });
   }
   if (mode === "eksiksiz" && missing.length) {
     return Response.json({
@@ -80,6 +96,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ slug: strin
     { name: "teslimler.csv", read: async () => encode(csv) },
     { name: "SHA256SUMS.txt", read: async () => encode(included.map(p => `${p.archive_sha256}  arsivler/${names.get(p.id)}`).join("\n") + "\n") },
     ...included.map(p => ({ name: `arsivler/${names.get(p.id)}`, read: async () => {
+      // Nesne başına yeniden denetim: akış sürerken vade dolarsa paket hatayla kesilir.
+      const now = await getArchiveAccess(event.id);
+      if (now.state === "expired") throw new Error(RETENTION_MESSAGE);
       const { data, error } = await db.storage.from("archives").download(p.archive_path!);
       if (error || !data) throw new Error(`No. ${p.exhibit_no} arşivi okunamadı.`);
       const zip = new Uint8Array(await data.arrayBuffer());

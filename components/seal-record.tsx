@@ -1,4 +1,5 @@
-import { formatBytes, formatDay, formatTime } from "@/lib/format";
+import { formatBytes, formatDateTime, formatDay, formatTime } from "@/lib/format";
+import { archiveAvailability, retentionLabel } from "@/lib/archive-retention";
 
 type Sealed = {
   repo_full_name: string;
@@ -13,8 +14,13 @@ type Sealed = {
   accepted_branch?: string | null;
 };
 
-/** Mühür kaydının tablosu: panelde, eser sayfasında ve makbuzda aynı. */
-export function SealRecord({ project, sealTime, print = false }: { project: Sealed; sealTime: string; print?: boolean }) {
+/**
+ * Mühür kaydının tablosu: panelde, eser sayfasında ve makbuzda aynı. `archiveExpiresAt` verilirse 30 günlük
+ * saklama durumu ayrı satırda gösterilir; süre dolsa da mühür kaydı ve SHA-256 değerleri kanıt olarak kalır.
+ */
+export function SealRecord({ project, sealTime, print = false, archiveExpiresAt, now }: { project: Sealed; sealTime: string; print?: boolean; archiveExpiresAt?: string | null; now?: number }) {
+  const retention = project.archive_sha256 && archiveExpiresAt !== undefined && now !== undefined
+    ? retentionLabel(archiveAvailability(archiveExpiresAt, now), archiveExpiresAt, formatDateTime) : null;
   const rows: [string, React.ReactNode][] = [
     ["Mühür anı", `${formatDay(sealTime)}, ${formatTime(sealTime)} (Türkiye saati)`],
     ["Repo", project.repo_full_name],
@@ -36,6 +42,7 @@ export function SealRecord({ project, sealTime, print = false }: { project: Seal
     ],
     ["Arşiv SHA-256", project.archive_sha256 ?? (project.freeze_error ? "Arşivleme başarısız" : project.accepted_at ? "Doğrulama tamamlanıyor…" : "Arşiv yok")],
     ...(project.archive_bytes ? ([["Arşiv boyutu", formatBytes(project.archive_bytes)]] as [string, React.ReactNode][]) : []),
+    ...(retention ? ([["Arşiv dosyası", <span key="r" className="font-sans">{retention}</span>]] as [string, React.ReactNode][]) : []),
   ];
   return (
     <div>

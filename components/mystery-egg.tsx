@@ -11,7 +11,7 @@ import { useProtectedForm } from "@/components/protected-form";
  * Cevap sunucuda denetlenir; bu bileşen cevabı bilmez. Ctrl+S esprisi (SaveEgg) Shift'siz basışı alır.
  * Gizem etkinlik başınadır: rozet, sayfası açık olan etkinliğe yazılır.
  */
-export function MysteryEgg({ eventId }: { eventId: string }) {
+export function MysteryEgg({ eventId, mascot }: { eventId: string; mascot: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [state, action, pending] = useActionState(huntMystery, undefined);
@@ -35,7 +35,7 @@ export function MysteryEgg({ eventId }: { eventId: string }) {
   return (
     <dialog ref={dialog} aria-labelledby="mystery-title" className="m-auto w-[min(92vw,480px)] border border-rule bg-wall p-6 text-ink backdrop:bg-black/40">
       <div className="flex items-center gap-4">
-        <Mascot mood={solved ? "mutlu" : "merakli"} title="" className="w-16 shrink-0" />
+        {mascot && <Mascot mood={solved ? "mutlu" : "merakli"} title="" className="w-16 shrink-0" />}
         <h2 id="mystery-title" className="text-xl font-semibold">
           {solved ? "Gizem avcısı!" : "Bir şey mi biliyorsun?"}
         </h2>

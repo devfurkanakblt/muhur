@@ -1,3 +1,4 @@
+import { eventShowsMascot } from "@/lib/event-features";
 import { connection } from "next/server";
 import { requireEventBySlug } from "@/lib/data";
 import { getStageData } from "@/lib/stage";
@@ -16,5 +17,5 @@ export default async function StagePage({ params }: PageProps<"/e/[slug]/sahne">
   const event = await requireEventBySlug(slug);
   const initial = await getStageData(event);
   const qrRows = qrMatrix(initial.vitrinUrl).map((row) => row.map((dark) => (dark ? "1" : "0")).join(""));
-  return <Stage slug={event.slug} initial={initial} qrRows={qrRows} />;
+  return <Stage slug={event.slug} initial={initial} qrRows={qrRows} mascot={eventShowsMascot(event)} />;
 }

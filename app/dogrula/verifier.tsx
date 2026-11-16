@@ -6,6 +6,7 @@ import { CheckCircleIcon, FileZipIcon, XCircleIcon } from "@phosphor-icons/react
 import { lookupSeal, type Match } from "./actions";
 import { buttonStyles } from "@/components/button-styles";
 import { exhibitNo, formatDateTime } from "@/lib/format";
+import { SEAL_VALID_FILE_EXPIRED } from "@/lib/archive-retention";
 
 type Result = { query: string; label: string; matches: Match[] } | null;
 
@@ -142,6 +143,7 @@ export function Verifier() {
                         <span className="font-mono tnum">{exhibitNo(m.no)}</span> · {m.event}
                         {m.sealedAt && <> · mühür {formatDateTime(m.sealedAt)}</>}
                       </p>
+                      {m.fileExpired && <p className="mt-2 max-w-[60ch] text-[0.875rem] text-ink-2">{SEAL_VALID_FILE_EXPIRED} {m.kind === "arsiv" ? "Eşleşme senin seçtiğin dosyanın özetiyle yapıldı; sunucu dosyayı yeniden indirip doğrulamadı." : ""}</p>}
                       {m.kind === "commit" && <p className="mt-2 max-w-[60ch] text-[0.875rem] text-ink-2">Commit eşleşmesi dosyanın birebir aynı olduğunu doğrulamaz. Bunun için mühürlü ZIP arşivini seç.{!m.sealedAt && " Bu kaydın mühür tamamlanma zamanı yok; tamamlanmış mühür olarak kabul etme."}</p>}
                     </div>
                   </li>

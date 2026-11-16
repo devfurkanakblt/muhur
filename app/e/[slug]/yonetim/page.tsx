@@ -17,7 +17,7 @@ import { can } from "@/lib/authz";
 import { selectAll } from "@/lib/paginate";
 import { createAdminClient } from "@/lib/supabase/server";
 import { HEALTH_TEXT } from "@/lib/health";
-import { exhibitNo, formatBytes, formatDay, formatTime, relativeTR, toLocalInput } from "@/lib/format";
+import { exhibitNo, formatBytes, formatDateTime, formatDay, formatTime, relativeTR, toLocalInput } from "@/lib/format";
 import { retryFreeze, setVoting, removeAward, runWorker } from "@/app/actions";
 import { LiveState } from "@/components/live-state";
 import { getLiveStatus } from "@/lib/status";
@@ -25,6 +25,7 @@ import { ActionForm, ActionButton } from "@/components/action-form";
 import { EventPresentationForm } from "@/components/branding-form";
 import { communityLogoUrl } from "@/lib/data";
 import { isMascotCommunity } from "@/lib/event-features";
+import { archiveAvailability, retentionLabel } from "@/lib/archive-retention";
 
 export const maxDuration = 300;
 
@@ -244,6 +245,7 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
         </Section>
 
         <Section title="Jüri paketi" note="Geçerli teslimler paketi yalnızca mühürlü arşivleri içerir; dışarıda kalanları nedenleriyle listeler. Eksiksiz paket için bütün kayıtların mührü tamamlanmış olmalı.">
+          {juryReady && event.archiveExpiresAt && <p className="mb-3 text-[0.9375rem] text-ink-2">{retentionLabel(archiveAvailability(event.archiveExpiresAt, event.now), event.archiveExpiresAt, formatDateTime)}</p>}
           {juryReady ? (
             <p className="flex flex-wrap gap-x-4 gap-y-1 text-[0.9375rem]">
               <a href={`/api/juri/${event.slug}?paket=gecerli`} className="underline underline-offset-4">Mühürlü teslimler ZIP</a>
@@ -365,9 +367,11 @@ export default async function EventAdminPage({ params }: PageProps<"/e/[slug]/yo
                             >
                               {r.frozen_sha?.slice(0, 7)}
                             </a>
-                            <a href={`/api/arsiv/${r.id}`} className="inline-flex items-center gap-1 text-ink-2 hover:text-ink">
-                              <DownloadSimpleIcon size={14} /> ZIP · {formatBytes(r.archive_bytes ?? 0)}
-                            </a>
+                            {archiveAvailability(event.archiveExpiresAt, event.now) === "expired"
+                              ? <span className="text-[0.8125rem] text-ink-3">ZIP saklama süresi doldu · kayıt geçerli</span>
+                              : <a href={`/api/arsiv/${r.id}`} className="inline-flex items-center gap-1 text-ink-2 hover:text-ink">
+                                <DownloadSimpleIcon size={14} /> ZIP · {formatBytes(r.archive_bytes ?? 0)}
+                              </a>}
                             {r.frozen_method === "head" && (
                               <span className="text-[0.8125rem] text-ink-3">Push kaydı okunamadı; kilit anındaki son commit alındı.</span>
                             )}

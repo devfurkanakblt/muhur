@@ -116,7 +116,7 @@ export default async function ExhibitPage({ params }: PageProps<"/sergi/[slug]/[
                 )}
               </div>
               {event.locked ? (
-                <SealRecord project={exhibit} sealTime={event.sealTime} />
+                <SealRecord project={exhibit} sealTime={event.sealTime} archiveExpiresAt={event.archiveExpiresAt} now={event.now} />
               ) : (
                 <p className="text-ink-2">Teslim {formatDateTime(event.deadline)} anında kapanacak. Ekip, son push&apos;tan sonra teslim sürümünü panelden güncellemelidir.</p>
               )}

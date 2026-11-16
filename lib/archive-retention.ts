@@ -1,6 +1,6 @@
-// 30 günlük arşiv saklama: saf kararlar ve metinler. Bağımlılıksız (node:crypto dışında); sunucu, betik ve
+// 30 günlük arşiv saklama: saf kararlar ve metinler. Bağımlılıksız (istemci paketine de girer); sunucu, betik ve
 // testler aynı kuralları kullanır. Yetkili karar zamanı DB'dir (archive_access); buradaki hesap arayüz içindir.
-import { createHash } from "node:crypto";
+// Manifest özeti (node:crypto) lib/archive-manifest.ts'dedir.
 
 export const RETENTION_HOURS = 720;
 export const EXPIRING_HOURS = 72;
@@ -36,19 +36,6 @@ export function signedUrlSeconds(secondsLeft: number | null, max = 60): number |
   if (secondsLeft === null) return max;
   if (!Number.isFinite(secondsLeft) || secondsLeft < MIN_SIGNED_URL_SECONDS) return null;
   return Math.min(max, Math.floor(secondsLeft));
-}
-
-export type ManifestRow = { path: string; bytes: number | string | null; sha256: string | null };
-
-/** DB `archive_expiry_preview` ile aynı satır biçimi: "yol\tbayt\tsha256", bayt sırasıyla sıralı. */
-export function manifestLines(rows: ManifestRow[]): string[] {
-  return rows
-    .map((r) => `${r.path}\t${r.bytes ?? ""}\t${r.sha256 ?? ""}`)
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-}
-
-export function manifestHash(rows: ManifestRow[]): string {
-  return createHash("sha256").update(manifestLines(rows).join("\n"), "utf8").digest("hex");
 }
 
 /** Saklama ledger'ındaki dosya durumunun kullanıcı metni. */

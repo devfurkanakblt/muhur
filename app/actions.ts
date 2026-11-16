@@ -639,6 +639,15 @@ export async function lockNowAction(eventId: string): Promise<{ error?: string }
   return {};
 }
 
+const RETENTION_RETRY_MSG = "Arşivin 30 günlük saklama süresi doldu; mühür yeniden denenemez. Mühür kaydı ve doğrulama geçerli kalır.";
+
+/** Saklama süresi DB saatine göre; okunamazsa yeniden deneme başlatılmaz (fail-closed). */
+async function archiveExpired(eventId: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().rpc("archive_expired", { p_event: eventId });
+  if (error) throw new Error("Saklama durumu okunamadı.");
+  return data === true;
+}
+
 export async function retryFreeze(formData: FormData): Promise<{ error: string } | void> {
   const id = String(formData.get("id") ?? "");
   const db = createAdminClient();
@@ -649,6 +658,7 @@ export async function retryFreeze(formData: FormData): Promise<{ error: string }
   const admin = owner ? await authorize(owner, "isletim") : YETKISIZ_MESAJI;
   if (typeof admin === "string") return { error: admin };
   const event = await getEventRow(row.event_id);
+  if (await archiveExpired(row.event_id)) return { error: RETENTION_RETRY_MSG };
   if ((event.locked_at || Date.now() >= +new Date(event.deadline)) && (await claimOnce(requestKey("muhur-yeniden", row.id), 30))) {
     await auditAdmin(admin, "retry_seal", { eventId: row.event_id, projectId: row.id });
     after(() => retrySeal(row.id, row.event_id));
@@ -838,6 +848,7 @@ export async function retryDeliveryJob(previous: FormState, formData: FormData):
   const owner = await getEventById(job.event_id);
   const admin = owner ? await authorize(owner, "isletim") : YETKISIZ_MESAJI;
   if (typeof admin === "string") return { error: admin };
+  if (await archiveExpired(job.event_id)) return { error: RETENTION_RETRY_MSG };
   const { data, error } = await db.rpc("retry_delivery_job", { p_job: id });
   if (error) return { error: dbError(error.message) };
   if (data !== true) {

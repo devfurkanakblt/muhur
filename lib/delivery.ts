@@ -62,6 +62,10 @@ export async function processDeliveryJobs(projectId: string | null = null, limit
         ).eq("id", job.project_id).single();
         if (projectError || !p) throw new Error("Proje okunamadı.");
         if (!p.archive_sha256) {
+          // Süresi dolmuş etkinlikte ZIP yeniden yüklenmez, GitHub'dan güncel HEAD arşivlenmez; hata nedeni saklamadır.
+          const { data: expired, error: expiryError } = await db.rpc("archive_expired", { p_event: job.event_id });
+          if (expiryError) throw new Error("Saklama durumu okunamadı.");
+          if (expired === true) throw new Error("SAKLAMA: Arşivin 30 günlük saklama süresi doldu; mühür yeniden oluşturulamaz.");
           if (!p.accepted_archive_path) throw new Error("Süre dolmadan kabul edilmiş teslim sürümü yok. Sonradan kod kabul edilemez.");
           await retryTransient(() => verifySealedArchive(p.accepted_archive_path, p.accepted_archive_sha256, p.accepted_archive_bytes, readArchive));
         }

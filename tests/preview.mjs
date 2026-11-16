@@ -26,6 +26,10 @@ const policyDocs = ["platform","data_processing"].map((kind,i)=>({id:`50000000-0
 const participantDoc = {id:"50000000-0000-0000-0000-000000000003",kind:"participant",version:"test-1",content:"Yalnız yerel test belgesi. Hukuki metin değildir.",content_sha256:"c".repeat(64),status:"published",published_at:stamp(-86400000),created_at:stamp(-90000000)};
 const fixtureTerms = {id:"51000000-0000-0000-0000-000000000001",event_id:eventId,version:1,rules_url:"https://example.com/kurallar",privacy_url:"https://example.com/aydinlatma",content_sha256:null};
 let consentMissing = false;
+// Plan 5 · saklama: ?saklama=doldu (vade geçti, dosya defterde silindi) | az (30 sn kaldı) | bitti (5 sn kaldı).
+let retention = "normal";
+let lastSignedSeconds = null;
+const retentionSeconds = () => retention === "doldu" ? 0 : retention === "az" ? 30 : retention === "bitti" ? 5 : 30 * 86400;
 const contact = {university:"Örnek Üniversite",city:"İzmir",link:null,contact_name:"Örnek Sorumlu",contact_email:"private-applicant@example.test",contact_phone:"+905551234567",created_at:stamp(-86400000),reviewed_at:null,review_reason:null,suspended_reason:null};
 const hashToken = token => createHash("sha256").update(token).digest("hex");
 // Denetim kayıtları (log_admin RPC) bellekte tutulur; /fixture/audit okur. ?denetim=hata ile yazma başarısız olur.
@@ -97,6 +101,7 @@ function records(table) {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
       community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
       community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false, logo_path: null }, features: DEU_FEATURES, accent_color: null,
+      archive_expires_at: locked ? stamp(retention === "doldu" ? -1000 : retentionSeconds() * 1000) : null,
       brand: locked ? { community_name: "DEÜ CS&AI", community_logo_path: null, accent_color: null, event_title: "Örnek Hackathon · Yerel Test", source: "lock", captured_at: stamp(-60_000) } : null, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", current_terms_version_id: fixtureTerms.id, terms: fixtureTerms, announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     communities: [
       { ...contact, applicant_id: "00000000-0000-0000-0000-000000000098", id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", city: "İzmir", status: "onaylandi", telegram_enabled: false },
@@ -132,6 +137,7 @@ function records(table) {
     worker_runs: [{ id: "r1", started_at: stamp(-30_000), finished_at: stamp(-15_000), processed: 3, error: null }],
     awards,
     votes,
+    archive_expiry_objects: retention === "doldu" ? [{ event_id: eventId, path: "teslim/fixture.zip", state: "deleted", deleted_at: stamp(-500) }] : [],
     mascot_naming_rounds: [{ event_id: eventId, phase: mode === "voting" ? "oylama" : mode === "sealed" ? "sonuc" : "oneriler" }],
     mascot_name_proposals: mascotProposals,
     mascot_name_votes: mode === "voting" || mode === "sealed" ? mascotVotes : [],
@@ -168,6 +174,8 @@ const server = createServer(async (request, response) => {
     multiEvent = url.searchParams.get("coklu") === "1";
     auditFails = url.searchParams.get("denetim") === "hata";
     consentMissing = url.searchParams.get("onay") === "eksik";
+    retention = ["doldu", "az", "bitti"].includes(url.searchParams.get("saklama")) ? url.searchParams.get("saklama") : "normal";
+    lastSignedSeconds = null;
     audits = [];
     hunters = [];
     votes = sealedVotes();
@@ -176,8 +184,19 @@ const server = createServer(async (request, response) => {
   }
   // Arşiv indirme bağlantısı: imzalı adres yerel sahte depoyu gösterir (içerik sunulmaz).
   if (url.pathname.startsWith("/storage/v1/object/sign/archives/") && request.method === "POST") {
+    const body = JSON.parse(await new Promise(done => { let b = ""; request.on("data", c => b += c); request.on("end", () => done(b)); }) || "{}");
+    lastSignedSeconds = body.expiresIn ?? null;
     return response.end(JSON.stringify({ signedURL: `${url.pathname.slice("/storage/v1".length)}?token=fixture` }));
   }
+  if (url.pathname === "/fixture/last-sign") return response.end(JSON.stringify({ seconds: lastSignedSeconds }));
+  // Plan 5 · saklama penceresi DB saatine göre (archive_access); fikstür seçilen durumu döndürür.
+  if (url.pathname === "/rest/v1/rpc/archive_access") {
+    const locked = mode !== "open";
+    const left = retentionSeconds();
+    return response.end(JSON.stringify({ state: !locked ? "available" : retention === "doldu" ? "expired" : left <= 72 * 3600 ? "expiring" : "available",
+      expires_at: locked ? stamp(retention === "doldu" ? -1000 : left * 1000) : null, seconds_left: locked ? left : null, run_state: retention === "doldu" ? "completed" : null, deleted_objects: retention === "doldu" ? 1 : 0 }));
+  }
+  if (url.pathname === "/rest/v1/rpc/archive_expired") return response.end(JSON.stringify(mode !== "open" && retention === "doldu"));
   if (url.pathname === "/fixture/audit") return response.end(JSON.stringify(audits));
   if (url.pathname === "/rest/v1/rpc/log_admin") {
     const body = JSON.parse(await new Promise(done => { let b = ""; request.on("data", c => b += c); request.on("end", () => done(b)); }) || "{}");

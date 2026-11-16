@@ -9,6 +9,7 @@ import { ProjectForm } from "@/components/project-form";
 import { CopyField } from "@/components/copy-field";
 import { ExhibitLabel } from "@/components/exhibit-label";
 import { EventMascot } from "@/components/event-mascot";
+import { archiveAvailability } from "@/lib/archive-retention";
 import { eventShowsMascot } from "@/lib/event-features";
 import { SealRecord } from "@/components/seal-record";
 import { DeliveryPanel } from "@/components/delivery-panel";
@@ -292,15 +293,17 @@ async function ProjectView({
                   </span>
                 </PageTitle>
               </div>
-              <SealRecord project={project} sealTime={sealTime} />
+              <SealRecord project={project} sealTime={sealTime} archiveExpiresAt={event.archiveExpiresAt} now={event.now} />
               {project.archive_sha256 && (
                 <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 text-[0.9375rem]">
                   <Link href={`${href}/makbuz`} className="inline-flex items-center gap-2 text-ink hover:underline">
                     <ReceiptIcon size={18} /> Mühür makbuzu
                   </Link>
-                  <a href={`/api/arsiv/${project.id}`} className="inline-flex items-center gap-2 text-ink hover:underline">
-                    <DownloadSimpleIcon size={18} /> Mühürlü arşivi indir
-                  </a>
+                  {archiveAvailability(event.archiveExpiresAt, event.now) !== "expired" && (
+                    <a href={`/api/arsiv/${project.id}`} className="inline-flex items-center gap-2 text-ink hover:underline">
+                      <DownloadSimpleIcon size={18} /> Mühürlü arşivi indir
+                    </a>
+                  )}
                 </div>
               )}
             </>

@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { archiveAvailability, archiveExpiresAt, manifestHash, manifestLines, signedUrlSeconds } from "../lib/archive-retention.ts";
+import { archiveAvailability, archiveExpiresAt, signedUrlSeconds } from "../lib/archive-retention.ts";
+import { manifestHash, manifestLines } from "../lib/archive-manifest.ts";
 
 const locked = "2026-10-01T10:00:00.000Z";
 const expires = archiveExpiresAt(locked);

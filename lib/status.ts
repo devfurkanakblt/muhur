@@ -25,6 +25,8 @@ export async function getLiveStatus(event: EventState) {
   ]) : null;
   const version = createHash("sha256").update(JSON.stringify({
     event: [event.id, event.startsAt, event.deadline, event.locked, event.lockedAt, event.voting, event.announcementAt, event.activity?.at],
+    // Marka/özellik/snapshot sürümü yalnız bu etkinliğe aittir; başka etkinliğin değişikliği bu sayfayı yenilemez.
+    presentation: [event.presentationVersion, event.features, event.brand.accentColor, event.brand.logoPath, event.brand.communityName],
     updates, awardCount, voteCount, project: project ? [project.id, project.accepted_sha, project.delivery_error, project.members] : null, jobs,
     admin: adminState?.map(s => s.data),
   })).digest("hex");

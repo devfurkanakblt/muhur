@@ -52,3 +52,12 @@ export function featuresFromForm(form: FormData): EventFeatures {
   for (const key of FEATURE_KEYS) out[key] = form.get(`feature_${key}`) === "on";
   return out;
 }
+
+/**
+ * Bu etkinliğin yüzeylerinde (sayfa, görsel, belge, sahne, makbuz, paylaşım kartı) DEÜ maskotu görünebilir mi?
+ * Header, PNG/SVG ve RSC aynı kararı kullanır. Özellik bayrağından bağımsızdır: maskot topluluğa aittir.
+ */
+export function eventShowsMascot(event: { communitySlug: string | null; communityId: string | null }): boolean {
+  return isMascotCommunity(event.communitySlug, event.communityId != null);
+}
+

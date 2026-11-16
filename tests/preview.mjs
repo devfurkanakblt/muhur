@@ -39,7 +39,13 @@ const logoSvg = shape => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" wi
 const logos = {
   "fixture/logo-1.png": { type: "image/png", bytes: await sharp(logoSvg(`<circle cx="256" cy="256" r="230" fill="#1f8a70"/><rect x="146" y="146" width="220" height="220" rx="36" fill="#f6f1e7"/><circle cx="256" cy="256" r="58" fill="#1f8a70"/>`)).png().toBuffer() },
   "fixture/logo-2.webp": { type: "image/webp", bytes: await sharp(logoSvg(`<path d="M256 24 488 256 256 488 24 256Z" fill="#e2712b"/><path d="M256 136 376 256 256 376 136 256Z" fill="#2b2d42"/>`)).webp().toBuffer() },
+  // Plan 5: ikinci topluluğun logosu (topluluk/<id>/<rastgele>.webp).
+  "topluluk/20000000-0000-0000-0000-000000000002/0123456789abcdef01234567.webp": { type: "image/webp", bytes: await sharp(logoSvg(`<rect width="512" height="512" fill="#0f766e"/><text x="256" y="320" font-size="220" text-anchor="middle" fill="#fff" font-family="sans-serif">BT</text>`)).webp().toBuffer() },
 };
+// Plan 5 · 0019: DEÜ etkinliğinde özellikler açık (geçmiş davranış), diğer toplulukta kapalı.
+const DEU_FEATURES = { public_voting: true, mystery_hunt: true, easter_eggs: true, mascot_naming: true };
+const OFF_FEATURES = { public_voting: false, mystery_hunt: false, easter_eggs: false, mascot_naming: false };
+const OTHER_LOGO = "topluluk/20000000-0000-0000-0000-000000000002/0123456789abcdef01234567.webp";
 let activity = null;
 // Gizem avcıları: claim_mystery RPC ile bellekte tutulur, mod değişince sıfırlanır.
 let hunters = [];
@@ -63,7 +69,7 @@ const mascotVotes = [
   { event_id: eventId, voter_id: "00000000-0000-0000-0000-000000000012", proposal_id: mascotProposals[1].id },
 ];
 // Başka topluluk: "komsu" rolünde onaylı, diğer rollerde onay bekliyor (etkinliği yok).
-const otherCommunity = () => ({ ...contact, applicant_id: role === "basvuran" ? userId : "00000000-0000-0000-0000-000000000099", id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", city: null, status: multiEvent || role === "komsu" ? "onaylandi" : "beklemede", telegram_enabled: false });
+const otherCommunity = () => ({ ...contact, applicant_id: role === "basvuran" ? userId : "00000000-0000-0000-0000-000000000099", id: otherCommunityId, slug: "baska-topluluk", name: "Başka Topluluk", city: null, status: multiEvent || role === "komsu" ? "onaylandi" : "beklemede", telegram_enabled: false, logo_path: OTHER_LOGO, branding_updated_at: stamp(-600_000) });
 const member = { user_id: userId, github_login: "preview-admin", avatar_url: null, role: "owner", event_id: eventId };
 const user = { id: userId, aud: "authenticated", role: "authenticated", email: "preview@example.com", app_metadata: { provider: "github" }, user_metadata: { user_name: "preview-admin" }, identities: [{ provider: "github", id: "424242", identity_data: { provider_id: "424242", user_name: "preview-admin" } }], created_at: stamp(-3600_000) };
 function fixtureUser() { return role === "linkedin" ? {...user,app_metadata:{provider:"linkedin_oidc"},user_metadata:{name:"LinkedIn Jürisi"},identities:[{provider:"linkedin_oidc",id:"linkedin-fixture",identity_data:{sub:"linkedin-fixture",name:"LinkedIn Jürisi"}}]} : user; }
@@ -90,7 +96,8 @@ function records(table) {
   const tables = {
     events: [{ id: eventId, slug: "ornek-etkinlik", title: "Örnek Hackathon · Yerel Test", starts_at: stamp(-7200_000), deadline: locked ? stamp(-60_000) : stamp(45 * 60_000), locked_at: locked ? stamp(-60_000) : null,
       community_id: communityId, suspended_at: suspended ? stamp(-120_000) : null, suspended_reason: suspended ? SUSPEND_REASON : null,
-      community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false }, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", current_terms_version_id: fixtureTerms.id, terms: fixtureTerms, announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
+      community: { name: "DEÜ CS&AI", slug: "deu-csai", city: "İzmir", status: "onaylandi", telegram_enabled: false, logo_path: null }, features: DEU_FEATURES, accent_color: null,
+      brand: locked ? { community_name: "DEÜ CS&AI", community_logo_path: null, accent_color: null, event_title: "Örnek Hackathon · Yerel Test", source: "lock", captured_at: stamp(-60_000) } : null, announcement: "Örnek duyuru: son push'tan sonra teslim sürümünü güncelle.", current_terms_version_id: fixtureTerms.id, terms: fixtureTerms, announcement_at: stamp(-600_000), activity_kind: activity?.kind ?? null, activity_title: activity?.title ?? null, activity_at: activity?.at ?? null, voting: mode === "voting" ? "acik" : locked ? "sonuclandi" : "kapali" }],
     communities: [
       { ...contact, applicant_id: "00000000-0000-0000-0000-000000000098", id: communityId, slug: "deu-csai", name: "DEÜ CS&AI", city: "İzmir", status: "onaylandi", telegram_enabled: false },
       otherCommunity(),
@@ -132,7 +139,9 @@ function records(table) {
   // İkinci açık etkinlik başka topluluğa aittir. Aynı katılımcı iki etkinlikte farklı ekiptedir.
   if (multiEvent) {
     tables.events.push({ ...tables.events[0], id: secondEventId, slug: "ikinci-etkinlik", title: "İkinci Hackathon · Yerel Test",
-      community_id: otherCommunityId, community: otherCommunity(), announcement: "İkinci etkinlik duyurusu", suspended_at: null, suspended_reason: null });
+      community_id: otherCommunityId, community: otherCommunity(), announcement: "İkinci etkinlik duyurusu", suspended_at: null, suspended_reason: null,
+      features: OFF_FEATURES, accent_color: "#0f766e", presentation_updated_at: stamp(-300_000),
+      brand: tables.events[0].locked_at ? { community_name: "Başka Topluluk", community_logo_path: OTHER_LOGO, accent_color: "#0f766e", event_title: "İkinci Hackathon · Yerel Test", source: "lock", captured_at: stamp(-60_000) } : null });
     tables.projects.push({ ...projects[0], id: secondProjectId, event_id: secondEventId, name: "İkinci Etkinlik Projesi",
       team_name: "İkinci Ekip", invite_code: "second-invite" });
     tables.project_members.push({ ...member, event_id: secondEventId, project_id: secondProjectId, project: { team_name: "İkinci Ekip" } });

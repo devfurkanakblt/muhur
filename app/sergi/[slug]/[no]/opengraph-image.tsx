@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getEventBySlug, getExhibit, logoUrl } from "@/lib/data";
 import { exhibitNo } from "@/lib/format";
+import { eventBrandArt, type BrandArt } from "@/lib/brand-image";
 
 export const alt = "mühür. eser kartı";
 export const size = { width: 1200, height: 630 };
@@ -12,10 +13,11 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const { slug, no } = await params;
   const event = await getEventBySlug(slug);
   const exhibit = event ? await getExhibit(event.id, Number(no)) : null;
-  const [regular, semibold, mascot] = await Promise.all([
+  // Maskot yalnız maskotun topluluğunda; diğerlerinde topluluk logosu (kilitliyse kilit anındaki).
+  const [regular, semibold, art] = await Promise.all([
     readFile(join(process.cwd(), "assets/schibsted-grotesk-400.woff")),
     readFile(join(process.cwd(), "assets/schibsted-grotesk-600.woff")),
-    readFile(join(process.cwd(), "assets/mascot.svg")),
+    event ? eventBrandArt(event) : Promise.resolve<BrandArt>({ name: "mühür", mascot: null, logo: null }),
   ]);
   const logo = exhibit ? logoUrl(exhibit.logo_path) : null;
   const name = exhibit?.name ?? "Eser bulunamadı";
@@ -37,7 +39,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
       >
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: 700 }}>
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ fontSize: 26, color: "#61667d" }}>{exhibit ? `${exhibitNo(exhibit.exhibit_no)} · ${event!.title}` : ""}</div>
+            <div style={{ fontSize: 26, color: "#61667d" }}>{exhibit ? `${exhibitNo(exhibit.exhibit_no)} · ${art.name} · ${event!.title}` : ""}</div>
             <div style={{ fontSize: titleSize, fontWeight: 600, letterSpacing: "-0.03em", lineHeight: 1.02, marginTop: 20 }}>{name}</div>
             <div style={{ fontSize: 36, color: "#44485f", marginTop: 16 }}>{exhibit?.team_name ?? ""}</div>
           </div>
@@ -64,7 +66,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
             {logo && <img src={logo} width={150} height={150} alt="" style={{ objectFit: "contain" }} />}
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`data:image/svg+xml;base64,${mascot.toString("base64")}`} width={200} height={163} alt="" />
+          {art.mascot ? <img src={art.mascot} width={200} height={163} alt="" /> : art.logo ? <img src={art.logo} width={140} height={140} alt="" /> : <div style={{ display: "flex", height: 140 }} />}
         </div>
       </div>
     ),

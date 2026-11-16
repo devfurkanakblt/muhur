@@ -6,7 +6,8 @@ import { qrCenterHole } from "@/lib/qr-hole";
  * Zemin her temada sitenin açık zemini (#eef2f6): ters renkli (koyu zeminde açık) karekodları
  * birçok telefon kamerası okuyamıyor; okunabilirlik için renkler sabit.
  */
-export function StageQr({ rows, className = "" }: { rows: string[]; className?: string }) {
+/** `mascot` kapalıysa karekodun ortası boş kalır (yüksek hata düzeltme payı); DEÜ maskotu yalnız kendi topluluğunda. */
+export function StageQr({ rows, className = "", mascot = false }: { rows: string[]; className?: string; mascot?: boolean }) {
   const n = rows.length;
   const quiet = 3;
   const view = n + quiet * 2;
@@ -38,9 +39,9 @@ export function StageQr({ rows, className = "" }: { rows: string[]; className?: 
       <rect width={view} height={view} rx={1.2} fill="#eef2f6" />
       <path d={ink} fill="#0b0d1e" shapeRendering="crispEdges" />
       <path d={core} fill="#4a36cf" shapeRendering="crispEdges" />
-      <svg x={hole + quiet + pad} y={hole + quiet + pad} width={side - pad * 2} height={side - pad * 2}>
+      {mascot && <svg x={hole + quiet + pad} y={hole + quiet + pad} width={side - pad * 2} height={side - pad * 2}>
         <Mascot mood="durbun" title="" />
-      </svg>
+      </svg>}
     </svg>
   );
 }

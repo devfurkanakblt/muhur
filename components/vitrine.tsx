@@ -28,6 +28,7 @@ export function Vitrine({
   voting,
   winners,
   live = true,
+  mascot = false,
 }: {
   /** Oylar bu etkinliğe yazılır. */
   eventId: string;
@@ -37,6 +38,8 @@ export function Vitrine({
   voting: VitrineVoting;
   /** Jüri ödülleri ve halkın seçimi; vitrinin başında büyük gösterilir. */
   winners: Winner[];
+  /** DEÜ maskotu yalnız maskotun topluluğunda (eventShowsMascot). */
+  mascot?: boolean;
   /** Geçmiş sergilerde kilit olayı dinlenmez. */
   live?: boolean;
 }) {
@@ -99,7 +102,7 @@ export function Vitrine({
       {items.length > 0 && visibleItems.length === 0 && <p className="py-10 text-ink-2">Bu aramayla eşleşen eser yok.</p>}
       {items.length === 0 ? (
         <div className="flex flex-col items-start gap-6 py-16 sm:flex-row sm:items-center">
-          <Mascot mood="merakli" title="" className="w-36 shrink-0" />
+          {mascot && <Mascot mood="merakli" title="" className="w-36 shrink-0" />}
           <div>
             <p className="text-[1.125rem] font-medium">Vitrin henüz boş.</p>
             <p className="mt-1 max-w-[42ch] text-ink-2">

@@ -1,11 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 import { SiteHeader } from "@/components/site-header";
+import { eventShowsMascot } from "@/lib/event-features";
 import { Vitrine } from "@/components/vitrine";
 import { getEventBySlug, getViewer } from "@/lib/data";
 import { buildVitrine } from "@/lib/vitrine";
 import { formatDay } from "@/lib/format";
-import { askiBilgisi, SuspensionNotice } from "@/components/suspension-notice";
+import { askiBilgisi, gorunenEtkinlik, SuspensionNotice } from "@/components/suspension-notice";
 import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
 import { eventPath } from "@/lib/event-routes";
@@ -29,7 +30,7 @@ export default async function PastExhibition({ params }: PageProps<"/sergi/[slug
 
   return (
     <>
-      <SiteHeader viewer={viewer} />
+      <SiteHeader viewer={viewer} event={gorunenEtkinlik(event, showReason)} />
       <main id="main-content" tabIndex={-1} className="flex-1">
         <div className="mx-auto w-full max-w-[1240px] px-5 pt-14 pb-14 sm:px-8 md:pt-20">
           <h1 className="text-[clamp(2rem,4.4vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.03em]">{event.title}</h1>
@@ -38,7 +39,7 @@ export default async function PastExhibition({ params }: PageProps<"/sergi/[slug
           </p>
           <SuspensionNotice event={askiBilgisi(event, showReason)} showReason={showReason} className="mt-8" />
         </div>
-        <Vitrine eventId={event.id} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} live={false} />
+        <Vitrine mascot={eventShowsMascot(event)} eventId={event.id} items={items} voting={voting} winners={winners} locked={event.locked} sealTime={event.sealTime} live={false} />
       </main>
     </>
   );

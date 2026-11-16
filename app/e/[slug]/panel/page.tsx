@@ -8,7 +8,8 @@ import { RepoPicker } from "@/components/repo-picker";
 import { ProjectForm } from "@/components/project-form";
 import { CopyField } from "@/components/copy-field";
 import { ExhibitLabel } from "@/components/exhibit-label";
-import { Mascot } from "@/components/mascot/mascot";
+import { EventMascot } from "@/components/event-mascot";
+import { eventShowsMascot } from "@/lib/event-features";
 import { SealRecord } from "@/components/seal-record";
 import { DeliveryPanel } from "@/components/delivery-panel";
 import { TransferOwnerForm, WithdrawProjectForm } from "@/components/team-actions";
@@ -84,7 +85,7 @@ export default async function PanelPage({ params: route, searchParams }: PagePro
     return (
       <Shell viewer={null} event={event} notice={notice}>
         <div className="flex flex-col items-start gap-8">
-          <Mascot mood="normal" title="" className="w-40" />
+          <EventMascot show={eventShowsMascot(event)} mood="normal" className="w-40" />
           <PageTitle note="Projeni içe aktarmak için GitHub hesabını bağla. Yalnızca public repolarını görürüz.">
             Önce giriş yap.
           </PageTitle>
@@ -114,7 +115,7 @@ export default async function PanelPage({ params: route, searchParams }: PagePro
     return (
       <Shell viewer={viewer} event={event} notice={notice}>
         <div className="flex flex-col items-start gap-8">
-          <Mascot mood="uykulu" title="" className="w-44" />
+          <EventMascot show={eventShowsMascot(event)} mood="uykulu" className="w-44" />
           <PageTitle note={`Teslimler ${formatDateTime(event.sealTime)} itibarıyla mühürlendi. Yeni proje kabul edilmiyor.`}>
             Vitrin kapandı.
           </PageTitle>
@@ -243,7 +244,7 @@ async function ProjectView({
       {!project.logo_path && !locked && <p role="alert" className="mb-8 text-danger">Logo yüklenememiş veya henüz eklenmemiş. Aşağıdaki formdan tekrar yükle.</p>}
       {justCreated && !locked && (
         <div className="mb-14 flex items-center gap-5 border-y border-rule py-5">
-          <Mascot mood="mutlu" title="" className="w-20 shrink-0" />
+          <EventMascot show={eventShowsMascot(event)} mood="mutlu" className="w-20 shrink-0" />
           <p className="text-[1.0625rem]">
             Eserin vitrinde{" "}
             <span className="mx-0.5 inline-block -rotate-2 rounded-[2px] bg-blush px-2 py-0.5 font-mono text-[0.875rem] text-[#0b0d1e] tnum">
@@ -284,7 +285,7 @@ async function ProjectView({
           {locked ? (
             <>
               <div className="mb-10 flex items-end gap-6">
-                <Mascot mood="uykulu" title="" className="w-28 shrink-0" />
+                <EventMascot show={eventShowsMascot(event)} mood="uykulu" className="w-28 shrink-0" />
                 <PageTitle level={2} note="Bu kayıt artık değiştirilemez. Jüri yalnızca aşağıdaki commit'i değerlendirir; sonradan yapılan push'lar sayılmaz.">
                   <span className="inline-flex items-center gap-3">
                     <LockSimpleIcon size={28} weight="bold" className="text-indigo" /> {project.archive_sha256 ? "Mühürlendi" : "Teslim kapandı"}

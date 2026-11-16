@@ -4,10 +4,14 @@ import { getEventAccess } from "@/lib/access";
 import { can } from "@/lib/authz";
 import { createAdminClient } from "@/lib/supabase/server";
 import { selectAll } from "@/lib/paginate";
+import { MASCOT_COMMUNITY } from "@/lib/event-features";
 
-/** Maskot isim oylaması yalnızca maskotun sahibi topluluğun etkinliklerinde açılır. */
-export function hasMascotNaming(event: Pick<EventState, "communitySlug">): boolean {
-  return event.communitySlug === "deu-csai";
+/**
+ * Maskot isim oylaması yalnızca maskotun sahibi topluluğun etkinliklerinde ve etkinlik bayrağı açıkken açılır.
+ * Bayrak başka toplulukta açık görünse bile (bozuk veri) kapalıdır; DB guard'ı da aynı kuralı uygular.
+ */
+export function hasMascotNaming(event: Pick<EventState, "communitySlug" | "communityId" | "features">): boolean {
+  return event.communitySlug === MASCOT_COMMUNITY && event.communityId != null && event.features.mascot_naming;
 }
 
 export type NamingPhase = "oneriler" | "oylama" | "sonuc";

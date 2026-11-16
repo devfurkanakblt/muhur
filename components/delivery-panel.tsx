@@ -3,6 +3,7 @@ import type { EventState, OwnProject, ProjectJob, TimelineEntry } from "@/lib/da
 import { formatDateTime, formatBytes } from "@/lib/format";
 import { SubmissionButton } from "@/components/team-actions";
 import { SealSuccess } from "@/components/seal-success";
+import { eventShowsMascot } from "@/lib/event-features";
 
 const timelineLabels: Record<string, string> = {
   registered: "Proje kaydı oluşturuldu", submission_requested: "Teslim güncellemesi istendi",
@@ -75,7 +76,7 @@ export function DeliveryPanel({ project, event, jobs, timeline }: {
         <span aria-hidden>{c.ok ? "✓" : "○"}</span> {c.label}
       </li>)}</ul>
     </details>}
-    {project.archive_sha256 && <SealSuccess projectId={project.id} />}
+    {project.archive_sha256 && <SealSuccess projectId={project.id} mascot={eventShowsMascot(event)} />}
     <details className="mt-6">
       <summary className="cursor-pointer font-medium">Teslim zaman çizelgesi</summary>
       <ol className="mt-4 grid gap-3 text-[0.875rem]">{timeline.length ? timeline.map(t => <li key={t.id}>

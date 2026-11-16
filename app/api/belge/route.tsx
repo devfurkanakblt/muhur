@@ -5,6 +5,7 @@ import { getEventBySlug, getViewer } from "@/lib/data";
 import { certificateAccess } from "@/lib/certificate-access";
 import { formatDay } from "@/lib/format";
 import { certificateName, dateRangeTR, fileSlug } from "@/lib/certificate";
+import { eventBrandArt } from "@/lib/brand-image";
 
 const INK = "#0b0d1e";
 const INK_2 = "#44485f";
@@ -31,7 +32,8 @@ export async function GET(request: Request) {
   const event = slug ? await getEventBySlug(slug) : null;
   if (!event) return new Response("Etkinlik bulunamadı.", { status: 404, headers: noStore });
   const viewer = await getViewer();
-  const org = event.communityName ?? "mühür";
+  const art = await eventBrandArt(event);
+  const org = art.name;
   const access = await certificateAccess(viewer, event);
   if (access === "giris") return new Response("Katılım belgesi için GitHub ile giriş yap.", { status: 401, headers: noStore });
   if (access === "katilimci-degil") return new Response("Katılım belgesini yalnızca etkinliğe katılan ekip üyeleri alabilir.", { status: 403, headers: noStore });
@@ -40,10 +42,9 @@ export async function GET(request: Request) {
   const name = certificateName(params.get("ad"), params.get("soyad"));
   if (!name) return new Response("Ad ve soyad yalnızca harf, boşluk, kesme ve tire içerebilir (en fazla 40 karakter).", { status: 400, headers: noStore });
 
-  const [regular, semibold, mascot] = await Promise.all([
+  const [regular, semibold] = await Promise.all([
     readFile(join(process.cwd(), "assets/schibsted-grotesk-400.woff")),
     readFile(join(process.cwd(), "assets/schibsted-grotesk-600.woff")),
-    readFile(join(process.cwd(), "assets/mascot.svg")),
   ]);
   const nameSize = name.length > 34 ? 84 : name.length > 24 ? 108 : 132;
 
@@ -58,8 +59,9 @@ export async function GET(request: Request) {
               </div>
               <div style={{ display: "flex", borderLeft: `2px solid ${RULE}`, paddingLeft: 22, fontSize: 30, color: INK_3, lineHeight: 1 }}>{org}</div>
             </div>
+            {/* Maskot yalnız DEÜ belgelerinde; diğer topluluklarda topluluk logosu (yoksa boş). */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`data:image/svg+xml;base64,${mascot.toString("base64")}`} width={200} height={163} alt="" />
+            {art.mascot ? <img src={art.mascot} width={200} height={163} alt="" /> : art.logo ? <img src={art.logo} width={160} height={160} alt="" /> : <div style={{ display: "flex" }} />}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column" }}>

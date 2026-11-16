@@ -34,7 +34,7 @@ export default async function Image() {
             mühür<span style={{ color: "#4a36cf" }}>.</span>
           </div>
           <div style={{ fontSize: 44, marginTop: 28, color: "#44485f" }}>Süre dolar, mühür vurulur.</div>
-          <div style={{ fontSize: 28, marginTop: 56, color: "#61667d" }}>DEÜ CS&AI Hackathon</div>
+          <div style={{ fontSize: 28, marginTop: 56, color: "#61667d" }}>DEÜ CS&AI topluluğu tarafından geliştirildi</div>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={mascotSrc} width={360} height={294} alt="" />

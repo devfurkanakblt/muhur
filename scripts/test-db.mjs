@@ -137,7 +137,9 @@ try {
   console.log("PASS: Sonuçlandırma bekleyen oyu bekledi; toplam kapanıştan sonra değişmedi.");
   await testCommunityRaces({ psql, asyncPsql, database });
   // Plan 4 aktivasyonu: belgeler yayınlanır, 0018 uygulanır; zorunluluk ve yarış testleri bundan sonra çalışır.
-  for (const file of ["tests/database-policies-setup.sql", "supabase/migrations/0018_sozlesme_zorunlulugu.sql", "tests/database-policies-enforced.sql", "tests/database-policy-privacy.sql"]) {
+  for (const file of ["tests/database-policies-setup.sql", "supabase/migrations/0018_sozlesme_zorunlulugu.sql", "tests/database-policies-enforced.sql", "tests/database-policy-privacy.sql",
+    // Plan 5: marka/özellik (0019) ve saklama defteri (0020); süreli silme aktivasyonu (0021) en son.
+    "supabase/migrations/0019_marka_ve_ozellikler.sql", "tests/database-branding.sql"]) {
     run("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-h", "127.0.0.1", "-p", port, "-U", "postgres", "-d", database, "-f", resolve(file)]);
   }
   console.log("Sözleşme zorunluluğu testleri geçti.");

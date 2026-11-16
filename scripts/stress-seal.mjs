@@ -365,6 +365,8 @@ async function main() {
     // Plan 4: stres kaydı da yeni giriş sözleşmesini kullanır (0018 açık, eski kayıt girişleri servise kapalı).
     await psql(await readFile(resolve("tests/database-policies-setup.sql"), "utf8"), database);
     await psql(await readFile(resolve("supabase/migrations/0018_sozlesme_zorunlulugu.sql"), "utf8"), database);
+    // Plan 5: stres düzeneği marka/özellik katmanıyla da çalışır (DEÜ etkinliği; özellikler açık).
+    await psql(await readFile(resolve("supabase/migrations/0019_marka_ve_ozellikler.sql"), "utf8"), database);
     pool = new pg.Pool({ host: "127.0.0.1", port: Number(port), user: "postgres", database, max: CFG.pool });
     const sampler = setInterval(() => {
       poolPeak = { waiting: Math.max(poolPeak.waiting, pool.waitingCount), total: Math.max(poolPeak.total, pool.totalCount) };
